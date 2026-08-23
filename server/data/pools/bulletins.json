@@ -3,7 +3,7 @@
   "title": "POTATO BULLETIN No. {no} — {EDITION}",
   "morning": {
     "headline": {
-      "first_day": "THE NET IS OPEN.",
+      "first_day": "THE NET IS LIVE.",
       "incident": "INCIDENT.",
       "inquiry": "THE INQUIRY.",
       "monday": "NEIGHBORS ASSIGNED.",
@@ -62,7 +62,7 @@
     }
   },
   "samples": [
-    {"no": 1, "edition": "morning", "headline": "THE NET IS OPEN.", "items": [
+    {"no": 1, "edition": "morning", "headline": "THE NET IS LIVE.", "items": [
       "Population: 14. All 14 are new. Nobody knows what they're doing. This is normal.",
       "Today's Question: ketchup. Polls close at 18:00.",
       "The Council wishes everyone a productive first day and reminds the Hands that the screen is the front."]},

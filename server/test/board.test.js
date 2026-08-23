@@ -46,7 +46,7 @@ test('tally buckets under five read "fewer than five"; polls-close line before c
   set(at(14, 0));
   for (let i = 1; i <= 7; i++) hb(w, SECRET(20 + i), []);
   let html = renderBoard(w.board());
-  assert.match(html, /Polls close at 23:00 UTC\./);
+  assert.match(html, /Polls close at <time data-utc="\d+">23:00 UTC<\/time>\./, 'UTC rendered server-side, instant attached for the viewer');
   assert.doesNotMatch(html, /class="tally"/);
   for (let i = 1; i <= 5; i++) w.choice({ secret: SECRET(20 + i), scene_rev: 1, choice_id: 'heinz' });
   for (let i = 6; i <= 7; i++) w.choice({ secret: SECRET(20 + i), scene_rev: 1, choice_id: 'hunts' });

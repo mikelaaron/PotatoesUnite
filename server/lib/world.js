@@ -156,9 +156,9 @@ export class World {
     for (const r of rows) {
       const key = C.localDayKey(r.t, off);
       let d = days[days.length - 1];
-      if (!d || d.key !== key) { d = { key, header: C.dayHeader(r.t, off), entries: [], withheld: false }; days.push(d); }
+      if (!d || d.key !== key) { d = { key, header: C.dayHeader(r.t, off), t: r.t, entries: [], withheld: false }; days.push(d); }
       if (r.withheld) { d.withheld = true; continue; }
-      d.entries.push({ time: C.hm(r.t, off), text: r.text, note: r.note, kind: r.kind, unread: r.t > (p.file_read_t || 0) });
+      d.entries.push({ t: r.t, time: C.hm(r.t, off), text: r.text, note: r.note, kind: r.kind, unread: r.t > (p.file_read_t || 0) });
     }
     const nrow = this.neighborRow(p, t);
     const n = this.neighborOf(p, t);
@@ -769,11 +769,11 @@ export class World {
   bulletinNo(day) { return this.dayIndex(day) + 1; }
   latestBulletin(t) {
     const r = this.store.get('SELECT * FROM bulletins WHERE t <= ? ORDER BY t DESC LIMIT 1', t);
-    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items) } : null;
+    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t } : null;
   }
   bulletin(day, edition) {
     const r = this.store.get('SELECT * FROM bulletins WHERE day = ? AND edition = ?', day, edition);
-    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items) } : null;
+    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t } : null;
   }
 
   ensureBulletin(day, edition, ds, t) {

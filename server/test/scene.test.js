@@ -44,7 +44,7 @@ test('scene shape follows protocol v0', () => {
   for (const c of s.choices) assert.ok(c.label.length <= 16, `label ≤ 16: ${c.label}`);
   assert.ok(s.expires_at > at(14, 0));
   assert.equal(s.bulletin.edition, 'morning');
-  assert.equal(s.bulletin.headline, 'THE NET IS OPEN.');
+  assert.equal(s.bulletin.headline, 'THE NET IS LIVE.');
 });
 
 test('events are drained once: a retried heartbeat does not double-file', () => {
