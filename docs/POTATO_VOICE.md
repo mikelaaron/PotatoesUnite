@@ -538,3 +538,23 @@ Found on the first evening with a real potato: every lift produced a line, and t
 **The File gets the same ration.** One entry per session ("Picked up. 24 s." — with "Repeatedly." as the note if there were three or more lifts), nothing for dark episodes under a minute, nothing for charge flickers. The File is a record of things that happened, not a motion log. Standing ignores anything the ration ignores.
 
 If the potato seems quiet, it's working.
+
+---
+
+## 16. When the Bulletin is out
+
+A new edition is news the potato has and the Hands don't. It says so once, as a line, in the two hours after printing — never "new edition available." It read the paper; the Hands haven't.
+
+**Not mentioned in it**
+- The Bulletin's out. I've read it. You should.
+- New edition. Nothing about you in it. Yet.
+- Morning edition. The Council has opinions again.
+- The paper's out. Read it before the neighbor does.
+- Evening edition. The Count is in. I'm not saying.
+
+**Mentioned in it** (Potato of the Day, an incident, a Missing notice, a named line)
+- Evening edition. I'm in it. Don't ask which part.
+- New Bulletin. I'm mentioned. It isn't flattering.
+- The paper's out. Page one is us. Mostly you.
+
+**The File** gets nothing for this. It's news, not an event.
