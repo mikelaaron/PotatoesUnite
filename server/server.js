@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { World, HttpError } from './lib/world.js';
-import { renderBoard, renderFile, renderMessage } from './lib/pages.js';
+import { renderBoard, renderFile, renderMessage, renderAbout } from './lib/pages.js';
+import { storyToHtml } from './lib/markdown.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8080;
@@ -16,7 +17,7 @@ const BODY_LIMIT = 64 * 1024;
 // Logs never carry secrets, claim codes, or anything that maps a potato to a person.
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
-const world = new World({ dbPath: DB_PATH, dataDir: path.join(here, 'data'), assetsDir: path.join(here, '..', 'assets'), log });
+const world = new World({ dbPath: DB_PATH, dataDir: path.join(here, 'data'), assetsDir: path.join(here, '..', 'assets'), docsDir: path.join(here, '..', 'docs'), log });
 world.data.start();
 world.tick();
 const ticker = setInterval(() => { try { world.tick(); } catch (e) { log('tick failed:', e.message); } }, TICK_MS);
@@ -54,6 +55,7 @@ async function route(req, res) {
   if (m === 'POST' && p === '/v0/choice') { const r = world.choice(await readJson(req)); return json(res, r.status, r.scene); }
 
   if (m === 'GET' && p === '/') return html(res, 200, renderBoard(world.board()));
+  if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl: process.env.GITHUB_URL || '' })));
   if (m === 'GET' && p === '/health') return json(res, 200, { ok: true, t: world.now() });
 
   let fm = p.match(/^\/file\/([A-Za-z0-9-]{3,16})$/);

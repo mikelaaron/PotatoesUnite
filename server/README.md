@@ -22,7 +22,7 @@ POTATOES UNITE! The Net is open on http://0.0.0.0:8080
   db: /…/server/data/potatoes.db
 ```
 
-Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.db`; the `data/*.db*` files are git-ignored).
+Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.db`; the `data/*.db*` files are git-ignored), `GITHUB_URL` (optional; linked from `/about`).
 
 ## Endpoints
 
@@ -35,6 +35,7 @@ Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.d
 | GET | `/file/{claim_code}` | The File. Read-only. |
 | POST | `/file/{claim_code}/ack` | Acknowledge. The one action. Redirects back. |
 | GET | `/card/…` | 501 for now. |
+| GET | `/about` | `docs/STORY.md` rendered in the same style (hot-reloaded; the trailing "Short forms" section is dropped). Set `GITHUB_URL` to link the repository in "The code"; unset, the sentence reads "All of it is open." |
 | GET | `/health` | `{ok: true}` |
 
 Logs carry method, path, status and time. Claim codes are masked; secrets never appear.

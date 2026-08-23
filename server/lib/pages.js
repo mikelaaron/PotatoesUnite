@@ -16,6 +16,16 @@ a { color: inherit; }
 .mast { text-align: center; border-top: 4px double var(--rule); border-bottom: 4px double var(--rule); padding: .4rem 0 .5rem; margin-bottom: .6rem; }
 .mast h1 { margin: 0; font-size: 3rem; letter-spacing: .06em; line-height: 1; }
 .mast .sub { color: var(--faint); text-transform: uppercase; letter-spacing: .15em; font-size: .8em; margin-top: .3rem; }
+.mast .sub a { text-decoration: none; border-bottom: 1px solid var(--faint); }
+.prose { max-width: 65ch; margin: 0 auto; }
+.prose h1 { font-size: 1.8em; letter-spacing: .04em; margin: 1rem 0 .2rem; }
+.prose h2 { margin-top: 1.8rem; }
+.prose p { margin: .6rem 0; }
+.prose ul, .prose ol { padding-left: 1.4rem; margin: .5rem 0; }
+.prose li { margin: .25rem 0; }
+.prose hr { border: 0; border-top: 1px solid var(--rule); margin: 1.4rem 0; }
+.prose em { font-style: italic; }
+.prose > p:first-of-type { font-size: 1.15em; }
 .now { text-align: center; color: var(--faint); margin: 0 0 1rem; }
 h2 { font-size: 1em; text-transform: uppercase; letter-spacing: .2em; border-bottom: 1px solid var(--rule); margin: 1.6rem 0 .5rem; padding-bottom: .1rem; color: var(--faint); }
 .small { color: var(--faint); font-size: .8em; margin: -.3rem 0 .4rem; letter-spacing: .1em; }
@@ -170,7 +180,7 @@ ${q.remark ? `<p>${h(q.remark)}</p>` : ''}`;
   const missing = b.missing.length ? `<h2>Missing</h2>${b.missing.map((m) => `<p class="notice">${h(m)}</p>`).join('')}` : '';
   const potd = b.potd ? `<h2>Potato of the Day</h2><p>${h(b.potd.name)} #${h(b.potd.id)} · ${h(b.potd.variety)}</p>${b.potd.excerpt ? `<p class="notice">${h(b.potd.excerpt)}</p>` : ''}` : '';
   return layout('POTATOES UNITE!', `
-<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)}</div></header>
+<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a></div></header>
 <p class="now">It is ${utc(b.t)}.</p>
 <p class="pop">Population: ${h(fewerThanFive(b.population))}.</p>
 ${question}
@@ -203,6 +213,16 @@ ${days}
 <form class="ack" method="post" action="/file/${h(f.claim_code)}/ack"><button type="submit">Acknowledge</button></form>
 <p class="ack-note">It does nothing except mark that the Hands have read it. The potato will know.</p>
 <footer>Read-only. ${h(PRIVACY)}</footer>`);
+}
+
+// GET /about — docs/STORY.md, already converted to HTML.
+export function renderAbout(storyHtml) {
+  return layout('Potatoes Unite! — About', `
+<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">About · <a href="/">The Net</a></div></header>
+<div class="prose">
+${storyHtml}
+</div>
+<footer>${h(PRIVACY)}</footer>`);
 }
 
 export function renderMessage(title, text) {
