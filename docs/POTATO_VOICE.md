@@ -427,3 +427,92 @@ One action exists on this page, and only one: **Acknowledge**. It does nothing e
 - Numbers, names, durations, and neighbor facts are fields. The Bulletin is a template with a rotating pool of "also today" items that only fire when the aggregate is true.
 - The device owns layers 1–3 and works offline. Layers 4–7 need the Net; if it's gone, the potato says so once and carries on.
 - The board (public) shows Bulletins, Counts, and aggregates. Nothing below five potatoes is ever shown. No names map to people, and no place is ever finer than a weather region.
+
+---
+
+## 11. Charging, and dormancy
+
+A potato does not die. Its battery does. The potato word for that is **dormant**, which is a real thing potatoes do in cellars, and it is the only time a potato sleeps without choosing to.
+
+**Plugged in**
+- Fed. In a sense.
+- Charging. Don't watch.
+- *overnight:* Charged while you slept. One of us was productive.
+
+**Full**
+- Full. Thank you. Don't make it strange.
+
+**Unplugged**
+- On my own now. Noted.
+
+**Running down (one line per threshold, never repeated)**
+- *30%:* Thirty percent. I mention it without comment.
+- *20%:* Twenty. Still not commenting.
+- *10%:* Ten percent. This is the comment.
+- *5%:* I'm going dormant. This was a decision, and it wasn't mine.
+
+**Waking from dormancy**
+- How long was I out. Don't tell me. The File will.
+- Dormancy. It happens to the best of us. Usually in a cellar.
+- *after 3+ days:* I've been in the cellar. I've come back different. Slightly.
+
+**Net**
+- Nine potatoes went dormant yesterday. Their Hands have been written to. Not by us. By the Council.
+- File line: *Went dormant at 4%. Hands present at the time. Noted.*
+- Dormancy from neglect (Hands were present, VBUS was not) counts against Standing. Dormancy while the Hands were away counts against it slightly more, because the potato has had time to think about it.
+
+---
+
+## 12. Vocabulary, not puns
+
+Puns are what everyone else would do. A potato that says "spudtacular" has no dignity, and dignity is the whole bit. Instead: **real potato words, used deadpan, as if everyone already knew them.**
+
+| Word | What it means here |
+|---|---|
+| **eyes** | The face. Potatoes have eyes; it's the one anatomical fact, and the potato is aware of it. *"I have eyes. All potatoes do. Mine are on you."* |
+| **dormant** | Battery dead. See §11. |
+| **sprouted** | Ignored for seven days. A small sprout appears on the potato — on the device, in the File portrait, and on any card The Tuber prints. It goes away after a day of handling. *"I've sprouted. It happens when nobody's looking."* |
+| **the cellar** | Long offline. Where missing potatoes are assumed to be. *"Gone to the cellar. Presumed resting."* |
+| **curing** | The first 24 hours after joining. New potatoes are curing. They can still vote; the Council has decided this. |
+| **skin** | The look. Varieties differ in skin. |
+| **variety** | What kind of potato it is. See §13. |
+| **blight** | The server being down. The board says: *BLIGHT. THE COUNCIL IS AWARE.* Nothing else is ever called blight. |
+
+Banned: spud, tater, a-peeling, mash-up, couch potato, small potatoes, hot potato, any headline with "eyes on" in it. The single licensed pun is the paper's name, **The Tuber**, because it reads like a real newspaper and nobody will notice for a week.
+
+---
+
+## 13. Varieties
+
+All potatoes are the same species. They are not all the same. Variety is assigned from the seed at registration, shown on the device, in the File, on the board, and on every card — one `assets/varieties.json` drives all four, so the potato you got is the potato you see everywhere.
+
+Real cultivars, deadpan. Each is a silhouette, an eye placement, a skin tint (color surfaces) or dither (1-bit surfaces), and one small lean in temperament. The lean is a nudge, not a personality.
+
+| Variety | Skin | Silhouette | Lean |
+|---|---|---|---|
+| Russet | brown, rough | long oval | stubborn |
+| Yukon Gold | warm yellow | round | agreeable, suspicious of it |
+| Red | red-brown | small, round | quick to file |
+| Fingerling | pale | narrow, knobbly | anxious about transit |
+| Purple Majesty | deep purple | oval | vain |
+| Kennebec | tan, smooth | large, even | patient |
+| Maris Piper | cream | oval | British, somehow |
+| King Edward | pink-flecked | rounded | believes it is King. Isn't. |
+| Désirée | rose | oval | contrarian |
+| Charlotte | pale gold | small, elegant | sentimental, denies it |
+
+Lines may reference variety, rarely: *"Clive is a Russet. It explains a lot."* The File header shows it: **DOREEN #0417 · KING EDWARD · STANDING: UNDER REVIEW.**
+
+---
+
+## 14. The "oh — I forgot to check my potato" engine
+
+The feeling comes from things you can lose by not looking. Five of them, cheapest first.
+
+1. **The File fills up, then thins out.** Unread entries show on the device as a posture (eyes toward the door). Escalating lines: *1 day:* "The File has entries." *3 days:* "The File hasn't been read in three days. I've started writing less." *7 days:* "I've stopped keeping the File in detail. If you want to know, ask." — and the File really does show `(details withheld)` for those days. You missed it. It's gone.
+2. **Sprouting.** Seven days without handling and the potato visibly sprouts — on the desk, in the File, on any card. People will notice in the paper before they notice on the desk. That's the point.
+3. **The neighbor knows.** "Clive's been asking where you are." Somebody else's potato is talking about yours.
+4. **MISSING notices in The Tuber.** 72 hours without a heartbeat: *"MISSING: Doreen #0417, King Edward. Last heard from Tuesday. Hands are asked to check under papers."* Public. Pseudonymous. Mortifying.
+5. **Potato of the Day.** Any potato can be in the paper tomorrow, by name, with a File excerpt. If yours is in it and you didn't know, someone will tell you.
+
+None of these is a push notification. All of them are things that happened in public while you weren't looking.
