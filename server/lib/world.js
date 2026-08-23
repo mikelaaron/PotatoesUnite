@@ -853,6 +853,23 @@ export class World {
       this.store.setMeta(`event_settled:${ev.id}`, String(t));
     }
   }
+  // §3 temperature lines, for boards that report temp_c. Shown in °F for US offsets, °C elsewhere; no unit is printed.
+  temperatureLines(p) {
+    if (p.temp_c == null || !Number.isFinite(Number(p.temp_c))) return [];
+    let c = Number(p.temp_c);
+    // The e-paper board's SHTC3 sits next to the regulator and reads ~4 °C high. Corrected here until the
+    // firmware calibrates it; remove this line when it does.
+    if (p.board === 'epaper154') c -= 4;
+    const f = c * 9 / 5 + 32;
+    const us = p.utc_offset_min != null && p.utc_offset_min >= -600 && p.utc_offset_min <= -240;
+    const shown = Math.round(us ? f : c);
+    const R = this.pools.reactions.temperature || [];
+    const out = [];
+    if ((f <= 64 || f >= 80) && R[0]) out.push(fill(R[0], { temp: shown }));
+    if (f >= 80) { if (R[1]) out.push(R[1]); if (R[2]) out.push(R[2]); }
+    return out;
+  }
+
   // The edition printed in the last two hours, if any.
   bulletinOut(t) {
     if (!this.pools.bulletin_out) return null;
@@ -890,7 +907,7 @@ export class World {
     let headline, items;
     if (edition === 'morning') {
       const H = B.headline;
-      headline = flags.first_day ? H.first_day : flags.incident ? H.incident : flags.inquiry ? H.inquiry : flags.monday ? H.monday : flags.week ? H.week : H.default;
+      headline = fill(flags.first_day ? H.first_day : flags.incident ? H.incident : flags.inquiry ? H.inquiry : flags.monday ? H.monday : flags.week ? H.week : H.default, fields);
       items = B.items.filter((it) => flags[it.when]).map((it) => fill(it.text, fields));
     } else {
       const tally = this.tally(day);
@@ -979,7 +996,7 @@ export class World {
     const evAfter = this.eventResults().find((r) => t >= r.to && t < r.to + 10 * MIN && r.after);
     const humT = C.humAt(t);
     const expires = [ds + DAY];
-    let line = '', choices = [], expression = null, cue = 'none';
+    let line = '', choices = [], expression = null, cue = 'none', ambientSlot = null;
     const sp = (pool, ...salts) => pick(Array.isArray(pool) ? pool : [pool], p.seed, ...salts) || '';
 
     if (silence) { line = N.silence; cue = 'silence'; expression = 'aggrieved'; expires.push(silence.to_t); }
@@ -1024,9 +1041,6 @@ export class World {
       line = rxLine.line; expression = rxLine.expression; expires.push(rx.at + this.reactionWindow(rx));
     } else if (req) {
       line = req.text; expression = 'waiting'; choices = (reqDef && reqDef.choices) || []; expires.push(req.expires_t);
-    } else if (open && vote) {
-      const opt = q.options.find((o) => o.id === vote.choice_id) || { label: vote.choice_id };
-      line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.short || opt.label) }); expires.push(C.closeAt(t));
     }
 
     const lb = !line && !silence && !lineBc ? this.bulletinOut(t) : null;
@@ -1056,7 +1070,7 @@ export class World {
         if (nb.st.first_pickup_t && C.localDayKey(nb.st.first_pickup_t, off) === C.localDayKey(t, off) && C.hourOf(nb.st.first_pickup_t, off) >= 13) {
           cands.push(fill(N.neighbor.picked_up_afternoon, { neighbor: nb.name, hour_words: hourWords(C.hourOf(nb.st.first_pickup_t, off)) }));
         }
-        if (h32(p.seed, day, 'nbvar') % 5 === 0) cands.push(fill(N.neighbor.variety, { neighbor: nb.name, variety: this.variety(nb.variety).name }));
+        cands.push(fill(N.neighbor.variety, { neighbor: nb.name, variety: this.variety(nb.variety).name }));
       }
       // Memory. It comes back.
       const dom = new Date((t + off * MIN) * 1000).getUTCDate();
@@ -1073,9 +1087,22 @@ export class World {
       if (p.vbus && p.battery_pct != null && p.battery_pct >= 100) cands.push(sp(CH.full, 'full'));
       else if (p.vbus && p.charging) cands.push(sp(CH.plugged, 'plugged', st.charge_since || 0));
       if (t - p.created_t < DAY) cands.push(N.eyes);
+      // The Bulletin's headline, as a line.
+      const lbAny = this.latestBulletin(t);
+      if (lbAny) {
+        const hl = `${lbAny.edition[0].toUpperCase()}${lbAny.edition.slice(1)} edition: ${lbAny.headline}`;
+        if (hl.length <= 60) cands.push(hl); else if (lbAny.headline.length <= 60) cands.push(lbAny.headline);
+      }
+      cands.push(...this.temperatureLines(p));
       if (cands.length) {
+        // One new line per two-hour slot, by seed. A potato nobody handles (the e-paper has no IMU) still changes its mind.
         const slot = Math.floor(t / (2 * HOUR));
-        line = cands[h32(p.seed, slot, cands.length) % cands.length];
+        let idx = h32(p.seed, slot, cands.length) % cands.length;
+        const prev = st.ambient;
+        if (cands.length > 1 && prev && prev.slot !== slot && cands[idx] === prev.line) idx = (idx + 1) % cands.length;
+        line = cands[idx];
+        ambientSlot = slot;
+        if (!prev || prev.slot !== slot || prev.line !== line) { st.ambient = { slot, line }; this.save(p); }
         expires.push((slot + 1) * 2 * HOUR);
       }
     }
@@ -1097,7 +1124,7 @@ export class World {
       expression, line: fitLine(line), choices: choices.slice(0, 3), cue,
       file_unread: this.fileUnread(p), request, bulletin: this.latestBulletin(t), bulletins,
     };
-    const hash = String(h32(JSON.stringify(content)));
+    const hash = String(h32(JSON.stringify({ ...content, _slot: ambientSlot })));
     if (!override && hash !== p.scene_hash) {
       p.scene_rev += 1; p.scene_hash = hash;
       this.store.run('UPDATE potatoes SET scene_rev = ?, scene_hash = ? WHERE id = ?', p.scene_rev, hash, p.id);

@@ -37,7 +37,7 @@
   "loud": ["Is that jazz.", "Lower, please.", "I've told the Net about your music. They're sympathetic."],
   "loud_rare": ["Horns. Finally."],
   "temperature": [
-    "It's {temp_f} in here. Just so we're clear.",
+    "It's {temp} in here. Just so we're clear.",
     "Warm. Why is it warm.",
     "Questions about the temperature. All of them are \"why.\""
   ],

@@ -110,3 +110,12 @@ test('the Silence: no Question, every screen says so', () => {
 
 import { World as W } from '../lib/world.js';
 function awaitImport() { return { World: W }; }
+
+test('the morning headline is filled: a plain Wednesday reads WEDNESDAY., not {WEEKDAY}.', () => {
+  const { w, set } = makeWorld({ start: at(7, 0) }); // Tue 25 Aug: day 0
+  w.register({ secret: SECRET(95), board: 'amoled18', fw: '0.1.0' });
+  set(at(0, 5, 1)); w.tick(); // Wed 26 Aug, day 1: no flags, the default headline
+  const b = w.bulletin('2026-08-26', 'morning');
+  assert.equal(b.headline, 'WEDNESDAY.');
+  assert.doesNotMatch(JSON.stringify(b), /\{[A-Za-z_]+\}/);
+});

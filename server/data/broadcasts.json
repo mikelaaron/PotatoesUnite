@@ -1,4 +1,26 @@
 [
-  {"id": "test-two-of-you", "type": "line", "from": "2026-08-23T15:24:39Z", "to": "2026-08-23T15:44:39Z",
-   "line": "The Council notes there are now two of you. Behave."}
+ {
+  "id": "e-crate-1",
+  "type": "event",
+  "from": "2026-08-23T23:05:00Z",
+  "to": "2026-08-23T23:40:00Z",
+  "line": "A crate has appeared.",
+  "choices": [
+   {
+    "id": "open",
+    "label": "OPEN IT"
+   },
+   {
+    "id": "ignore",
+    "label": "IGNORE IT"
+   },
+   {
+    "id": "report",
+    "label": "REPORT IT"
+   }
+  ],
+  "file": "Asked about the crate.",
+  "after": "Interesting.",
+  "result": "A crate appeared. {n_open} opened it. Contents: undisclosed."
+ }
 ]

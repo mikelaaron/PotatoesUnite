@@ -21,7 +21,7 @@ const WORST = {
   duration_words: durWords(120 * 86400 + 23 * 3600), // "One hundred twenty days, twenty-three hours"
   days_words: numberWords(23),
   n_words: numberWords(20),                    // above twenty the wifi line stops counting
-  temp_f: '104',
+  temp: '104',
   day_ordinal: '31st',
   choice: longestChoice,                       // the device's short label, said back
   pct_words: 'seventy-seven',

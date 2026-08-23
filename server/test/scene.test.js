@@ -100,8 +100,10 @@ test('events in this heartbeat outrank steady state: a 4h45m dark restore beats 
   // steady state only once no event is speaking
   set(at(9, 15));
   const s3 = w.heartbeat({ ...body, events: [] });
-  assert.ok(!restored.includes(s3.line));
-  if (!s3.request) assert.ok(w.pools.charging.plugged.includes(s3.line), `charging is steady state: ${s3.line}`);
+  assert.ok(!restored.includes(s3.line), `no longer the restore line: ${s3.line}`);
+  const reactions = [...w.pools.reactions.pickup, ...w.pools.reactions.putdown, ...w.pools.reactions.tap, ...w.pools.reactions.shake];
+  assert.ok(!reactions.includes(s3.line), `steady state, not a reaction: ${s3.line}`);
+  assert.doesNotMatch(s3.line, /\{[A-Za-z_]+\}/, `no unfilled placeholder: ${s3.line}`);
 });
 
 test('among events, severity picks the speaker: shake beats pickup and the charger', () => {
