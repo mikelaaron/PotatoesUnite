@@ -100,3 +100,17 @@ Clarifications from building `server/` against the contract above. Nothing here 
 - **Incident day.** A drop on day D schedules the inquiry Question (`trigger: "after_drop"`) for D+1 and the D+1 morning Bulletin leads with `INCIDENT.`; day D's Question is not suspended.
 - **Gaps.** A heartbeat after more than 6 h of silence with no `dormant_resume`/`wifi_restore` event files `Unheard from. 7h 2m. — Presumed resting.`
 - **`/card/…`** returns 501 until the card renderer exists.
+
+## Notes from implementation
+
+*Firmware (`firmware/potato`), 2026-08-22.*
+
+- **Event `t` may be 0.** The device keeps event times as uptime and converts to epoch at send. Before it has a clock (no NTP yet, first minutes after boot) it sends `"t": 0`; the server should use arrival time for those.
+- **Orientation, as the AMOLED judges it** (screen +y is down): `down` = face down (az > 0.72); `inverted` = standing on its top edge (in-plane gravity > 0.6 g pointing up the screen); `side` = standing on a long edge (in-plane gravity mostly along x); `up` = everything else, i.e. flat face-up or standing upright. A request with `orientation:up` is therefore satisfied by a potato lying flat.
+- **`sound` is `"quiet"` on `amoled18` for now.** The ES8311 mic path is not wired; the field is present so the schema is stable.
+- **`cue: throat_clear` is accepted and skipped** on `amoled18` (no audio path). `incident` widens the eyes for four seconds. `silence` does nothing on the device.
+- **Requests with `check: tap`** add a `DONE` button; pressing it sends `request_done` as an event, not a `/v0/choice`. `request_id` travels as the string from the scene (`"r81"`). `orientation:*`, `still:<s>`, `held:<s>` and `transit` are verified on the device for `for_s` seconds (or the seconds in the check); `request_expired` is sent when `expires_at` passes unmet.
+- **Heartbeat timing.** Every 120 s, and 1.5 s after the last event in a burst (pickup followed by putdown is one heartbeat, not two). Events are held through failed heartbeats and drained only on a 200; the queue keeps the newest 32.
+- **`temp_c` is omitted** (no sensor on `amoled18`).
+- **`/v0/choice` 409** is treated like 200: the returned Scene is rendered.
+- **Server URL.** Default `http://potatoes.local:8080`; `.local` is resolved by mDNS query from the device, so the server host should advertise itself (or the Hands set an IP URL in the portal).

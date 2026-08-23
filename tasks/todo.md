@@ -13,7 +13,7 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 
 ## Now
 - [x] `server/` — one Node process, zero deps (`node:sqlite`), protocol v0, the board, the File, 30 Questions + pools as data, 19 tests. `cd server && npm start` prints the LAN URL for the device.
-- [ ] `firmware/potato` — fork of creature: potato silhouette + eyes, text line, up to three touch buttons, Wi-Fi captive portal, heartbeat/scene/choice, events from the existing IMU code, battery from AXP2101. Flashed and verified on the desk.
+- [x] `firmware/potato` — fork of creature: lying-down potato per art spec, text line + up to three touch buttons, captive-portal Wi-Fi (AP POTATO-xxxx), protocol v0 (register/heartbeat/scene/choice, NVS identity + cached scene), IMU events, AXP2101 battery. Flashed and verified over serial; 41% of flash, 55 fps.
 - [ ] Live: both talking on the LAN. Pick it up, see it in the File.
 
 ## Next
@@ -24,3 +24,8 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 
 ## Gate
 Two desks, one week, no bricks, no blight. One of us says a potato "decided" something.
+
+## Open from firmware bring-up (22 Aug)
+- [ ] One boot in ~10 after a USB reset came up with XCA9554/CST820/AXP2101 "not found" (no touch/PMU until next reboot). Likely an I2C slave holding SDA across reset; add a 9-clock bus-recovery pulse before `Wire.begin`.
+- [ ] `sound` is always "quiet" (ES8311 mic path not wired). `cue: throat_clear` logged, not played. No sprout drawing yet. Saturday line and "charged while you slept" not implemented.
+- [ ] Real server needs `potatoes.local` advertised (mDNS) or an IP URL set in the portal; dev uses gitignored `firmware/potato/secrets.h`.

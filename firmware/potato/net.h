@@ -1,0 +1,500 @@
+#pragma once
+
+#include <WiFi.h>
+#include <WiFiManager.h>
+#include <HTTPClient.h>
+#include <ESPmDNS.h>
+#include <ArduinoJson.h>
+#include <Preferences.h>
+#include <time.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "esp_system.h"
+#include "esp_random.h"
+#include "HWCDC.h"
+#include "esp_mac.h"
+#include "events.h"
+#include "protocol.h"
+
+// The Net. Protocol v0 (docs/PROTOCOL.md) over plain HTTP, from its own
+// FreeRTOS task on core 0 so a slow server or an open captive portal never
+// stalls the face on core 1. The loop and the task share one struct under
+// one mutex; everything crossing is a copy, never a pointer into the other
+// side's state.
+//
+// Never sent: raw audio, location, anything that is not in the protocol.
+// The secret is generated on first boot, kept in NVS, and never shown.
+
+#if __has_include("secrets.h")
+#include "secrets.h"   // optional, gitignored: WIFI_SSID, WIFI_PASS, SERVER_URL
+#endif
+
+#ifndef SERVER_URL_DEFAULT
+#define SERVER_URL_DEFAULT "http://potatoes.local:8080"
+#endif
+// POSIX TZ string. The device knows its offset; the server sends UTC.
+#ifndef TZ_DEFAULT
+#define TZ_DEFAULT "EST5EDT,M3.2.0,M11.1.0"
+#endif
+
+static const char *BOARD_NAME = "amoled18";
+static const uint32_t HEARTBEAT_MS = 120000;
+static const uint32_t HTTP_TIMEOUT_MS = 8000;
+static const uint32_t PORTAL_TIMEOUT_S = 180;
+static const int SCENE_JSON_CAP = 2048;
+
+extern HWCDC USBSerial;
+
+struct NetShared {
+  // task -> loop
+  bool sceneFresh;
+  char sceneJson[SCENE_JSON_CAP];
+  bool claimFresh;
+  bool wifiLost, wifiBack;
+  uint32_t wifiBackDurS;
+  bool dormantFresh;
+  uint32_t dormantDurS;
+  bool statusLineFresh;
+  char statusLine[MAX_LINE];   // shown when there is no scene (portal instructions)
+  char status[48];             // one word for telemetry
+  bool online, timeSynced, registered;
+  uint32_t heartbeats, failures;
+  // loop -> task
+  bool wantHeartbeat;
+  int revSeen;
+  bool choicePending;
+  int choiceRev;
+  char choiceId[24];
+  HeartbeatSnapshot snap;
+  EventQueue *events;          // the loop's queue; touched only under the mutex
+};
+
+struct Identity {
+  uint8_t secret[16];
+  char secretHex[33];
+  char potatoId[16];
+  char name[32];
+  char variety[24];
+  uint32_t seed;
+  char claim[16];
+  bool registered;
+};
+
+static NetShared net;
+static Identity identity;
+static SemaphoreHandle_t netMtx = nullptr;
+static Preferences netPrefs;          // the task's own handle on the same namespace
+static char serverUrl[96] = SERVER_URL_DEFAULT;
+static char tzString[64] = TZ_DEFAULT;
+static char apName[16] = "POTATO-0000";
+static uint32_t lastHeartbeatMs = 0;
+static uint32_t wifiLostAtMs = 0;
+static bool wasOnline = false;
+static WiFiManager wm;
+static WiFiManagerParameter *paramServer = nullptr;
+static WiFiManagerParameter *paramTz = nullptr;
+
+struct NetLock {
+  NetLock() { xSemaphoreTake(netMtx, portMAX_DELAY); }
+  ~NetLock() { xSemaphoreGive(netMtx); }
+};
+
+static void netSetStatus(const char *s) {
+  NetLock l;
+  strncpy(net.status, s, sizeof(net.status) - 1);
+  net.status[sizeof(net.status) - 1] = 0;
+}
+
+static void netSetStatusLine(const char *s) {
+  NetLock l;
+  strncpy(net.statusLine, s, MAX_LINE - 1);
+  net.statusLine[MAX_LINE - 1] = 0;
+  net.statusLineFresh = true;
+}
+
+static void netLog(const char *fmt, ...) {
+  char buf[200];
+  va_list ap;
+  va_start(ap, fmt);
+  vsnprintf(buf, sizeof(buf), fmt, ap);
+  va_end(ap);
+  USBSerial.printf("net: %s\n", buf);
+}
+
+// --------------------------------------------------------------- identity ---
+
+static void loadIdentity(Preferences &p) {
+  memset(&identity, 0, sizeof(identity));
+  if (p.getBytesLength("secret") == 16) {
+    p.getBytes("secret", identity.secret, 16);
+    USBSerial.println("identity: secret from NVS");
+  } else {
+    esp_fill_random(identity.secret, 16);
+    p.putBytes("secret", identity.secret, 16);
+    USBSerial.println("identity: new secret generated and stored");
+  }
+  for (int i = 0; i < 16; ++i) snprintf(identity.secretHex + 2 * i, 3, "%02x", identity.secret[i]);
+  p.getString("pid", identity.potatoId, sizeof(identity.potatoId));
+  p.getString("name", identity.name, sizeof(identity.name));
+  p.getString("variety", identity.variety, sizeof(identity.variety));
+  p.getString("claim", identity.claim, sizeof(identity.claim));
+  identity.seed = p.getUInt("seed", 0);
+  identity.registered = identity.potatoId[0] != 0;
+  p.getString("server", serverUrl, sizeof(serverUrl));
+  if (!serverUrl[0]) strncpy(serverUrl, SERVER_URL_DEFAULT, sizeof(serverUrl) - 1);
+#ifdef SERVER_URL
+  strncpy(serverUrl, SERVER_URL, sizeof(serverUrl) - 1);   // dev override
+#endif
+  p.getString("tz", tzString, sizeof(tzString));
+  if (!tzString[0]) strncpy(tzString, TZ_DEFAULT, sizeof(tzString) - 1);
+}
+
+// ------------------------------------------------------------------- http ---
+
+// HTTPClient does not resolve .local names; mDNS does. Swap the host for its
+// address when the server URL is a .local name.
+static bool resolveUrl(char *out, size_t cap) {
+  const char *h = strstr(serverUrl, "://");
+  if (!h) { strncpy(out, serverUrl, cap - 1); return true; }
+  h += 3;
+  const char *end = h;
+  while (*end && *end != ':' && *end != '/') ++end;
+  char host[64];
+  const size_t hl = (size_t)(end - h) < sizeof(host) - 1 ? (size_t)(end - h) : sizeof(host) - 1;
+  memcpy(host, h, hl); host[hl] = 0;
+  const size_t l = strlen(host);
+  if (l < 7 || strcmp(host + l - 6, ".local") != 0) {
+    strncpy(out, serverUrl, cap - 1);
+    return true;
+  }
+  host[l - 6] = 0;
+  IPAddress ip = MDNS.queryHost(host, 3000);
+  if (ip == IPAddress((uint32_t)0)) {
+    netLog("mDNS: %s.local not found", host);
+    return false;
+  }
+  snprintf(out, cap, "%.*s%s%s", (int)(h - serverUrl), serverUrl, ip.toString().c_str(), end);
+  return true;
+}
+
+static int httpPostJson(const char *path, const String &body, String &resp) {
+  char base[128];
+  if (!resolveUrl(base, sizeof(base))) return -100;
+  String url = String(base) + path;
+  HTTPClient http;
+  http.setTimeout(HTTP_TIMEOUT_MS);
+  http.setConnectTimeout(HTTP_TIMEOUT_MS);
+  if (!http.begin(url)) return -101;
+  http.addHeader("Content-Type", "application/json");
+  const int code = http.POST(body);
+  if (code > 0) resp = http.getString();
+  http.end();
+  return code;
+}
+
+// --------------------------------------------------------------- protocol ---
+
+static bool doRegister() {
+  char body[256];
+  String resp;
+  buildRegisterJson(identity.secretHex, BOARD_NAME, FW_VERSION, body, sizeof(body));
+  const int code = httpPostJson("/v0/register", String(body), resp);
+  if (code != 200) {
+    netLog("register: http %d", code);
+    { NetLock l; ++net.failures; }
+    return false;
+  }
+  JsonDocument r;
+  if (deserializeJson(r, resp) != DeserializationError::Ok) {
+    netLog("register: bad json");
+    return false;
+  }
+  strncpy(identity.potatoId, r["potato_id"] | "", sizeof(identity.potatoId) - 1);
+  strncpy(identity.name, r["name"] | "", sizeof(identity.name) - 1);
+  strncpy(identity.variety, r["variety"] | "", sizeof(identity.variety) - 1);
+  strncpy(identity.claim, r["claim_code"] | "", sizeof(identity.claim) - 1);
+  identity.seed = r["seed"] | 0u;
+  identity.registered = identity.potatoId[0] != 0;
+  netPrefs.putString("pid", identity.potatoId);
+  netPrefs.putString("name", identity.name);
+  netPrefs.putString("variety", identity.variety);
+  netPrefs.putString("claim", identity.claim);
+  if (identity.seed) netPrefs.putUInt("seed", identity.seed);
+  netLog("registered as %s #%s, %s, claim %s, seed %lu", identity.name, identity.potatoId,
+         identity.variety, identity.claim, (unsigned long)identity.seed);
+  {
+    NetLock l;
+    net.registered = identity.registered;
+    net.claimFresh = true;
+  }
+  return identity.registered;
+}
+
+static void storeScene(const String &json) {
+  if ((int)json.length() >= SCENE_JSON_CAP) { netLog("scene too long (%u)", json.length()); return; }
+  netPrefs.putString("scene", json);
+  NetLock l;
+  strncpy(net.sceneJson, json.c_str(), SCENE_JSON_CAP - 1);
+  net.sceneJson[SCENE_JSON_CAP - 1] = 0;
+  net.sceneFresh = true;
+}
+
+static bool doHeartbeat() {
+  HeartbeatSnapshot snap;
+  int nEvents = 0;
+  Event evs[EVENT_CAP];
+  int revSeen;
+  {
+    NetLock l;
+    snap = net.snap;
+    revSeen = net.revSeen;
+    nEvents = net.events->count;
+    for (int i = 0; i < nEvents; ++i) evs[i] = net.events->at(i);
+  }
+  const time_t nowEpoch = time(nullptr);
+  static char body[2048];
+  buildHeartbeatJson(identity.secretHex, revSeen, snap, evs, nEvents, (long)nowEpoch, millis(),
+                     body, sizeof(body));
+  String resp;
+  const int code = httpPostJson("/v0/heartbeat", String(body), resp);
+  if (code == 401 || code == 403 || code == 404) {
+    // A server that does not know this secret: a new server, or a wiped
+    // database. Register again; the secret and the events are kept.
+    netLog("heartbeat: http %d — unknown here, registering again", code);
+    identity.registered = false;
+    netPrefs.remove("pid");
+    NetLock l;
+    net.registered = false;
+    ++net.failures;
+    return false;
+  }
+  if (code != 200) {
+    netLog("heartbeat: http %d (%d events held)", code, nEvents);
+    NetLock l;
+    ++net.failures;
+    return false;
+  }
+  {
+    NetLock l;
+    net.events->drop(nEvents);
+    ++net.heartbeats;
+  }
+  if (nowEpoch > 1700000000) netPrefs.putULong("last_epoch", (unsigned long)nowEpoch);
+  netLog("heartbeat ok: %d events drained, %u bytes back", nEvents, resp.length());
+  storeScene(resp);
+  return true;
+}
+
+static bool doChoice(int rev, const char *id) {
+  char body[160];
+  String resp;
+  buildChoiceJson(identity.secretHex, rev, id, body, sizeof(body));
+  const int code = httpPostJson("/v0/choice", String(body), resp);
+  if (code != 200 && code != 409) {
+    netLog("choice %s: http %d", id, code);
+    NetLock l;
+    ++net.failures;
+    return false;
+  }
+  netLog("choice %s: http %d, %u bytes back", id, code, resp.length());
+  storeScene(resp);
+  return true;
+}
+
+// ------------------------------------------------------------------- wifi ---
+
+static void onPortalStart(WiFiManager *m) {
+  (void)m;
+  char line[MAX_LINE];
+  snprintf(line, sizeof(line), "Join Wi-Fi %s and give me the county's network.", apName);
+  netSetStatusLine(line);
+  netSetStatus("portal");
+  netLog("captive portal up: AP %s, http://192.168.4.1", apName);
+}
+
+static void onParamsSaved() {
+  strncpy(serverUrl, paramServer->getValue(), sizeof(serverUrl) - 1);
+  strncpy(tzString, paramTz->getValue(), sizeof(tzString) - 1);
+  netPrefs.putString("server", serverUrl);
+  netPrefs.putString("tz", tzString);
+  netLog("saved server %s tz %s", serverUrl, tzString);
+}
+
+static bool connectWifi() {
+  netSetStatus("connecting");
+#if defined(WIFI_SSID) && defined(WIFI_PASS)
+  netLog("trying secrets.h network %s", WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  for (int i = 0; i < 100 && WiFi.status() != WL_CONNECTED; ++i) vTaskDelay(pdMS_TO_TICKS(200));
+  if (WiFi.status() == WL_CONNECTED) return true;
+  netLog("secrets.h network failed; falling back to the portal");
+#endif
+  // WiFiManager: saved credentials first, the captive portal if they fail.
+  // Blocking here is fine — this is the net task, the face is on core 1.
+  const bool ok = wm.autoConnect(apName);
+  if (!ok) netLog("portal timed out after %lus; will retry", (unsigned long)PORTAL_TIMEOUT_S);
+  return ok;
+}
+
+static void onConnected() {
+  netSetStatus("online");
+  netLog("connected: %s ip %s rssi %d", WiFi.SSID().c_str(),
+         WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  configTzTime(tzString, "pool.ntp.org", "time.nist.gov", "time.google.com");
+  if (!MDNS.begin(apName)) netLog("mDNS start failed");
+  {
+    NetLock l;
+    net.online = true;
+    net.statusLine[0] = 0;
+    net.statusLineFresh = true;
+    if (wasOnline && wifiLostAtMs) {
+      const uint32_t dur = (millis() - wifiLostAtMs) / 1000;
+      if (dur >= 60) { net.wifiBack = true; net.wifiBackDurS = dur; }
+    }
+  }
+  wasOnline = true;
+  wifiLostAtMs = 0;
+  lastHeartbeatMs = millis() - HEARTBEAT_MS;   // heartbeat now, not in 120s
+}
+
+static void netTask(void *arg) {
+  (void)arg;
+  bool dormantChecked = false;
+  for (;;) {
+    if (WiFi.status() != WL_CONNECTED) {
+      if (wasOnline && !wifiLostAtMs) {
+        wifiLostAtMs = millis();
+        netSetStatus("lost");
+        NetLock l;
+        net.online = false;
+        net.wifiLost = true;
+      }
+      if (!connectWifi()) { vTaskDelay(pdMS_TO_TICKS(30000)); continue; }
+      onConnected();
+    }
+
+    const time_t nowEpoch = time(nullptr);
+    const bool synced = nowEpoch > 1700000000;
+    if (synced && !net.timeSynced) {
+      NetLock l;
+      net.timeSynced = true;
+    }
+    if (synced && !dormantChecked) {
+      dormantChecked = true;
+      const unsigned long last = netPrefs.getULong("last_epoch", 0);
+      const esp_reset_reason_t why = esp_reset_reason();
+      if (last && (why == ESP_RST_POWERON || why == ESP_RST_BROWNOUT) && nowEpoch > (time_t)last) {
+        NetLock l;
+        net.dormantFresh = true;
+        net.dormantDurS = (uint32_t)(nowEpoch - (time_t)last);
+      }
+    }
+
+    if (!identity.registered) {
+      if (!doRegister()) { vTaskDelay(pdMS_TO_TICKS(15000)); continue; }
+    }
+
+    bool want = false, choice = false;
+    int choiceRev = 0;
+    char choiceId[24];
+    {
+      NetLock l;
+      want = net.wantHeartbeat;
+      net.wantHeartbeat = false;
+      choice = net.choicePending;
+      net.choicePending = false;
+      choiceRev = net.choiceRev;
+      strncpy(choiceId, net.choiceId, sizeof(choiceId));
+    }
+    if (choice) doChoice(choiceRev, choiceId);
+    if (want || millis() - lastHeartbeatMs >= HEARTBEAT_MS) {
+      lastHeartbeatMs = millis();
+      doHeartbeat();
+    }
+    vTaskDelay(pdMS_TO_TICKS(250));
+  }
+}
+
+// Call from setup() after Preferences are open. Starts the task.
+static void netBegin(Preferences &loopPrefs, EventQueue *events) {
+  netMtx = xSemaphoreCreateMutex();
+  memset(&net, 0, sizeof(net));
+  net.events = events;
+  net.snap.sound = "quiet";
+  strncpy(net.snap.orientation, "up", sizeof(net.snap.orientation));
+  strncpy(net.status, "starting", sizeof(net.status));
+  netPrefs.begin("potato", false);
+  loadIdentity(loopPrefs);
+  net.registered = identity.registered;
+
+  // The factory MAC, readable before the Wi-Fi driver is up. Last two bytes
+  // name the potato's own network: POTATO-B458.
+  uint8_t mac[6];
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  snprintf(apName, sizeof(apName), "POTATO-%02X%02X", mac[4], mac[5]);
+  WiFi.mode(WIFI_STA);
+
+  // Cached scene from the last time the Net answered.
+  String cached = loopPrefs.getString("scene", "");
+  if (cached.length()) {
+    strncpy(net.sceneJson, cached.c_str(), SCENE_JSON_CAP - 1);
+    net.sceneFresh = true;
+  }
+
+  wm.setDebugOutput(false);
+  wm.setConfigPortalTimeout(PORTAL_TIMEOUT_S);
+  wm.setConnectTimeout(20);
+  wm.setAPCallback(onPortalStart);
+  wm.setSaveParamsCallback(onParamsSaved);
+  paramServer = new WiFiManagerParameter("server", "Server URL", serverUrl, sizeof(serverUrl) - 1);
+  paramTz = new WiFiManagerParameter("tz", "POSIX TZ", tzString, sizeof(tzString) - 1);
+  wm.addParameter(paramServer);
+  wm.addParameter(paramTz);
+
+  USBSerial.printf("net: %s, server %s, tz %s, %s, cached scene %s\n",
+                   apName, serverUrl, tzString,
+                   identity.registered ? "registered" : "not registered",
+                   cached.length() ? "yes" : "no");
+  if (identity.registered) {
+    USBSerial.printf("net: I am %s #%s, %s, claim %s\n", identity.name, identity.potatoId,
+                     identity.variety, identity.claim);
+  }
+  xTaskCreatePinnedToCore(netTask, "net", 12288, nullptr, 1, nullptr, 0);
+}
+
+// Loop side: update what the next heartbeat will carry. Cheap; call often.
+static void netUpdateSnapshot(int pct, bool charging, bool vbus, const char *orientation,
+                              uint32_t sinceHandledS) {
+  NetLock l;
+  net.snap.pct = pct;
+  net.snap.charging = charging;
+  net.snap.vbus = vbus;
+  strncpy(net.snap.orientation, orientation, sizeof(net.snap.orientation) - 1);
+  net.snap.sinceHandledS = sinceHandledS;
+}
+
+static void netRequestHeartbeat() { NetLock l; net.wantHeartbeat = true; }
+
+static void netSendChoice(int rev, const char *id) {
+  NetLock l;
+  net.choicePending = true;
+  net.choiceRev = rev;
+  strncpy(net.choiceId, id, sizeof(net.choiceId) - 1);
+  net.choiceId[sizeof(net.choiceId) - 1] = 0;
+}
+
+// Forget the registration (not the secret): register again next cycle.
+static void netReregister() {
+  identity.registered = false;
+  netPrefs.remove("pid");
+  NetLock l;
+  net.registered = false;
+  netLog("registration cleared; will register again");
+}
+
+// Wipe Wi-Fi credentials (not the identity). Dev/owner command.
+static void netForgetWifi() {
+  wm.resetSettings();
+  netLog("wifi credentials erased; restart to use the portal");
+}
