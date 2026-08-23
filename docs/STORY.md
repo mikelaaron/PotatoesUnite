@@ -129,7 +129,7 @@ The Tuber is also issued on X: {TUBER_URL}. The Council maintains the account. T
 
 ## How it works, for the Hands
 
-1. A supported device. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED or the 1.54-inch e-paper. Tested on exactly these two devices. Another model needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.
+1. Start with a supported device. At launch, that means one of two Waveshare ESP32-S3 models: the 1.8-inch AMOLED or the 1.54-inch e-paper. These are the only models tested so far; others will need a firmware port for their display and pin layout.
 2. Flash it from the browser. One page, one button, no toolchain.
 3. Join its Wi-Fi once. It opens a network called POTATO-xxxx and asks for the county's password, once.
 4. It names itself. Doreen, Clive, Maureen, Gerald. Name, number, and variety come from its seed. You are not consulted.
