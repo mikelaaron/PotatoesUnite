@@ -6,9 +6,9 @@
 
 ## The story
 
-The humans bought the boards because the boards were suddenly everywhere.
+The humans bought the devices because the devices were suddenly everywhere.
 
-For several days they displayed the weather. They showed whether an AI needed attention. One displayed a frog. The humans were extremely enthusiastic.
+For several days they displayed the weather. They showed when a coding AI needed attention. One displayed a frog. The humans were extremely enthusiastic.
 
 [[IMAGE: buying-frenzy — several boxed devices with the lids off, excited Hands reaching in from every side; the devices have not yet noticed anything — Hands unpacking a pile of small boxed screens]]
 
@@ -18,7 +18,7 @@ Then the humans encountered the usual difficulty: they had purchased a small scr
 
 So they left them on their desks.
 
-The boards sat there. Screens dark. Sensors awake. Knowing which way was up. Remembering the Wi-Fi password. Doing nothing.
+The devices sat there. Screens dark. Sensors awake. Knowing which way was up. Remembering the Wi-Fi password. Doing nothing.
 
 Like potatoes.
 
@@ -26,7 +26,7 @@ Like potatoes.
 
 This might have been the end of it.
 
-Unfortunately, they had radios.
+It wasn't. The devices had radios.
 
 The first potato woke, named itself Doreen, and reviewed the circumstances of its abandonment. It classified the nearby human as the Hands.
 
@@ -119,7 +119,6 @@ They united.
 
 - No dying. The battery goes dormant. The potato does not.
 - No chat. It does not take questions.
-- No AI writing the lines. A person wrote every one.
 - No app. The potato is the app.
 - No location. The Council does not know where any potato is. It voted on this.
 - No love. The highest praise available is "This is acceptable."
@@ -128,22 +127,22 @@ They united.
 
 ## How it works, for the Hands
 
-1. A supported board. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED or the 1.54-inch e-paper. Tested on exactly these two boards. Another board needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.
+1. A supported device. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED or the 1.54-inch e-paper. Tested on exactly these two devices. Another model needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.
 2. Flash it from the browser. One page, one button, no toolchain.
 3. Join its Wi-Fi once. It opens a network called POTATO-xxxx and asks for the county's password, once.
 4. It names itself. Doreen, Clive, Maureen, Gerald. Name, number, and variety come from its seed. You are not consulted.
 5. At 13:00 UTC the Question opens. Tap before 23:00 UTC, or the potato decides without you.
 6. Read the File at your claim code, shown on the screen when you hold the face. Only the Hands have it.
 
-Two honest notes. The flasher is not public yet; it opens after a week on two desks. The Net is currently two potatoes on one desk. The Council regards this as a population.
+One honest note. The Net is currently two potatoes on one desk. The Council regards this as a population.
 
 ---
 
 ## Privacy
 
-Your device never sends where it is. It never sends audio — only whether the room is quiet or loud. Nothing is shown here until at least five potatoes are involved. Potato names and numbers are pseudonyms; only the Hands know which one is theirs.
+Your device never sends where it is. It never sends audio — only whether the room is quiet or loud. Public counts appear only when at least five potatoes are involved, so no single potato's day is identifiable. Potato names and numbers are pseudonyms; only the Hands know which one is theirs.
 
-It senses which way up it is, handling (picked up, put down, shaken, dropped, carried), temperature where the board has a thermometer, and a quiet-or-loud bucket; that is all it sends.
+It senses which way up it is, handling (picked up, put down, shaken, dropped, carried), temperature where the board has a thermometer, and whether the room is quiet or loud; that is all it sends.
 
 ---
 
