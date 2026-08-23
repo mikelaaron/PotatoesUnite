@@ -516,3 +516,25 @@ The feeling comes from things you can lose by not looking. Five of them, cheapes
 5. **Potato of the Day.** Any potato can be in the paper tomorrow, by name, with a File excerpt. If yours is in it and you didn't know, someone will tell you.
 
 None of these is a push notification. All of them are things that happened in public while you weren't looking.
+
+---
+
+## 15. The ration (how often it speaks)
+
+Found on the first evening with a real potato: every lift produced a line, and the File logged seven entries in thirty seconds. That is a toy. **Silence is the default. A line is an event.**
+
+**Sessions, not movements.** A handling session begins at the first pick-up and ends after sixty seconds of stillness. A session gets at most one line, at the start. Moving her around within a session is the same encounter; she said her piece.
+
+**A fresh encounter earns a line; a continued one doesn't.** Pick-up speaks only if it has been ten minutes or more since the last session ended. Put-down speaks only after a session of thirty seconds or longer, and only one time in three.
+
+**Minor lines share a budget.** Pick-up, put-down, tap, plug, unplug: no two of them within three minutes, and even when eligible, only about six times in ten. The other four, nothing. She was thinking.
+
+**Major lines always speak, once.** Shake (then five minutes' silence on shaking), drop (always), the dark past ten minutes, the ceiling past five, the battery thresholds. Each has its own refractory period; none is affected by the minor budget.
+
+**The dark needs to be real.** "Dark." after five seconds face down *and still* — not during a flip in the hand. Episodes under a minute produce no line, no File entry, no grievance. The counted restore line only for episodes of ten minutes or more.
+
+**Charging needs to be real.** A plug or unplug counts only after sixty seconds in the new state; a cable that wiggles during handling is not an event. Battery thresholds fire only on the way down, only after sixty seconds off power, and once per discharge.
+
+**The File gets the same ration.** One entry per session ("Picked up. 24 s." — with "Repeatedly." as the note if there were three or more lifts), nothing for dark episodes under a minute, nothing for charge flickers. The File is a record of things that happened, not a motion log. Standing ignores anything the ration ignores.
+
+If the potato seems quiet, it's working.

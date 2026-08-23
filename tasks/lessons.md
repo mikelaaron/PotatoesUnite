@@ -35,3 +35,15 @@ Text through `gfx->print` goes pixel by pixel (odd 1x1 windows) and would
 shear the panel. The text band is an `Arduino_Canvas` in PSRAM, drawn with
 the GFX font engine and flushed as one even-aligned blit, only when the text
 changes (about 20 ms per flush, a few times an hour).
+
+## Silence is the default; every reaction is rationed
+
+**2026-08-22.** First real handling session: every lift produced a line and the
+File filed seven entries in thirty seconds, including "Restored from the dark.
+1s." Mike's verdict: too many quips, too often. The detectors were right; the
+*policy* was missing. A sensor event is not a speaking opportunity.
+
+**How to apply:** model handling as sessions with one line at the start, give
+minor lines a shared budget with a random skip, let only major events bypass
+it, and debounce physical states (dark, power) before they count. The File
+records sessions, not movements. Rules are in `docs/POTATO_VOICE.md` §15.
