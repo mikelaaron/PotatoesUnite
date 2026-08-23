@@ -258,7 +258,7 @@ static bool doHeartbeat() {
   }
   const time_t nowEpoch = time(nullptr);
   static char body[2048];
-  buildHeartbeatJson(identity.secretHex, revSeen, snap, evs, nEvents, (long)nowEpoch, millis(),
+  buildHeartbeatJson(identity.secretHex, FW_VERSION, revSeen, snap, evs, nEvents, (long)nowEpoch, millis(),
                      body, sizeof(body));
   String resp;
   const int code = httpPostJson("/v0/heartbeat", String(body), resp);

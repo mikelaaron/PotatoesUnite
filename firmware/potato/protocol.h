@@ -108,11 +108,12 @@ static size_t buildRegisterJson(const char *secretHex, const char *board, const 
 
 // Event times are kept as millis on the device and converted here. t = 0
 // means the device had no clock yet; the server should use arrival time.
-static size_t buildHeartbeatJson(const char *secretHex, int revSeen, const HeartbeatSnapshot &snap,
-                                 const Event *evs, int nEvents, long nowEpoch, uint32_t nowMs,
-                                 char *out, size_t cap) {
+static size_t buildHeartbeatJson(const char *secretHex, const char *fw, int revSeen,
+                                 const HeartbeatSnapshot &snap, const Event *evs, int nEvents,
+                                 long nowEpoch, uint32_t nowMs, char *out, size_t cap) {
   JsonDocument doc;
   doc["secret"] = secretHex;
+  doc["fw"] = fw;   // every heartbeat, so the server sees which version actually stuck
   doc["rev_seen"] = revSeen;
   JsonObject b = doc["battery"].to<JsonObject>();
   // The field is always present; pct is null when the battery is unknown

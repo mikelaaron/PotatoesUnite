@@ -5,6 +5,7 @@
 //   c++ -std=c++11 -I firmware/potato -I "$AJ" firmware/tools/protocol_test.cpp -o /tmp/pt && /tmp/pt
 #include <stdio.h>
 #include <string.h>
+#include "version.h"
 #include "protocol.h"
 #include "pools.h"
 
@@ -66,11 +67,12 @@ int main() {
   for (int i = 0; i < q.count; ++i) evs[i] = q.at(i);
   HeartbeatSnapshot snap = {63, true, true, "up", 14400, "quiet"};
   char body[1536];
-  size_t n = buildHeartbeatJson("00ff", 42, snap, evs, q.count, 1756000010L, 10000, body, sizeof(body));
+  size_t n = buildHeartbeatJson("00ff", FW_VERSION, 42, snap, evs, q.count, 1756000010L, 10000, body, sizeof(body));
   CHECK(n > 0);
   JsonDocument back;
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);
   CHECK_STR(back["secret"] | "", "00ff");
+  CHECK_STR(back["fw"] | "", FW_VERSION);   // the heartbeat carries the running version
   CHECK((back["rev_seen"] | 0) == 42);
   CHECK((back["battery"]["pct"] | 0) == 63);
   CHECK((back["battery"]["charging"] | false) == true);
@@ -84,16 +86,18 @@ int main() {
   CHECK((back["events"][2]["pct"] | 0) == 20);
   CHECK_STR(back["events"][3]["request_id"] | "", "r81");
   CHECK(back["temp_c"].isNull());
-  n = buildHeartbeatJson("00ff", 0, snap, evs, 1, 0L, 10000, body, sizeof(body));
+  n = buildHeartbeatJson("00ff", FW_VERSION, 0, snap, evs, 1, 0L, 10000, body, sizeof(body));
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);
   CHECK((back["events"][0]["t"] | -1L) == 0L);                  // no clock yet
   HeartbeatSnapshot blind = {-1, false, true, "up", 0, "quiet"};  // PMU missing
-  n = buildHeartbeatJson("00ff", 0, blind, evs, 0, 0L, 10000, body, sizeof(body));
+  n = buildHeartbeatJson("00ff", FW_VERSION, 0, blind, evs, 0, 0L, 10000, body, sizeof(body));
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);
   CHECK(back["battery"]["pct"].isNull() && !back["battery"].isNull());   // present, null pct
 
-  n = buildRegisterJson("00ff", "amoled18", "0.1.0", body, sizeof(body));
-  CHECK_STR(body, "{\"secret\":\"00ff\",\"board\":\"amoled18\",\"fw\":\"0.1.0\"}");
+  n = buildRegisterJson("00ff", "amoled18", FW_VERSION, body, sizeof(body));
+  CHECK(deserializeJson(back, body) == DeserializationError::Ok);
+  CHECK_STR(back["fw"] | "", FW_VERSION);
+  CHECK_STR(back["board"] | "", "amoled18");
   n = buildChoiceJson("00ff", 7, "hunts", body, sizeof(body));
   CHECK_STR(body, "{\"secret\":\"00ff\",\"scene_rev\":7,\"choice_id\":\"hunts\"}");
 
