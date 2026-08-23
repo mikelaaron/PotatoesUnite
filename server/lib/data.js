@@ -10,6 +10,7 @@ export class Data {
     this.docsDir = docsDir;
     this.releasesDir = releasesDir == null ? path.join(dataDir, 'releases') : releasesDir;
     this.story = '';
+    this.flashAgent = '';
     this.releases = {};
     this.pollMs = pollMs;
     this.log = log;
@@ -52,6 +53,7 @@ export class Data {
     const v = read(path.join(this.assetsDir, 'varieties.json'), { varieties: [] });
     this.varieties = Array.isArray(v) ? v : (v.varieties || []);
     if (this.docsDir) this.story = read(path.join(this.docsDir, 'STORY.md'), '', (s) => s);
+    if (this.docsDir) this.flashAgent = read(path.join(this.docsDir, 'FLASH_WITH_AN_AGENT.md'), '', (s) => s);
     // firmware manifests: data/releases/<board>/manifest.json
     const releases = {};
     let boards = [];

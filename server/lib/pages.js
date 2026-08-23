@@ -12,6 +12,19 @@ const CSS = `
   :root { --paper: #15130f; --ink: #e8dfc6; --rule: #9a907a; --faint: #a09680; --bar: #e8dfc6; --barbg: #2a2620; --wash: #1e1b16; }
 }
 * { box-sizing: border-box; }
+/* A Council document is printed on paper, whatever the room's lighting. Ink drawings vanish on a dark ground. */
+body.paper-doc { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d7462; --wash: #e6dcc2; --barbg: #d9cfb2; --bar: #1c1a16; }
+/* the flasher */
+.boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+.board-card { border: 2px solid var(--rule); background: var(--wash); padding: 1rem 1.1rem; text-align: center; }
+.board-card h3 { font-family: var(--tt); font-size: 1.2em; letter-spacing: .08em; text-transform: uppercase; margin: .5rem 0 .2rem; }
+.board-card p { font-size: .92em; margin: .3rem 0 .8rem; }
+.board-card esp-web-install-button button, .board-card .connect { font-family: var(--tt); font-size: 1.2em; background: var(--ink); color: var(--paper); border: 0; padding: .45rem 1.6rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
+.board-card .unsupported { display: block; color: var(--faint); font-size: .85em; margin-top: .5rem; }
+.requirements { text-align: center; color: var(--faint); }
+.follow { text-align: center; margin: .2rem 0 0; }
+.follow a { text-decoration: none; border-bottom: 1px solid var(--faint); color: var(--faint); letter-spacing: .15em; }
+.oneliner { background: var(--wash); border: 1px solid var(--rule); padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
 html { background: var(--paper); }
 body { margin: 0 auto; max-width: 65ch; padding: 1.5rem 1rem 3rem; background: var(--paper); color: var(--ink);
   font-family: var(--serif); font-size: 19px; line-height: 1.5; }
@@ -179,7 +192,7 @@ const TIME_SCRIPT = `
   }
 })();`;
 
-export function layout(title, body) {
+export function layout(title, body, { bodyClass = '' } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -192,7 +205,7 @@ export function layout(title, body) {
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <style>${CSS}</style>
 </head>
-<body>
+<body${bodyClass ? ` class="${bodyClass}"` : ''}>
 ${body}
 <script>${TIME_SCRIPT}</script>
 </body>
@@ -282,7 +295,8 @@ export function renderBoard(b, { tuberUrl = '' } = {}) {
   const missing = b.missing.length ? `<h2>Missing</h2>${b.missing.map((m) => `<p class="notice">${h(m)}</p>`).join('')}` : '';
   const potd = b.potd ? `<h2>Potato of the Day</h2><p>${h(b.potd.name)} #${h(b.potd.id)} · ${h(b.potd.variety)}</p>${b.potd.excerpt ? `<p class="notice">${h(b.potd.excerpt)}</p>` : ''}` : '';
   return layout('POTATOES UNITE!', `
-<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a></div></header>
+<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a> · <a href="/flash">Flash</a></div></header>
+${tuberUrl ? `<p class="tt follow"><a href="${h(tuberUrl)}">THE TUBER →</a></p>` : ''}
 <p class="now">It is ${utc(b.t)}.</p>
 <p class="next" data-next-utc="${h(b.nextPrint)}" data-printed-utc="${h(b.lastPrint || 0)}">${h(nextLine(b.t, b.lastPrint, b.nextPrint))}</p>
 <p class="lede">${h(LEDE)}</p>
@@ -383,7 +397,50 @@ export function renderAbout(storyHtml, { tuberUrl = '' } = {}) {
 <div class="prose">
 ${storyHtml}
 </div>
-${footer({ tuberUrl })}`);
+${footer({ tuberUrl })}`, { bodyClass: 'paper-doc' });
+}
+
+// GET /flash — flash a spare board into a citizen. ESP Web Tools, vendored; no CDN.
+export function renderFlash({ boards, githubUrl = '', tuberUrl = '' } = {}) {
+  const cards = boards.map((b) => `<div class="board-card">
+${b.portrait}
+<h3>${h(b.citizen)}</h3>
+<p>${h(b.blurb)}</p>
+<esp-web-install-button manifest="/releases/${h(b.id)}/webflash.json">
+<button slot="activate" class="connect">Connect</button>
+<span slot="unsupported" class="unsupported">This browser has no Web Serial. Chrome or Edge, on a computer — or the command below.</span>
+<span slot="not-allowed" class="unsupported">Serial needs an https page (or localhost).</span>
+</esp-web-install-button>
+</div>`).join('\n');
+  return layout('Potatoes Unite! — Flash', `
+<script type="module" src="/vendor/esp-web-tools/install-button.js"></script>
+<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">Flash · <a href="/">Front page</a></div></header>
+<p class="lede">A spare board becomes a citizen. The flasher writes the whole image; the potato does the rest.</p>
+<div class="boards">
+${cards}
+</div>
+<p class="requirements">Chrome or Edge, on a computer, with a USB data cable.</p>
+<noscript><p class="muted">Without JavaScript the button cannot reach the port. The command works anywhere Python does:</p>
+<pre class="oneliner">pip install esptool && esptool --port /dev/ttyUSB0 write_flash 0x0 webflash-&lt;version&gt;.bin   # image: /releases/&lt;board&gt;/webflash.json</pre></noscript>
+<h2>Then</h2>
+<ol>
+<li>The potato opens a Wi-Fi network called POTATO-xxxx. Join it once.</li>
+<li>Give it the county's network on the little page that appears.</li>
+<li>It names itself. Name, number and variety come from its seed. You are not consulted.</li>
+<li>Claim its File with the code on the screen, at <a href="/">the front page</a> under CLAIM YOUR FILE.</li>
+</ol>
+<p><a href="/flash/agent">Or hand this page to your coding agent →</a></p>
+<p class="muted">Tested on exactly these two boards. Another board needs a port — its pins and its display — and the protocol is small.</p>
+<footer><p>No location. No audio. Nothing reported below five potatoes. <a href="/about#privacy">Privacy record →</a>${githubUrl ? ` <a href="${h(githubUrl)}">CODE →</a>` : ''}</p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`);
+}
+
+// GET /flash/agent — docs/FLASH_WITH_AN_AGENT.md, when it exists.
+export function renderFlashAgent(docHtml) {
+  return layout('Potatoes Unite! — Flash with an agent', `
+<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">Flash · <a href="/flash">By hand</a> · <a href="/">Front page</a></div></header>
+<div class="prose">
+${docHtml}
+</div>`, { bodyClass: 'paper-doc' });
 }
 
 export function renderMessage(title, text) {

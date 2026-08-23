@@ -89,6 +89,10 @@ Append to `data/questions.json`:
 
 Optional flags: `"withdrawn": true` (runs, then the Count says it was withdrawn; no tally published), `"trigger": "after_drop"` (only runs the day after a drop incident; it preempts the rotation). Max three options; device labels (`short` or `label`) must be ≤ 16 chars. The rotation asks the least-recently-asked Question first, file order breaking ties — so a new Question runs the next day. `npm test` checks the limits.
 
+## The flasher
+
+`GET /flash` — two board cards wired to ESP Web Tools (vendored at `server/vendor/esp-web-tools/`, Apache-2.0, pinned; no CDN). Each card's button reads `/releases/<board>/webflash.json`, which the firmware agent publishes beside `webflash-<version>.bin` (the merged image, flashed at 0x0). `/flash/agent` renders `docs/FLASH_WITH_AN_AGENT.md` when it exists. `TUBER_URL` also adds a THE TUBER → link under the front-page masthead; `GITHUB_URL` adds CODE → to the flasher footer.
+
 ## Firmware releases
 
 ```sh

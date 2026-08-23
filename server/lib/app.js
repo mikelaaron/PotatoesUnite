@@ -2,7 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { HttpError } from './world.js';
-import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions, renderAcknowledged } from './pages.js';
+import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions, renderAcknowledged, renderFlash, renderFlashAgent } from './pages.js';
+import { BOARDS } from './boards.js';
+import { potatoSvg } from './portrait.js';
+import { renderMarkdown } from './markdown.js';
 import { storyToHtml, mimeFor, findIllustration } from './markdown.js';
 import { offer, BOARD_RE, BIN_RE } from './releases.js';
 
@@ -53,7 +56,7 @@ function readForm(req) {
   });
 }
 
-export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '', tuberUrl = '', log = () => {}, claimLimit = limiter() }) {
+export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'vendor'), githubUrl = '', tuberUrl = '', log = () => {}, claimLimit = limiter() }) {
   // The short code on the device buys a long token; the File lives at the token. Never at the code.
   function claim(req, res, code) {
     const ip = (req.socket && req.socket.remoteAddress) || '?';
@@ -98,7 +101,17 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
       if (!o) { res.writeHead(204, { 'cache-control': 'no-store' }); return res.end(); }
       return json(res, 200, o);
     }
-    let rm = p.match(/^\/releases\/([a-z0-9]+)\/([^/]+)$/);
+    let rm = p.match(/^\/releases\/([a-z0-9]+)\/webflash\.json$/);
+    if (m === 'GET' && rm) {
+      const file = world.data.releasesDir ? path.join(world.data.releasesDir, rm[1], 'webflash.json') : null;
+      let st = null;
+      try { st = file && fs.statSync(file); } catch { st = null; }
+      if (!st || !st.isFile()) return json(res, 404, { error: 'no such manifest' });
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'content-length': st.size, 'cache-control': 'no-store' });
+      if (res.headOnly) return res.end();
+      return fs.createReadStream(file).pipe(res);
+    }
+    rm = p.match(/^\/releases\/([a-z0-9]+)\/([^/]+)$/);
     if (m === 'GET' && rm && BIN_RE.test(rm[2])) {
       const file = world.data.releasesDir ? path.join(world.data.releasesDir, rm[1], rm[2]) : null;
       let st = null;
@@ -115,6 +128,28 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
       const ill = b.incident ? findIllustration(illustrationsDir, b.incident) : null;
       b.incidentSrc = ill ? ill.src : null;
       return html(res, 200, renderBoard(b, { tuberUrl }));
+    }
+    if (m === 'GET' && p === '/flash') {
+      const boards = Object.entries(BOARDS).map(([id, b]) => {
+        const variety = world.data.variety(b.variety) || world.data.varieties[0] || {};
+        return { id, ...b, portrait: potatoSvg(variety, 77 + id.length, { name: b.citizen, size: 96 }) };
+      });
+      return html(res, 200, renderFlash({ boards, githubUrl, tuberUrl }));
+    }
+    if (m === 'GET' && p === '/flash/agent') {
+      world.data.reload();
+      if (!world.data.flashAgent) return html(res, 404, renderMessage('NOT FOUND', 'Nothing here. The plant may know more.'));
+      return html(res, 200, renderFlashAgent(renderMarkdown(world.data.flashAgent)));
+    }
+    let vm = p.match(/^\/vendor\/esp-web-tools\/([A-Za-z0-9._-]+\.js)$/);
+    if (m === 'GET' && vm) {
+      const file = path.join(vendorDir, 'esp-web-tools', vm[1]);
+      let st = null;
+      try { st = fs.statSync(file); } catch { st = null; }
+      if (!st || !st.isFile()) return json(res, 404, { error: 'no such module' });
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'content-length': st.size, 'cache-control': 'public, max-age=3600' });
+      if (res.headOnly) return res.end();
+      return fs.createReadStream(file).pipe(res);
     }
     if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, illustrationsDir, artifactsDir }), { tuberUrl }));
     if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions(), { tuberUrl })); }
