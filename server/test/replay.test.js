@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeWorld, at, hb, SECRET, fileText } from './helpers.js';
+import { NAMES } from '../lib/names.js';
 
 test('a replayed Tuesday prints the File the voice doc describes', () => {
   const { w, set } = makeWorld();
   const secret = SECRET(1);
   const reg = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
-  assert.equal(reg.potato_id, '0001');
-  assert.equal(reg.name, 'Doreen');
+  assert.equal(reg.potato_id, '0001', 'the public number is sequential');
+  assert.ok(NAMES.includes(reg.name));
   assert.match(reg.claim_code, /^[A-Z]{3}-[A-Z0-9]{3}$/);
 
   set(at(7, 10)); hb(w, secret, [{ t: at(7, 10), type: 'pickup' }]);
@@ -24,11 +25,13 @@ test('a replayed Tuesday prints the File the voice doc describes', () => {
   assert.equal(hb(w, secret, [], { orientation: 'down' }).line, 'I assume this is deliberate.');
   set(at(21, 15));
   const restored = hb(w, secret, [{ t: at(21, 15), type: 'facedown_end', dur_s: 17100 }]);
-  assert.ok(restored.request, 'a request was issued');
-  const reqId = restored.request.id;
+  assert.equal(restored.expression, 'aggrieved');
   set(at(21, 20));
-  const done = hb(w, secret, [{ t: at(21, 20), type: 'request_done', request_id: reqId }]);
-  assert.ok(done.line.length > 0, 'the potato acknowledges compliance');
+  const req = w.issueRequest(w.byId('0001'), 'high'); // 21:20  Request: put me somewhere high.
+  assert.equal(hb(w, secret, []).request.id, req.id, 'the scene carries the request');
+  set(at(21, 24));
+  const done = hb(w, secret, [{ t: at(21, 24), type: 'request_done', request_id: req.id }]);
+  assert.equal(done.line, 'Better.', 'the potato acknowledges compliance');
   set(at(23, 5));
   const after = hb(w, secret, []);
   assert.match(after.line, /^You weren't here\./, 'the potato voted alone and says so');
@@ -44,7 +47,7 @@ test('a replayed Tuesday prints the File the voice doc describes', () => {
   assert.ok(lines.some((l) => l.startsWith('12:40  Quiet. 4 hours.')));
   assert.ok(lines.some((l) => l.startsWith('16:30  Placed in the dark.')));
   assert.ok(lines.some((l) => l === '21:15  Restored from the dark. 4h 45m.  Grievance filed.'));
-  assert.ok(lines.some((l) => /^21:15  Request: .+  Complied \(5m\)\.$/.test(l)), lines.join('\n'));
+  assert.ok(lines.includes('21:20  Request: put me somewhere high.  Complied (4m).'), lines.join('\n'));
   assert.ok(lines.some((l) => /^23:00  The Question closed\. Hands absent\.  You weren't here\. I chose .+\.$/.test(l)), lines.join('\n'));
   // reverse chronological within the day
   const times = tue.entries.map((e) => e.time);
@@ -63,4 +66,18 @@ test('acknowledge marks the File read and the potato knows', () => {
   assert.equal(w.ack(claim_code), true);
   assert.equal(hb(w, secret, []).file_unread, 0);
   assert.equal(w.ack('NOPE-000'), false);
+});
+
+test('identity comes from the secret, not the slot', () => {
+  const a = makeWorld().w.register({ secret: SECRET(1), board: 'amoled18', fw: '0.1.0' });
+  const b = makeWorld().w.register({ secret: SECRET(1), board: 'amoled18', fw: '0.1.0' });
+  assert.deepEqual([a.name, a.variety, a.seed], [b.name, b.variety, b.seed], 'same secret on a fresh Net, same potato');
+  const { w } = makeWorld();
+  const first = w.register({ secret: SECRET(2), board: 'amoled18', fw: '0.1.0' });
+  const again = w.register({ secret: SECRET(2).toUpperCase(), board: 'amoled18', fw: '0.1.0' });
+  assert.equal(again.potato_id, first.potato_id, 'idempotent, case-insensitive');
+  assert.equal(again.seed, first.seed);
+  assert.equal(first.potato_id, '0001');
+  assert.notEqual(first.seed, a.seed, 'a different secret in the same slot is a different potato');
+  assert.ok(first.name !== a.name || first.variety !== a.variety);
 });

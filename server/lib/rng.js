@@ -15,9 +15,11 @@ export function h32(...parts) {
   return h >>> 0;
 }
 
-// A potato's seed comes from its number. 31-bit positive so every JSON parser on earth is happy.
-export function seedFromId(idNum) {
-  return h32('potato-seed', idNum, 0x5eed) & 0x7fffffff;
+// A potato's seed comes from its device secret, not its slot: the first potato on a fresh Net is not
+// always Doreen. Deterministic per device, idempotent on re-register. 31-bit positive so every JSON
+// parser on earth is happy.
+export function seedFromSecret(secret) {
+  return h32('potato-seed', String(secret).toLowerCase(), 0x5eed) & 0x7fffffff;
 }
 
 export function pick(arr, ...salts) {

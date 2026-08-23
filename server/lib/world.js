@@ -5,7 +5,7 @@ import { Store } from './db.js';
 import { Data } from './data.js';
 import { NAMES } from './names.js';
 import * as C from './clock.js';
-import { h32, seedFromId, pick, shuffle } from './rng.js';
+import { h32, seedFromSecret, pick, shuffle } from './rng.js';
 import { fill, numberWords, durShort, durWords, hourWords, fitLine, requestShort, pct, sayLabel, fewerThanFive } from './text.js';
 
 const { MIN, HOUR, DAY } = C;
@@ -83,9 +83,9 @@ export class World {
       p = this.store.tx(() => {
         const n = Number(this.store.meta('next_id', '1'));
         const id = String(n).padStart(4, '0');
-        const seed = seedFromId(n);
-        const name = NAMES[((n - 1) * 37) % NAMES.length];
-        const variety = varieties[seed % varieties.length].id;
+        const seed = seedFromSecret(secret);
+        const name = NAMES[h32(seed, 'name') % NAMES.length];
+        const variety = varieties[h32(seed, 'variety') % varieties.length].id;
         const claim = this.newClaimCode();
         this.store.run(
           `INSERT INTO potatoes(id, secret, name, variety, seed, claim_code, board, fw, created_t, last_seen_t, state)
@@ -422,6 +422,7 @@ export class World {
     if (this.activeBroadcast('silence', t)) return;
     if (this.openRequest(p, t)) return;
     if (p.orientation === 'down') return; // it can't see the screen
+    if (p.st.sprouted_t || (p.since_handled_s || 0) >= DAY) return; // nobody is there to ask
     const st = p.st, day = C.dayKey(t), ds = C.dayStart(t);
     if (!st.req || st.req.day !== day) st.req = { day, slots: [] };
     const quota = 2 + (h32(p.seed, day, 'rq') % 2); // two or three a day
@@ -434,14 +435,21 @@ export class World {
       if (t - slotT > 3 * HOUR) continue; // the moment passed while it was away
       const defs = (this.pools.requests.requests || []).filter((r) => !(r.choices && qOpen) && !(r.id === 'facedown' && p.orientation === 'down'));
       const def = pick(defs, p.seed, day, 'rk', i);
-      if (!def) return;
-      const n = Number(this.store.meta('next_request', '1'));
-      this.store.setMeta('next_request', n + 1);
-      const ttl = num(this.pools.requests.ttl_s, C.REQUEST_TTL_S);
-      this.store.run('INSERT INTO requests(id, potato_id, kind, text, chk, for_s, issued_t, expires_t, day, slot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        `r${n}`, p.id, def.id, def.text, def.check, num(def.for_s), t, t + ttl, day, i);
+      if (def) this.issueRequest(p, def.id, t, i);
       return;
     }
+  }
+
+  // Ask the Hands for something. Returns the request row, or null if the kind is unknown.
+  issueRequest(p, kind, t = this.now(), slot = 0) {
+    const def = this.requestDef(kind);
+    if (!def) return null;
+    const n = Number(this.store.meta('next_request', '1'));
+    this.store.setMeta('next_request', n + 1);
+    const ttl = num(this.pools.requests.ttl_s, C.REQUEST_TTL_S);
+    this.store.run('INSERT INTO requests(id, potato_id, kind, text, chk, for_s, issued_t, expires_t, day, slot) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      `r${n}`, p.id, def.id, def.text, def.check, num(def.for_s), t, t + ttl, C.dayKey(t), slot);
+    return this.store.get('SELECT * FROM requests WHERE id = ?', `r${n}`);
   }
 
   resolveRequest(p, id, outcome, t) {

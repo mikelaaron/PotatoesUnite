@@ -106,4 +106,4 @@ data/              questions, broadcasts, pools, the database
 test/              node --test
 ```
 
-Determinism: a potato's seed comes from its number; its name, variety, voice and absent votes come from the seed. Same seed + same events → same File. Scene `rev` only moves when the scene's content changes (the hash excludes `expires_at`).
+Determinism: a potato's seed is a hash of its device secret (so the first potato on a fresh Net is not always the same one); its name, variety, voice and absent votes come from the seed; the public number is sequential. Same seed + same events → same File. Scene `rev` only moves when the scene's content changes (the hash excludes `expires_at`).
