@@ -48,7 +48,7 @@ Open: the paper's name — The Tuber (paper + account; each edition is "Bulletin
 About page: no captions; transparent cut-out images float with text wrapping the alpha shape (owner supplying transparent PNGs).
 
 ## 23 Aug afternoon — before anyone else flashes
-- [ ] OTA + frozen partition table + frozen NVS schema (firmware agent, in progress). This is the one thing that can't be changed later without a manual reflash.
-- [ ] Server: /v0/firmware manifest + release folder (after the firmware agent defines the contract).
-- [ ] File v2: the case against management (folding, matters of record, portrait, acknowledge); claim-code → long token exchange + rate limit (server agent, in progress).
-- [ ] Rosemary: "Hunt's. Noted." persists hours after her vote — diagnosing (device re-post vs server hold).
+- [x] OTA + frozen partition table + frozen NVS schema — 0.2.0 on both boards; 0.2.1 delivered over the air 23 Aug 16:50 UTC (Doreen rebooted into ota_1 as Doreen #0001). Release procedure: bump version.h → `make -C firmware release BOARD=potato|paper` → `cd server && npm run release -- <board-id> <bin> <version> "notes"`.
+- [x] Server: /v0/firmware manifest + /releases + `npm run release`.
+- [x] File v2 (the case against management) and claim-code → long-token exchange with rate limit.
+- [x] Rosemary's stale line: server hold fixed; voted potatoes rotate lines; the device-side cause was most likely the 4 KB scene cap (raised to 8 KB in 0.2.1).
