@@ -1,0 +1,12 @@
+{
+  "name": "potatoes-unite",
+  "private": true,
+  "description": "Deploy root: the Net lives in server/ and reads ../docs and ../assets, so the whole repo ships. See docs/DEPLOY.md.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

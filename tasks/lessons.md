@@ -228,3 +228,24 @@ fingerprint matches, so retrying "fixes" it, which is how it hides.
 `--build-path`; write logs *next to* it (`build/<board>-compile.log`). When a
 file that a just-succeeded command wrote is missing, suspect the tool that
 owns the directory, not the command that wrote the file.
+
+## A cloud CLI's delete-by-name plus --yes is a loaded gun; its list lags behind the truth
+
+**2026-08-23.** Cleaning up a duplicate Railway project, `railway delete
+--project Potatoes-Unite --yes` case-insensitively matched **potatoes-unite**
+— the real, live project — and `--yes` had waived the only confirmation that
+would have shown the resolution. Compounding it: `railway list` kept showing
+already-deleted projects for minutes, so a "verify then retry" loop deleted
+the survivor while believing it was deleting the ghost. (Recoverable only
+because the project was fifteen minutes old and its database empty; the real
+Net lives on the LAN.) The duplicate itself came from a third footgun: the
+CLI's project link is per-directory, and `railway up` from an unlinked
+directory silently creates a new project instead of erroring.
+
+**How to apply:** destructive cloud-CLI calls go by immutable ID, never by
+name, and never with the confirmation flag when any ambiguity exists — or
+better, do deletes in the provider's dashboard where the target is visible.
+Verify existence by probing the resource itself (link to the ID, curl the
+URL), never by membership in a list endpoint, which may be eventually
+consistent. And before `up`/`deploy` commands, confirm what the CLI thinks
+the current directory is linked to.

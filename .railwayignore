@@ -1,0 +1,8 @@
+# The deploy is the server plus what it reads at runtime: server/, docs/ (story,
+# illustrations), assets/ (varieties, artifact SVGs). Everything else stays home.
+.git/
+site/
+firmware/
+tasks/
+prototypes/
+.claude/

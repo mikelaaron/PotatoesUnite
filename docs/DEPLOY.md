@@ -2,13 +2,29 @@
 
 The Net is one Node process with a SQLite file. It needs an always-on box, a persistent disk, and TLS. It does NOT fit serverless hosts (Vercel, Netlify functions): no persistent process, no disk.
 
-## Railway (chosen 23 Aug — domain, DNS and TLS all in one dashboard)
+## Railway (chosen 23 Aug — domain, DNS and TLS all in one dashboard; deployed 23 Aug)
 
-1. Push this repo to GitHub (private is fine) or use `railway up` from `server/`.
-2. New project → deploy from the repo; set the service **Root Directory** to `server/` (`server/railway.json` supplies the start command and the `/health` healthcheck).
-3. Attach a **Volume**, mount it at `/data`, and set the env var `DB_PATH=/data/potatoes.db`. Railway injects `PORT`; the server honors it.
-4. Set `GITHUB_URL` and `TUBER_URL` env vars when ready.
-5. Buy the domain in Railway → service → Settings → Domains; it handles DNS and the certificate.
+The server reads `../docs` (story, illustrations) and `../assets` at runtime, so **the deploy
+context is the repo root**, not `server/`. The root `package.json` + `railway.json` exist exactly
+for this, and `.railwayignore` keeps `site/`, `firmware/` and the rest out of the upload. A deploy
+from `server/` boots and looks healthy, but `/about` loses its story and every illustration 404s.
+
+1. `railway login` (`--browserless` prints a pairing link for the human).
+2. From the **repo root**: `railway init --name potatoes-unite`, then
+   `railway add --service net --variables "DB_PATH=/data/potatoes.db" --variables "TUBER_URL=https://x.com/IssuedByCouncil"`,
+   then `railway volume add -m /data`. Railway injects `PORT`; the server honors it.
+3. `railway up --detach --service net` — again from the repo root.
+4. `railway domain` mints the `*.up.railway.app` URL. Attach the purchased domain in the
+   dashboard: service → Settings → Domains. Set `GITHUB_URL` when the repo goes public.
+
+CLI footguns, learned the hard way (23 Aug):
+- The project link is **per-directory**. `railway up` from an unlinked directory silently creates
+  a brand-new project instead of failing. Link the repo root before deploying.
+- `railway delete --project <name>` matches names **case-insensitively**, and `--yes` skips the
+  only confirmation — aimed at a stray duplicate, it deleted the real project. Delete projects in
+  the dashboard only, never from a script.
+- `railway list` lags deletions by minutes. Verify a project exists by linking to its **ID**, not
+  by its presence in the list.
 
 **Cutover note:** the desk potatoes keep talking to the LAN server until firmware 0.3.0 (HTTPS) ships. Launching the public site early is fine, but it starts as its own empty Net; the real move is: ship 0.3.0 → copy `potatoes.db` to the volume → repoint the devices. Doreen and Rosemary travel with the file.
 
