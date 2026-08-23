@@ -27,6 +27,17 @@ export function pick(arr, ...salts) {
   return arr[h32(...salts) % arr.length];
 }
 
+// A bag order: 0..n-1 shuffled by h32, deterministic per (salts). One cycle
+// of a pool plays out in this order before any line comes back.
+export function bagOrder(n, ...salts) {
+  const a = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = h32(...salts, i) % (i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // Fisher–Yates with an injectable random() for tests.
 export function shuffle(arr, random = Math.random) {
   const a = arr.slice();

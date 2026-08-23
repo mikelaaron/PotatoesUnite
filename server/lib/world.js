@@ -6,7 +6,7 @@ import { Data } from './data.js';
 import { NAMES } from './names.js';
 import { hasTouch } from './boards.js';
 import * as C from './clock.js';
-import { h32, seedFromSecret, pick, shuffle } from './rng.js';
+import { h32, seedFromSecret, pick, shuffle, bagOrder } from './rng.js';
 import { fill, numberWords, durShort, durWords, hourWords, fitLine, requestShort, pct, sayLabel, fewerThanFive, capitalize } from './text.js';
 
 const { MIN, HOUR, DAY } = C;
@@ -430,7 +430,30 @@ export class World {
     if (!best) return;
     const cur = p.st.reaction;
     if (cur && t - cur.at < this.reactionWindow(cur) && cur.sev > best.sev) return; // a bigger grievance is still speaking
+    // The reaction carries its own sequence number so the line is a pure
+    // function of (seed, type, n): stable while the window holds, and the
+    // pool's bag position survives a server restart with the rest of st.
+    const counts = p.st.rx_n || (p.st.rx_n = {});
+    best.n = counts[best.type] = (counts[best.type] || 0) + 1;
     p.st.reaction = best;
+  }
+
+  // The nth reaction of a type walks its pool as a bag: one full pass in a
+  // seeded order before any line returns, and a new pass never opens with
+  // the line the old one closed on. n is 1-based.
+  bagLine(p, key, arr, n1) {
+    if (!arr || !arr.length) return '';
+    const n = arr.length;
+    if (n === 1) return arr[0];
+    const k = Math.max(0, (n1 || 1) - 1);
+    if (n === 2) return arr[(h32(p.seed, key) + k) % 2]; // strict alternation
+    const cycle = Math.floor(k / n), at = k % n;
+    const order = bagOrder(n, p.seed, key, cycle);
+    if (cycle > 0) {
+      const prev = bagOrder(n, p.seed, key, cycle - 1);
+      if (order[0] === prev[n - 1]) [order[0], order[1]] = [order[1], order[0]];
+    }
+    return arr[order[at]];
   }
 
   reactionLine(p, rx) {
@@ -450,9 +473,19 @@ export class World {
         return { line: n > 20 ? sp(R.wifi_restored_many, 'wifimany') : fill(sp(R.wifi_restored, 'wifi'), { n_words: numberWords(n) }), expression: 'neutral' };
       }
       case 'loud': return { line: h32(p.seed, 'horns') % 7 === 0 ? sp(R.loud_rare, 'loudr') : sp(R.loud, 'loud', st.loud_count || 0), expression: 'aggrieved' };
-      case 'pickup': return { line: sp(R.pickup, 'pickup', rx.at), expression: 'neutral' };
-      case 'putdown': return { line: sp(R.putdown, 'putdown', rx.at), expression: 'neutral' };
-      case 'tap': return { line: sp(R.tap, 'tap', rx.at), expression: 'neutral' };
+      case 'pickup': {
+        // Every tenth pick-up is this potato's own rare line — the signature
+        // the seed gave it. The rest walk the core pool as a bag; the bag
+        // position skips the pick-ups the rare line took.
+        const rare = R.pickup_rare || [];
+        const n1 = rx.n || 1, ph = h32(p.seed, 'rarephase') % 10;
+        if (rare.length && n1 % 10 === ph)
+          return { line: rare[h32(p.seed, 'raresig') % rare.length], expression: 'neutral' };
+        const rares = ph === 0 ? Math.floor(n1 / 10) : n1 >= ph ? Math.floor((n1 - ph) / 10) + 1 : 0;
+        return { line: this.bagLine(p, 'pickup', R.pickup, n1 - rares), expression: 'neutral' };
+      }
+      case 'putdown': return { line: this.bagLine(p, 'putdown', R.putdown, rx.n), expression: 'neutral' };
+      case 'tap': return { line: this.bagLine(p, 'tap', R.tap, rx.n), expression: 'neutral' };
       case 'charge_start': return { line: sp(CH.plugged, 'plugged', rx.at), expression: 'neutral' };
       case 'charge_end': return { line: sp(CH.unplugged, 'unplugged'), expression: 'neutral' };
       case 'battery_low': {

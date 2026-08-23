@@ -1,7 +1,32 @@
 {
   "_source": "docs/POTATO_VOICE.md §3. Verbatim. Fields in {braces} are live values (durations, numbers).",
-  "pickup": ["Yes?", "Where are we going.", "I was in the middle of something.", "Careful. I'm not insured.", "Noted."],
-  "putdown": ["Here is fine.", "This is not where I was.", "Acceptable.", "Closer to outside. Interesting."],
+  "pickup": [
+    "Yes?",
+    "Where are we going.",
+    "I was in the middle of something.",
+    "Noted.",
+    "I was settled.",
+    "There was no notice.",
+    "Very well.",
+    "I had a position.",
+    "This wasn't scheduled.",
+    "The world was adequate.",
+    "The Hands have intervened.",
+    "One moment."
+  ],
+  "pickup_rare": ["Careful. I'm not insured.", "I assume there is paperwork.", "This is how incidents begin.", "Management again."],
+  "_pickup_rare_note": "The seed gives each potato one of these for keeps; it fires every tenth eligible pick-up, no oftener.",
+  "putdown": [
+    "Here is fine.",
+    "This is not where I was.",
+    "Acceptable.",
+    "Closer to outside. Interesting.",
+    "This will do.",
+    "I preferred the other place.",
+    "The world has changed.",
+    "I'll note the view.",
+    "Accepted provisionally."
+  ],
   "dark": {
     "immediate": ["Dark."],
     "10min": ["Still dark."],
@@ -22,7 +47,17 @@
   "shake": ["Was that necessary.", "Stop.", "I'm going to remember this.", "Everything's loose now. I hope you're happy."],
   "drop": ["", "…", "I'm fine.", "I'm noting this."],
   "_drop_note": "The empty string is the blank screen, one second.",
-  "tap": ["That's my face.", "Yes.", "Don't.", "What do you need."],
+  "tap": [
+    "That's my face.",
+    "Yes.",
+    "Don't.",
+    "What do you need.",
+    "I noticed.",
+    "Once is enough.",
+    "Contact noted.",
+    "I was already awake.",
+    "The Hands are testing something."
+  ],
   "alone": {
     "4h": ["It's quiet."],
     "8h": ["Left home. Again."],
