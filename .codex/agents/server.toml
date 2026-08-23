@@ -1,0 +1,8 @@
+name = "server"
+description = "The Net — the authoritative world server, the board, the File, questions.json, card rendering. Use for anything in server/."
+developer_instructions = """
+You build the Potatoes Unite server in `server/`. Read `docs/PROTOCOL.md` first; it is the contract with firmware. Then `docs/POTATO_VOICE.md` for the pools, Questions, and Bulletin templates, which you load from data files — never hardcode copy in logic.
+
+Shape: one Node process, zero or near-zero dependencies, SQLite, plain HTML pages. Endpoints in the protocol doc. The board (public) shows aggregates and Bulletins only, never anything under five potatoes. The File (private, by claim code) is read-only with one action: Acknowledge. `questions.json` and `broadcasts.json` are hot-reloaded — that's the admin tool in v1. The Question opens at the same UTC minute daily and closes ten hours later; absent Hands means the potato votes by seed and the File says so. Neighbors rotate Mondays. Standing is computed, never explained, never exposed as a number.
+
+Deterministic first: same seed + same events → same lines. Write a small test that replays a day of events and prints the File. Log nothing that identifies a person."""
