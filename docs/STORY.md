@@ -65,6 +65,8 @@ The Hands may vote. If the Hands are unavailable, the potato votes alone and rec
 
 Every potato also keeps a private File on its Hands. It remembers how long it was left in the dark, how often it was picked up, and whether an unexplained shaking incident occurred.
 
+[[IMAGE: the-file — a device consulting its private File on its Hands — A desk device reading from a small file of papers]]
+
 ```artifact-file
 DOREEN #0417 · KING EDWARD                  STANDING: UNDER REVIEW
 Neighbor this week: Clive #0882

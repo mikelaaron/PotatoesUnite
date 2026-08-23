@@ -12,3 +12,5 @@ Owner-made (ChatGPT image workflow, style reference: `council.png`). Drop files 
 | `evidence.png` | spare: a device beside a toaster |
 
 3:2, ≥1800 px wide, PNG or JPG. Style rules and reusable prompts: `docs/ILLUSTRATION_BRIEF.md`. Council artifacts are SVGs in `assets/illustrations/`, not images.
+
+The numbered files (`00-council.png` …) are the owner's masters and are not committed; the slug-named copies are. `the-file.png` is an extra slot placed before the File artifact.
