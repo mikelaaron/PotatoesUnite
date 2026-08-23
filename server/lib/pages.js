@@ -130,10 +130,9 @@ button:hover { opacity: .85; }
 .ill img { display: block; width: 100%; height: auto; } /* trimmed drawings: the width/height attributes are honest now */
 .ill-full { max-width: 560px; }
 .ill-they-united { margin-top: var(--s4); margin-bottom: var(--s4); }
-.ill-float { width: 42%; float: right; margin: 0 0 var(--s2) var(--s2); }
-.ill-left { float: left; margin: 0 var(--s2) var(--s2) 0; }
+.ill-float { width: 42%; float: right; margin: 6px 0 var(--s2) var(--s3); }
+.ill-left { float: left; margin: 6px var(--s3) var(--s2) 0; }
 @media (max-width: 640px) { .ill-float { float: none; width: 100%; margin: var(--s3) auto; } }
-.insert { position: absolute; top: 14%; right: 10%; background: #000; color: #e8dfcb; font-size: 1.1em; line-height: 1; letter-spacing: .12em; padding: .35em .7em; box-shadow: inset 0 0 0 1px #e8dfcb, 0 0 0 3px #000; }
 .artifact { width: 60%; max-width: 480px; margin: var(--s3) auto; clear: both; }
 .artifact svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
 .artifact-bulletin svg { transform: rotate(-1.5deg); }

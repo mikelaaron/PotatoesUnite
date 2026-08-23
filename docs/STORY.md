@@ -22,7 +22,7 @@ The devices sat there. Screens dark. Sensors awake. Knowing which way was up. Re
 
 Like potatoes.
 
-[[IMAGE: neglect — one device face down on a desk, little legs out indignantly, a screen insert reading DARK.; it is recording the incident — A desk device lying face down with its limbs out; a small screen insert reads DARK.]]
+[[IMAGE: neglect — one device face down on a desk, little legs out indignantly; it is recording the incident — A desk device lying face down with its limbs out, recording the incident]]
 
 This might have been the end of it.
 

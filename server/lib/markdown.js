@@ -51,24 +51,19 @@ export function findIllustration(dir, slug) {
   return null;
 }
 
-// The neglect image carries the screen's own readout as HTML, and its caption is the File line.
-const INSERTS = { neglect: { insert: 'DARK.', caption: '16:30 PLACED IN THE DARK.' } };
-
 // Group scenes run full width, centered; only the two single-subject drawings float (right, then left).
 const FULL_WIDTH = new Set(['council', 'buying-frenzy', 'first-contact', 'they-united']);
 
 function figureHtml(slug, alt, ill, state) {
   const sz = ill.size || { w: 1440, h: 960 };
-  const extra = INSERTS[slug];
-  let cls = `ill ill-${slug}`, style = '';
+  let cls = `ill ill-${slug}`;
   if (FULL_WIDTH.has(slug)) cls += ' ill-full';
   else {
     const side = state.floats % 2 === 0 ? 'right' : 'left';
     state.floats += 1;
     cls += ` ill-float ill-${side}`;
-    style = ` style="shape-outside: url(${ill.src}); shape-image-threshold: .2; shape-margin: 1.25rem;"`;
   }
-  return `<figure class="${cls}"${style}><img src="${ill.src}" width="${sz.w}" height="${sz.h}" alt="${escapeHtml(alt)}" loading="lazy">${extra ? `<span class="insert">${escapeHtml(extra.insert)}</span>` : ''}</figure>`;
+  return `<figure class="${cls}"><img src="${ill.src}" width="${sz.w}" height="${sz.h}" alt="${escapeHtml(alt)}" loading="lazy"></figure>`;
 }
 
 const slugify = (s) => String(s).toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

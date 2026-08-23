@@ -53,10 +53,9 @@ test('image slots become figures when the file exists, nothing when it does not'
   assert.match(html, /<figure class="ill ill-council ill-full">/);
   assert.match(html, /<figure class="ill ill-first-contact ill-full">/, 'group scenes do not float');
   assert.match(html, /<figure class="ill ill-they-united ill-full">/);
-  assert.match(html, /<figure class="ill ill-neglect ill-float ill-right" style="shape-outside: url\(\/illustrations\/neglect\.png\); shape-image-threshold: \.2; shape-margin: 1\.25rem;">/);
-  assert.match(html, /<figure class="ill ill-the-file ill-float ill-left"/, 'the second float takes the left');
-  // the neglect figure keeps the screen's own readout
-  assert.match(html, /<figure class="ill ill-neglect[^>]*><img[^>]*><span class="insert">DARK\.<\/span><\/figure>/);
+  assert.match(html, /<figure class="ill ill-neglect ill-float ill-right"><img/);
+  assert.match(html, /<figure class="ill ill-the-file ill-float ill-left"><img/, 'the second float takes the left');
+  assert.doesNotMatch(html, /shape-|<figure[^>]*style="|class="insert"/, 'no shapes, no inline figure styles, no insert span');
   // width/height read from the trimmed file: honest dimensions, no forced ratio
   const sz = imageSize(path.join(ILL_DIR, 'council.png'));
   assert.ok(sz.w > 0 && sz.h > 0);
@@ -85,8 +84,9 @@ test('artifact blocks inline the Council SVGs; the teletext text is the fallback
   assert.match(page, /\.artifact-neighbor svg \{ transform: rotate\(1\.5deg\); \}/);
   assert.match(page, /\.ill-full \{ max-width: 560px; \}/);
   assert.match(page, /\.ill-they-united \{ margin-top: var\(--s4\); margin-bottom: var\(--s4\); \}/, 'the closing figure gets its air');
-  assert.match(page, /\.ill-float \{ width: 42%; float: right; margin: 0 0 var\(--s2\) var\(--s2\); \}/);
-  assert.match(page, /\.ill-left \{ float: left; margin: 0 var\(--s2\) var\(--s2\) 0; \}/);
+  assert.match(page, /\.ill-float \{ width: 42%; float: right; margin: 6px 0 var\(--s2\) var\(--s3\); \}/);
+  assert.match(page, /\.ill-left \{ float: left; margin: 6px var\(--s3\) var\(--s2\) 0; \}/);
+  assert.doesNotMatch(page, /shape-(outside|image-threshold|margin)/, 'no shape properties anywhere in the CSS');
   assert.doesNotMatch(page, /aspect-ratio: 3 \/ 2/, 'no forced ratio on honest images');
   assert.match(page, /\.prose hr \{[^}]*clear: both; \}/);
   assert.match(page, /\.artifact \{[^}]*clear: both; \}/);
