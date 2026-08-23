@@ -62,6 +62,10 @@ struct NetShared {
   uint32_t dormantDurS;
   bool statusLineFresh;
   char statusLine[MAX_LINE];   // shown when there is no scene (portal instructions)
+  bool connecting;             // Wi-Fi is joining (secrets, saved creds, or a portal save): hold refreshes
+  bool joinFailFresh;          // a portal save that did not connect
+  char joinFailSsid[33];
+  uint8_t joinFailCode;
   char status[48];             // one word for telemetry
   bool online, timeSynced, registered;
   bool lastHttpOk;             // the last register/heartbeat/choice got an answer
@@ -326,6 +330,20 @@ static void onPortalStart(WiFiManager *m) {
   netLog("captive portal up: AP %s, http://192.168.4.1", apName);
 }
 
+static bool portalSubmitted = false;
+
+static void onPreSave() {
+  portalSubmitted = true;
+  { NetLock l; net.connecting = true; }
+  netSetStatus("connecting");
+  netLog("portal: credentials submitted; connecting (panel refreshes held)");
+}
+
+// Fires after the connect attempt, success or (with breakAfterConfig) failure.
+static void onWifiSaved() {
+  netLog("portal: save callback, result %u (%s)", wm.getLastConxResult(), wm.getWLStatusString(wm.getLastConxResult()).c_str());
+}
+
 static void onParamsSaved() {
   strncpy(serverUrl, paramServer->getValue(), sizeof(serverUrl) - 1);
   strncpy(tzString, paramTz->getValue(), sizeof(tzString) - 1);
@@ -334,26 +352,68 @@ static void onParamsSaved() {
   netLog("saved server %s tz %s", serverUrl, tzString);
 }
 
+static bool portalRunning = false;
+
+// Try to join: secrets.h (only if filled in), then the saved credentials,
+// then open the portal and return false with it running. Non-blocking: the
+// task loop drives the portal with wm.process() and real delays, so IDLE0
+// gets the CPU (WiFiManager's blocking loop only yield()s, which never runs
+// the idle task; the task watchdog then resets the chip every ~40 s, which
+// reprinted the page and lost every portal save mid-connect).
 static bool connectWifi() {
   netSetStatus("connecting");
+  { NetLock l; net.connecting = true; }
+  WiFi.persistent(true);
 #if defined(WIFI_SSID) && defined(WIFI_PASS)
-  netLog("trying secrets.h network %s", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  for (int i = 0; i < 100 && WiFi.status() != WL_CONNECTED; ++i) vTaskDelay(pdMS_TO_TICKS(200));
-  if (WiFi.status() == WL_CONNECTED) return true;
-  netLog("secrets.h network failed; falling back to the portal");
+  if (WIFI_SSID[0]) {
+    netLog("trying the secrets.h network");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    for (int i = 0; i < 100 && WiFi.status() != WL_CONNECTED; ++i) vTaskDelay(pdMS_TO_TICKS(200));
+    if (WiFi.status() == WL_CONNECTED) { NetLock l; net.connecting = false; return true; }
+    netLog("secrets.h network did not connect (status %d); saved credentials / portal next", (int)WiFi.status());
+  }
 #endif
-  // WiFiManager: saved credentials first, the captive portal if they fail.
-  // Blocking here is fine — this is the net task, the face is on core 1.
-  const bool ok = wm.autoConnect(apName);
-  if (!ok) netLog("portal timed out after %lus; will retry", (unsigned long)PORTAL_TIMEOUT_S);
-  return ok;
+  portalSubmitted = false;
+  const bool ok = wm.autoConnect(apName);        // saved credentials; else the portal starts and this returns
+  if (ok) { NetLock l; net.connecting = false; return true; }
+  portalRunning = wm.getConfigPortalActive();
+  { NetLock l; net.connecting = false; }
+  if (!portalRunning) netLog("wifi: not connected and no portal (last result %u, %s)", wm.getLastConxResult(), wm.getWLStatusString().c_str());
+  return false;
+}
+
+// One step of the open portal. Returns true once a save has connected.
+static bool portalStep() {
+  const bool connected = wm.process();
+  if (connected) {
+    portalRunning = false;
+    { NetLock l; net.connecting = false; }
+    netLog("portal: connected with the submitted credentials (stored in NVS by the driver)");
+    return true;
+  }
+  if (!wm.getConfigPortalActive()) {
+    portalRunning = false;
+    const uint8_t res = wm.getLastConxResult();
+    if (portalSubmitted) {
+      // WL_CONNECT_FAILED = wrong password, WL_NO_SSID_AVAIL = not found, else timed out.
+      const String saved = wm.getWiFiSSID(true);
+      netLog("portal: save did not connect — result %u (%s); the driver stored \"%s\" anyway; reopening", res,
+             wm.getWLStatusString(res).c_str(), saved.c_str());
+      NetLock l;
+      strncpy(net.joinFailSsid, saved.c_str(), sizeof(net.joinFailSsid) - 1);
+      net.joinFailCode = res;
+      net.joinFailFresh = true;
+      net.connecting = false;
+    } else {
+      netLog("portal: closed (timeout after %lus with no phone attached); reopening", (unsigned long)PORTAL_TIMEOUT_S);
+    }
+  }
+  return false;
 }
 
 static void onConnected() {
   netSetStatus("online");
-  netLog("connected: %s ip %s rssi %d", WiFi.SSID().c_str(),
-         WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  netLog("connected: ip %s rssi %d", WiFi.localIP().toString().c_str(), WiFi.RSSI());
   configTzTime(tzString, "pool.ntp.org", "time.nist.gov", "time.google.com");
   if (!MDNS.begin(apName)) netLog("mDNS start failed");
   {
@@ -383,7 +443,12 @@ static void netTask(void *arg) {
         net.online = false;
         net.wifiLost = true;
       }
-      if (!connectWifi()) { vTaskDelay(pdMS_TO_TICKS(30000)); continue; }
+      if (portalRunning) {
+        if (!portalStep()) { vTaskDelay(pdMS_TO_TICKS(portalRunning ? 10 : 1500)); continue; }
+      } else if (!connectWifi()) {
+        vTaskDelay(pdMS_TO_TICKS(portalRunning ? 10 : 5000));
+        continue;
+      }
       onConnected();
     }
 
@@ -458,8 +523,15 @@ static void netBegin(Preferences &loopPrefs, EventQueue *events) {
   wm.setDebugOutput(false);
   wm.setConfigPortalTimeout(PORTAL_TIMEOUT_S);
   wm.setConnectTimeout(20);
+  wm.setConfigPortalBlocking(false);  // the task loop drives it; see connectWifi()
+  wm.setAPClientCheck(true);          // no portal timeout while a phone is on the AP
+  wm.setBreakAfterConfig(true);       // a failed save closes the portal at once and says why
   wm.setAPCallback(onPortalStart);
+  wm.setPreSaveConfigCallback(onPreSave);
+  wm.setSaveConfigCallback(onWifiSaved);
   wm.setSaveParamsCallback(onParamsSaved);
+  USBSerial.printf("net: wifi credentials in NVS: %s\n",
+                   wm.getWiFiIsSaved() ? (String("\"") + wm.getWiFiSSID(true) + "\"").c_str() : "none");
   paramServer = new WiFiManagerParameter("server", "Server URL", serverUrl, sizeof(serverUrl) - 1);
   paramTz = new WiFiManagerParameter("tz", "POSIX TZ", tzString, sizeof(tzString) - 1);
   wm.addParameter(paramServer);

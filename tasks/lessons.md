@@ -154,3 +154,41 @@ is a reason to draw the potato differently, not to replace it.
 **How to apply:** every device shows the potato, one line, and choices. Design
 input for the medium (press-count voting with LED feedback, one refresh) rather
 than designing a different product for it.
+
+## A blocking captive portal starves the idle task and the watchdog reboots the board
+
+**2026-08-23.** The e-paper press "kept flashing" on its join page and every
+portal save came back "network couldn't be reached". The owner's hypothesis
+was a brown-out (panel refresh plus Wi-Fi TX on one small rail). A
+three-minute untouched capture said otherwise: every reset was
+`task_wdt: IDLE0 (CPU 0)` with the `net` task running — `RTC_SW_CPU_RST`,
+not brownout. WiFiManager's blocking `autoConnect()` loop only `yield()`s,
+and on FreeRTOS a yield from a priority-1 task never runs the priority-0 idle
+task, which is what the task watchdog watches. With a phone attached
+(`setAPClientCheck`) the loop got busier and the watchdog fired every ~40 s;
+each reboot reprinted the page and killed the AP mid-save. The same code had
+run for 75 s at a time without tripping, which is why it looked like
+hardware.
+
+**How to apply:** symbolize the backtrace (`xtensa-esp32s3-elf-addr2line -e
+<sketch>.elf`) before theorizing about rails; print `esp_reset_reason()` in
+the banner so the next capture names the cause. Drive WiFiManager
+non-blocking (`setConfigPortalBlocking(false)` + `process()` with a
+`vTaskDelay` between calls) so the task sleeps instead of spinning. And the
+capture tool's own resets (`rst:0x15`) must be gone before counting resets,
+or the diagnosis counts itself.
+
+## The screen is the potato; the UI is the potato's, not a dashboard's
+
+**2026-08-23.** The e-paper press shipped as a newspaper — masthead, headline,
+two items, a cursor and a long press to vote — because the brief said it
+"prints the paper". The owner, device in hand: "having trouble selecting on
+the e-ink device. I want a potato on the screen — not a newspaper." Two
+mistakes in one: the page put the Bulletin where the potato belongs (the
+CLAUDE.md look rules apply to every surface), and a cursor on a panel that
+takes fifteen seconds to redraw is an interaction that cannot be seen.
+
+**How to apply:** on a slow panel, every interaction must complete in the
+*next* refresh, never need one to be understood — count presses, blink the
+count back on the LED, cast, print once. And before designing a second
+device's screen, put the same potato on it first; the rest is typography.

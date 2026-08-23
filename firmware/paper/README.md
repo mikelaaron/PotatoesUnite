@@ -77,9 +77,9 @@ USB, and the firmware says so).
   ETA6098's STAT pin only drives an LED, no GPIO sees it. `vbus` is true when
   the USB CDC sees a host or the cell reads ≥ 4.15 V (the charger's CV
   phase); `charging` = vbus and under 100 %.
-- **Orientation**: always `up`. **Events**: only `tap` (short BOOT press),
-  plus `wifi_restore` and `dormant_resume` from the Net code.
-  `since_handled_s` counts from the last BOOT press.
+- **Orientation**: always `up`. **Events**: only `tap` (a BOOT burst outside
+  a Question), plus `wifi_restore` and `dormant_resume` from the Net code.
+  `since_handled_s` counts from the last key press.
 - **Sound**: stubbed, always `"quiet"`. The ES8311 mic path is not wired
   (it needs the codec over I2C plus I2S RX and a loudness bucket; more than
   the hour it was worth).
@@ -90,41 +90,48 @@ USB, and the firmware says so).
 
 ## The page (`layout.h`)
 
-Old newspaper, not a dashboard. Masthead in the 5x7 — `THE BULLETIN · No. N
-· MORNING` — between two rules; the headline in FreeSerifBold 12 pt, or 9 pt
-if it does not fit two lines, broken where the two lines are most even; up to
-two items in the 5x7, cut at a word if they will not fit; a rule; and at the
-bottom the potato's own scene line (wrapped, ≤ 60 chars) beside a 36×26
-portrait of the lying-down potato from `assets/potato-look-v1.svg`
-(`portrait.h`, generated; body, underside shade and highlight masks dithered
-per the variety's `dither` in `assets/varieties.json`; two eye dots, narrowed
-when aggrieved, shut when asleep). A tiny footer gives name, number and
-variety, or the claim code for ten minutes after registration and after a
-long press when no Question is open. Red only for `cue: incident` and the
-words MISSING / INCIDENT. Yellow only for the mark on a confirmed vote.
+**The screen is the potato.** The lying-down body from
+`assets/potato-look-v1.svg` (`portrait.h`, generated at 140 px wide by
+`tools/make_portrait.py`) sits centred about 40 % down: a 2 px black
+outline, the skin a Bayer dither at the variety's density with a darker
+underside and a highlight, four dimples, two eyes. Red and Désirée print
+their skin in the panel's red; King Edward is pale with red flecks; every
+other variety is black on white (`skinFor()` in `paper_gfx.h`, from
+`assets/varieties.json`). Expressions are the AMOLED's, by eye shape:
+neutral/waiting/pleased ovals, aggrieved slits, asleep/dormant arcs, `cue:
+incident` wide rings, and a glance toward the edge while `file_unread > 0`.
+Under the potato, in the 5x7: `ROSEMARY #0002 · RED` (the claim code in its
+place for ten minutes after registration, or after a short PWR press); then
+the scene `line` (≤ 60 chars, wrapped, centred). No masthead, no Bulletin
+layout — a headline arrives as a line like any other.
 
-When the Scene has `choices`, the lower half is the Question: its text, then
-the options, the cursor row inverted. Short BOOT press moves the cursor; long
-press (≥ 1.5 s) confirms → `POST /v0/choice`; the chosen option gets a yellow
-boxed cross. A new set of choices resets the cursor.
+**Voting in one refresh.** With `choices` in the Scene the options print
+under the line, numbered `1 HEINZ / 2 HUNT'S / 3 WHATEVER'S THERE`, in the
+same refresh as the Question. Press BOOT N times within two seconds; the LED
+blinks the running count back after each press (no panel refresh). Two
+seconds after the last press the choice for option N goes to `/v0/choice`,
+and the page prints once more — after the Scene the choice returns, so the
+mark and the new line land in one refresh — with the chosen row inverted. A
+count outside 1..N gets a triple blink and no refresh. Outside a Question a
+burst is one `tap`. The vote is remembered by option id across heartbeats.
 
-Which edition: from 07:30 local, today's morning edition; from 18:30, the
-evening edition (falling back to the morning); otherwise the latest printed
-(`scene.bulletin`). The device knows its offset from the POSIX TZ and sends
-`utc_offset_min` so the File is in local time.
+**Unregistered and off the Net**, the page is the join card: `NOT YET A
+CITIZEN.`, then `JOIN WI-FI / POTATO-XXXX / then open 192.168.4.1` large
+and centred, `Could not join <ssid>. Try again.` after a failed portal save,
+and a small unnamed potato at the bottom. Nothing on it depends on the
+portal's state, the clock or the battery, so it prints once.
 
 **Refresh policy.** Full refresh only when the rendered page changes (a hash
-of the frame), never more than once per 60 s, never between 23:00 and 06:00
-local unless the headline changed. E-paper persists; silence is free. One
-deliberate exception: a key press gets the panel as soon as it is idle and
-the keys have been quiet for 2 s, because a Question you cannot see yourself
-answering is no Question — the refresh itself (15–20 s) is the rate limit.
-The first page waits up to 20 s for the Net so it is a real one, not "NOT
-YET A CITIZEN" for a minute. The LED is on while the panel is refreshing.
+of the frame; the serial log names the first field that differed), never
+more than once per 60 s, never between 23:00 and 06:00 local unless the line
+changed, never while Wi-Fi is joining. E-paper persists; silence is free. A
+key press gets the panel as soon as it is idle and the keys have been quiet
+for 2 s. The first page waits up to 20 s for the Net. The LED is on while
+the panel is refreshing.
 
 `make paper-preview` renders sample pages with the same code on the host
-(`tools/paper_preview.cpp`), and `p` over serial prints the text of the
-current page, `s` a 100×100 character dump of it.
+(`tools/paper_preview.cpp`); `p` over serial prints the text of the current
+page, `s`/`S` a character dump of it.
 
 ## Net (`net.h`, `protocol.h`)
 
@@ -146,11 +153,12 @@ through the portal. Add `WIFI_SSID`/`WIFI_PASS` to `paper/secrets.h` or join
 
 ## Serial keys
 
-`h` lists them: `t` short press, `l` long press, `q` demo Question (local,
-not from the Net), `b` heartbeat now, `r` force refresh, `n` night override,
-`p` page text, `s`/`S` screen dump (100×100 / 200×200), `T` sensors, `c`
-clock, `e` events, `i` identity and net status, `x` clear scene, `W` forget
-Wi-Fi, `R` register again, `O` power off (latch low).
+`h` lists them: `t` one BOOT press, `1`/`2`/`3` a burst of N presses, `k`
+PWR short (claim code), `q` demo Question (local, not from the Net), `b`
+heartbeat now, `r` force refresh, `n` night override, `p` page text, `s`/`S`
+screen dump (100×100 / 200×200), `T` sensors, `c` clock, `e` events, `i`
+identity and net status, `x` clear scene, `W` forget Wi-Fi, `R` register
+again, `O` power off (latch low).
 
 ## Bring-up notes (2026-08-23, MAC 70:04:1D:D7:A8:C4)
 
@@ -175,9 +183,17 @@ Wi-Fi, `R` register again, `O` power off (latch low).
   with the Wi-Fi portal up, on a desk in August. The vendor's 4 °C offset is
   what the heartbeat carries; at steady state it under-compensates. Calibrate
   against a real thermometer before trusting `temp_c` to a degree.
-- **Wi-Fi.** `potato/secrets.h` carries only `SERVER_URL`, so the press came
-  up in its portal (`POTATO-A8C4`). Registration and the neighbor pairing
-  need the county's network: add `WIFI_SSID`/`WIFI_PASS` to
-  `paper/secrets.h`, or join `POTATO-A8C4` and enter it there.
+- **Wi-Fi and the watchdog.** The first portal attempts failed with the
+  panel "flashing": WiFiManager's blocking portal loop only `yield()`s, IDLE0
+  never ran, and the task watchdog reset the chip every ~40 s (every reset
+  reprinted the page and killed the AP mid-save). The net task now drives the
+  portal non-blocking (`process()` + `vTaskDelay`), holds panel refreshes
+  while Wi-Fi is joining, persists credentials the moment the portal hands
+  them to the driver, and logs the pre-save, the save and the connect result
+  (`WL_CONNECT_FAILED` = wrong password, `WL_NO_SSID_AVAIL` = not found). A
+  failed save prints "Could not join <ssid>. Try again." on the page. The
+  banner names the reset reason. `paper/secrets.h` `WIFI_SSID`/`WIFI_PASS`
+  are used when non-empty and never printed. Registered on the LAN as
+  Rosemary #0002 (red), neighbor Doreen #0001.
 - **Panel orientation** relative to the USB port is unconfirmed (no eyes on
   it from here); `PAPER_ROTATE=1` if it is upside down.

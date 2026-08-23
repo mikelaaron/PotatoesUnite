@@ -9,49 +9,39 @@
 #include "FreeSerifBold9pt7b.h"
 #include "TomThumb.h"
 
-// The page. An old newspaper, not a dashboard: a tiny masthead, the
-// headline large and black, two items small, a rule, and at the bottom the
-// potato's own line beside its portrait. Red only for an incident and the
-// words MISSING / INCIDENT; yellow only for the mark on a confirmed vote.
-// When the Question is open the lower half is the Question and its options.
+// The screen is the potato. Its body fills the upper page, lying down; its
+// name and variety in small type beneath; then its line (≤ 60 chars); and,
+// when the Question is open, the options numbered 1..3 — the vote is BOOT
+// pressed N times, and the chosen row prints inverted. Red ink only where
+// the variety is red; yellow nowhere here. No masthead, no columns: a
+// Bulletin headline arrives as a line like any other.
 //
-// Host-portable: no Arduino here. The .ino fills a PaperModel; this draws it.
+// Unregistered and off the Net, the page is the join card instead, with a
+// small potato at the bottom. Host-portable: no Arduino here.
 
-static const int PAPER_MAX_ITEMS = 2;
 static const int PAPER_MAX_OPTIONS = 3;
 
 struct PaperModel {
-  // The Bulletin.
-  bool hasBulletin;
-  int no;
-  char edition[10];          // "MORNING" | "EVENING"
-  char headline[80];
-  char items[PAPER_MAX_ITEMS][160];
-  uint8_t nItems;
-  bool incident;             // cue: incident → red headline
-  // The potato.
-  char line[128];            // its own scene line, ≤ 60
   char name[32];
-  char variety[24];
+  char variety[24];          // id from assets/varieties.json
   char potatoId[16];
   char claim[16];
   bool showClaim;
-  uint8_t eyes;              // 0 open, 1 narrowed, 2 shut
-  PortraitDither dither;
-  // The Question (choices present).
-  bool question;
-  char qText[128];
+  uint8_t expression;        // Expression enum value from protocol.h
+  bool alarmed;              // cue: incident
+  bool glance;               // file_unread > 0: eyes toward the edge
+  char line[128];
   char options[PAPER_MAX_OPTIONS][17];
   uint8_t nOptions;
-  int8_t cursor;
   int8_t chosen;             // -1 none; index of the confirmed option
-  // Tiny status at the bottom right, e.g. "NO NET" or "".
-  char status[24];
+  char status[24];           // tiny, top right: "NO NET", "REGISTERING", ""
+  char joinAp[16];           // unregistered and off the Net: the portal's AP name
+  char joinFailSsid[33];     // a saved network that would not connect
 };
 
 // What was drawn, as lines of text, for the serial log.
 struct PaperLog {
-  char text[1400];
+  char text[1200];
   int len = 0;
   void add(const char *fmt, ...) {
     if (len >= (int)sizeof(text) - 2) return;
@@ -73,195 +63,109 @@ static const Font FONT_TINY = {&TomThumb, 1};     // 4 px advance
 static const int PAGE_X = 2;
 static const int PAGE_W = PAPER_W - 2 * PAGE_X;
 
-static bool wordIsAlarm(const char *w) {
-  char buf[16];
-  size_t n = 0;
-  for (; w[n] && n < sizeof(buf) - 1; ++n) {
-    if (w[n] == '.' || w[n] == ',' || w[n] == ':' || w[n] == ' ') break;
-    buf[n] = w[n];
-  }
-  buf[n] = 0;
-  return !strcmp(buf, "INCIDENT") || !strcmp(buf, "MISSING");
-}
+static void upper(char *s) { for (; *s; ++s) if (*s >= 'a' && *s <= 'z') *s = (char)(*s - 'a' + 'A'); }
 
-// A headline line, word by word, so MISSING and INCIDENT can be red on their own.
-static void drawHeadlineLine(PaperCanvas &cv, int x, int y, const char *s, const Font &f, bool allRed) {
-  const char *p = s;
-  while (*p) {
-    const char *e = p;
-    while (*e && *e != ' ') ++e;
-    char word[WRAP_CAP];
-    const size_t n = (size_t)(e - p) < sizeof(word) - 1 ? (size_t)(e - p) : sizeof(word) - 1;
-    memcpy(word, p, n);
-    word[n] = 0;
-    const uint8_t color = (allRed || wordIsAlarm(word)) ? PAPER_RED : PAPER_BLACK;
-    x += drawText(cv, x, y, word, f, color);
-    if (*e == ' ') { x += glyphAdvance(f, ' '); ++e; }
-    p = e;
+static EyeStyle eyesFor(const PaperModel &m) {
+  if (m.alarmed) return EYES_WIDE;
+  switch (m.expression) {
+    case 2: return EYES_SLIT;             // aggrieved
+    case 4: case 5: return EYES_ARC;      // asleep, dormant
+    default: return EYES_OVAL;            // neutral, waiting, pleased, sprouted
   }
 }
 
-// Headline: the large serif if it fits in `maxLines`, else the small one; the
-// small one may run to maxLines + 1. Returns the baseline of the last line.
-// A headline that needs two lines breaks where the halves are most even,
-// not where the first line happens to fill: "AN INQUIRY, / 9 TO 5 TO 3."
-static bool balanceTwoLines(const Font &f, const char *text, int maxW, char out[][WRAP_CAP]) {
-  int best = -1, bestMax = 1 << 30;
-  const int len = (int)strlen(text);
-  for (int i = 1; i < len - 1 && i < WRAP_CAP - 1; ++i) {
-    if (text[i] != ' ') continue;
-    char a[WRAP_CAP], b[WRAP_CAP];
-    memcpy(a, text, i); a[i] = 0;
-    strncpy(b, text + i + 1, WRAP_CAP - 1); b[WRAP_CAP - 1] = 0;
-    const int wa = textWidth(f, a), wb = textWidth(f, b);
-    if (wa > maxW || wb > maxW) continue;
-    const int m = wa > wb ? wa : wb;
-    if (m < bestMax) { bestMax = m; best = i; }
-  }
-  if (best < 0) return false;
-  memcpy(out[0], text, best); out[0][best] = 0;
-  strncpy(out[1], text + best + 1, WRAP_CAP - 1); out[1][WRAP_CAP - 1] = 0;
-  return true;
+static const char *eyeName(EyeStyle e) {
+  return e == EYES_SLIT ? "slits" : e == EYES_ARC ? "arcs" : e == EYES_WIDE ? "wide" : "ovals";
 }
 
-static int drawHeadline(PaperCanvas &cv, int yTop, const char *text, bool red, int maxLines, PaperLog *log) {
+// Body text in the 5x7, centred. Returns the y after the last line.
+static int drawCentredLines(PaperCanvas &cv, int yTop, const char *text, int maxLines, int lineH, uint8_t color,
+                            PaperLog *log, const char *tag) {
   char lines[4][WRAP_CAP];
   bool trunc = false;
-  const Font *f = &FONT_HEAD_L;
-  int n = wrapText(FONT_HEAD_L, text, PAGE_W, lines, maxLines, &trunc);
-  if (trunc) {
-    f = &FONT_HEAD_S;
-    n = wrapText(FONT_HEAD_S, text, PAGE_W, lines, maxLines + 1 <= 4 ? maxLines + 1 : 4, &trunc);
-  }
-  if (n == 2 && !trunc) balanceTwoLines(*f, text, PAGE_W, lines);
-  const int cap = fontCapHeight(*f);
-  const int lh = cap + 7;
-  int y = yTop + cap;
-  for (int i = 0; i < n; ++i) {
-    drawHeadlineLine(cv, PAGE_X, y, lines[i], *f, red);
-    if (log) log->add("  %s%s", red ? "[red] " : "", lines[i]);
-    if (i < n - 1) y += lh;
-  }
-  if (trunc && log) log->add("  (headline cut)");
-  return y;
-}
-
-// Body text in the 5x7. Returns the y after the last line drawn.
-static int drawParagraph(PaperCanvas &cv, int x, int w, int yTop, int yLimit, const char *text, int maxLines,
-                         PaperLog *log, const char *tag) {
-  char lines[4][WRAP_CAP];
-  bool trunc = false;
-  int n = wrapText(FONT_BODY, text, w, lines, maxLines > 4 ? 4 : maxLines, &trunc);
+  const int n = wrapText(FONT_BODY, text, PAGE_W, lines, maxLines > 4 ? 4 : maxLines, &trunc);
   int y = yTop;
   for (int i = 0; i < n; ++i) {
-    if (y + 8 > yLimit) { trunc = true; break; }
-    drawText(cv, x, y + 7, lines[i], FONT_BODY, PAPER_BLACK);
-    if (log) log->add("  %s%s", i == 0 ? tag : "    ", lines[i]);
-    y += 8;
+    drawTextCentered(cv, PAPER_W / 2, y + 7, lines[i], FONT_BODY, color);
+    if (log) log->add("  %s%s", i == 0 ? tag : "      ", lines[i]);
+    y += lineH;
   }
   if (trunc && log) log->add("  (cut)");
   return y;
 }
 
-// The vote: a yellow box with a cross, the one place yellow is spent.
-static void drawVotedMark(PaperCanvas &cv, int x, int yMid, uint8_t ink) {
-  cv.fillRect(x, yMid - 4, 9, 9, PAPER_YELLOW);
-  cv.rect(x, yMid - 4, 9, 9, ink);
-  for (int i = 0; i < 9; ++i) { cv.set(x + i, yMid - 4 + i, ink); cv.set(x + 8 - i, yMid - 4 + i, ink); }
+static void renderJoinPage(PaperCanvas &cv, const PaperModel &m, PaperLog *log) {
+  int y = 20;
+  drawTextCentered(cv, PAPER_W / 2, y + fontCapHeight(FONT_HEAD_S), "NOT YET A CITIZEN.", FONT_HEAD_S, PAPER_BLACK);
+  if (log) log->add("  NOT YET A CITIZEN.");
+  y = 62;
+  drawTextCentered(cv, PAPER_W / 2, y, "JOIN WI-FI", FONT_HEAD_L, PAPER_BLACK);
+  y += fontCapHeight(FONT_HEAD_L) + 9;
+  const Font &apFont = textWidth(FONT_HEAD_L, m.joinAp) <= PAGE_W ? FONT_HEAD_L : FONT_HEAD_S;
+  drawTextCentered(cv, PAPER_W / 2, y, m.joinAp, apFont, PAPER_BLACK);
+  y += 16;
+  drawTextCentered(cv, PAPER_W / 2, y, "then open 192.168.4.1", FONT_BODY, PAPER_BLACK);
+  if (log) log->add("  JOIN WI-FI / %s / then open 192.168.4.1", m.joinAp);
+  if (m.joinFailSsid[0]) {
+    char msg[96];
+    snprintf(msg, sizeof(msg), "Could not join %s. Try again.", m.joinFailSsid);
+    drawCentredLines(cv, y + 6, msg, 2, 8, PAPER_BLACK, log, "");
+  }
+  // A small potato at the bottom, unnamed.
+  drawPotato(cv, PAGE_X, PAPER_H - PORTRAIT_H - 10, PORTRAIT_ART, skinFor(""), EYES_OVAL, false);
+  drawText(cv, PAGE_X, PAPER_H - 2, "UNREGISTERED", FONT_TINY, PAPER_BLACK);
+  if (log) log->add("footer: UNREGISTERED");
 }
 
 static void renderPaper(PaperCanvas &cv, const PaperModel &m, PaperLog *log) {
   cv.clear(PAPER_WHITE);
-  char buf[160];
+  if (m.joinAp[0] && !m.name[0]) { renderJoinPage(cv, m, log); return; }
 
-  // Masthead. Tiny, centred, between two rules.
-  if (m.hasBulletin) snprintf(buf, sizeof(buf), "THE BULLETIN %c No. %d %c %s", CH_MIDDOT, m.no, CH_MIDDOT, m.edition);
-  else snprintf(buf, sizeof(buf), "THE BULLETIN %c NOT YET PRINTED", CH_MIDDOT);
-  drawTextCentered(cv, PAPER_W / 2, 9, buf, FONT_BODY, PAPER_BLACK);
-  cv.hline(0, 12, PAPER_W, PAPER_BLACK);
-  cv.hline(0, 14, PAPER_W, PAPER_BLACK);
-  if (log) { char t[160]; asciiFold(buf, t, sizeof(t)); for (char *c = t; *c; ++c) if ((uint8_t)*c == CH_MIDDOT) *c = '*'; log->add("masthead: %s", t); }
+  // The potato, 140 px wide, centred about 40 % down.
+  const int px = (PAPER_W - POTATO_W) / 2, py = 80 - POTATO_H / 2;
+  const SkinStyle skin = skinFor(m.variety);
+  const EyeStyle eyes = eyesFor(m);
+  drawPotato(cv, px, py, POTATO_ART, skin, eyes, m.glance);
+  if (log) log->add("potato: %s skin %s %d/16%s, eyes %s%s", m.variety[0] ? m.variety : "(no variety)",
+                    skin.ink == PAPER_RED ? "red" : "black", skin.density, skin.flecks ? " + red flecks" : "",
+                    eyeName(eyes), m.glance ? ", glancing" : "");
 
-  // Headline.
-  const char *head = m.hasBulletin ? m.headline : (m.name[0] ? "THE NET HAS NOT SPOKEN." : "NOT YET A CITIZEN.");
-  int y = drawHeadline(cv, 18, head, m.incident, m.question ? 2 : 2, log);
-  y += 5;
-  cv.hline(PAGE_X, y, PAGE_W, PAPER_BLACK);
-  y += 4;
+  // Status, tiny, top right.
+  if (m.status[0]) drawText(cv, PAPER_W - PAGE_X - textWidth(FONT_TINY, m.status), 7, m.status, FONT_TINY, PAPER_BLACK);
 
-  // The lower block: either the Question or the potato's own line.
-  const int bottomTop = m.question ? 96 : 163;
-
-  // Items, as many as fit above the lower block.
-  if (m.hasBulletin) {
-    for (int i = 0; i < m.nItems && i < PAPER_MAX_ITEMS; ++i) {
-      if (y + 8 > bottomTop - 2) break;
-      char tag[8];
-      snprintf(tag, sizeof(tag), "%d: ", i + 1);
-      y = drawParagraph(cv, PAGE_X, PAGE_W, y, bottomTop - 2, m.items[i], 4, log, tag);
-      y += 3;
-    }
-  } else if (!m.question) {
-    y = drawParagraph(cv, PAGE_X, PAGE_W, y, bottomTop - 2,
-                      m.name[0] ? "The Bulletin prints at 07:30 and 18:30. Until then, the Net." :
-                                  "Waiting for the Net to assign a name.", 4, log, "   ");
-  }
-
-  if (m.question) {
-    // The Question: its text, then the options with a cursor.
-    y = bottomTop;
-    cv.hline(0, y, PAPER_W, PAPER_BLACK);
-    cv.hline(0, y + 2, PAPER_W, PAPER_BLACK);
-    y += 6;
-    y = drawParagraph(cv, PAGE_X, PAGE_W, y, 140, m.qText, 3, log, "Q: ");
-    y += 4;
-    // The cursor is the inverted row; the vote is the box at the left. The
-    // serif if every label fits beside the box, else the 5x7.
-    const int lx = 18;
-    const Font *of = &FONT_HEAD_S;
-    for (int i = 0; i < m.nOptions && i < PAPER_MAX_OPTIONS; ++i)
-      if (textWidth(*of, m.options[i]) > PAPER_W - lx - PAGE_X) of = &FONT_BODY;
-    const int rowH = 19;
-    for (int i = 0; i < m.nOptions && i < PAPER_MAX_OPTIONS; ++i) {
-      const int mid = y + rowH / 2;
-      const bool cur = m.cursor == i;
-      const uint8_t ink = cur ? PAPER_WHITE : PAPER_BLACK;
-      if (cur) cv.fillRect(0, y, PAPER_W, rowH, PAPER_BLACK);
-      if (m.chosen == i) drawVotedMark(cv, 4, mid, ink);
-      drawText(cv, lx, mid + fontCapHeight(*of) / 2, m.options[i], *of, ink);
-      if (log) log->add("  %c %s%s", cur ? '>' : ' ', m.options[i], m.chosen == i ? "  [x]" : "");
-      y += rowH;
-    }
+  // Name and variety under the potato.
+  char who[64];
+  if (m.name[0]) {
+    char nm[32], vr[24];
+    asciiFold(m.name, nm, sizeof(nm)); upper(nm);
+    asciiFold(m.variety, vr, sizeof(vr)); upper(vr);
+    for (char *c = vr; *c; ++c) if (*c == '_') *c = ' ';
+    if (m.showClaim && m.claim[0]) snprintf(who, sizeof(who), "%s #%s %c FILE %s", nm, m.potatoId, CH_MIDDOT, m.claim);
+    else snprintf(who, sizeof(who), "%s #%s %c %s", nm, m.potatoId, CH_MIDDOT, vr);
   } else {
-    // The potato's own line beside its portrait.
-    y = bottomTop;
-    cv.hline(0, y, PAPER_W, PAPER_BLACK);
-    drawPortrait(cv, PAGE_X, y + 5, m.dither, m.eyes);
-    const int lx = PAGE_X + PORTRAIT_W + 6;
-    const char *line = m.line[0] ? m.line : "";
-    drawParagraph(cv, lx, PAPER_W - lx - PAGE_X, y + 4, y + 4 + 3 * 8 + 1, line, 3, log, "line: ");
+    snprintf(who, sizeof(who), "A POTATO, NOT YET NAMED");
   }
+  int y = py + POTATO_H + 4;            // 132
+  drawTextCentered(cv, PAPER_W / 2, y + 7, who, FONT_BODY, PAPER_BLACK);
+  if (log) { char t[64]; asciiFold(who, t, sizeof(t)); for (char *c = t; *c; ++c) if ((uint8_t)*c == CH_MIDDOT) *c = '*'; log->add("name: %s%s%s", t, m.status[0] ? "  |  " : "", m.status); }
+  y += 11;                              // 143
 
-  // Footer, tiny: who this is, and the Net's state at the right.
-  {
-    char who[64];
-    if (m.name[0]) {
-      char nm[32];
-      asciiFold(m.name, nm, sizeof(nm));
-      for (char *c = nm; *c; ++c) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
-      char vr[24];
-      asciiFold(m.variety, vr, sizeof(vr));
-      for (char *c = vr; *c; ++c) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
-      if (m.showClaim && m.claim[0]) snprintf(who, sizeof(who), "%s #%s %c FILE %s", nm, m.potatoId, CH_MIDDOT, m.claim);
-      else snprintf(who, sizeof(who), "%s #%s %c %s", nm, m.potatoId, CH_MIDDOT, vr);
-    } else {
-      snprintf(who, sizeof(who), "UNREGISTERED");
-    }
-    drawText(cv, PAGE_X, PAPER_H - 2, who, FONT_TINY, PAPER_BLACK);
-    if (m.status[0]) drawText(cv, PAPER_W - PAGE_X - textWidth(FONT_TINY, m.status), PAPER_H - 2, m.status, FONT_TINY, PAPER_BLACK);
-    if (log) {
-      char t[64]; asciiFold(who, t, sizeof(t)); for (char *c = t; *c; ++c) if ((uint8_t)*c == CH_MIDDOT) *c = '*';
-      log->add("footer: %s%s%s", t, m.status[0] ? "  |  " : "", m.status);
+  // The line, then the options.
+  const bool question = m.nOptions > 0;
+  y = drawCentredLines(cv, y, m.line, question ? 2 : 3, 8, PAPER_BLACK, log, "line: ");
+  if (question) {
+    y = y < 166 ? 166 : y;
+    const int rowH = 11;
+    for (int i = 0; i < m.nOptions && i < PAPER_MAX_OPTIONS; ++i) {
+      if (y + rowH > PAPER_H) break;
+      const bool chosen = m.chosen == i;
+      const uint8_t ink = chosen ? PAPER_WHITE : PAPER_BLACK;
+      if (chosen) cv.fillRect(0, y, PAPER_W, rowH, PAPER_BLACK);
+      char row[24];
+      snprintf(row, sizeof(row), "%d %s", i + 1, m.options[i]);
+      drawText(cv, 8, y + 9, row, FONT_BODY, ink);
+      if (log) log->add("  %s%s", row, chosen ? "   <-- chosen" : "");
+      y += rowH;
     }
   }
 }

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include "gfx_font.h"
 #include "font5x7.h"
 #include "portrait.h"
@@ -205,63 +206,130 @@ static int wrapText(const Font &f, const char *s, int maxW, char out[][WRAP_CAP]
   return n;
 }
 
-// --------------------------------------------------------------- portrait ---
+// ----------------------------------------------------------------- potato ---
 
-// Variety dithers from assets/varieties.json: how dark the skin prints.
-enum PortraitDither : uint8_t { DITHER_NONE = 0, DITHER_FINE, DITHER_MEDIUM, DITHER_COARSE, DITHER_CHECKER };
+// The potato is the page. Body, underside shade and highlight are masks from
+// assets/potato-look-v1.svg (portrait.h, two sizes); the skin is a dither in
+// the variety's ink at the variety's density; dimples, eyes and the outline
+// are black. Expressions are the AMOLED's, by eye shape.
 
-static inline PortraitDither ditherFromName(const char *s) {
-  if (!strcmp(s, "fine")) return DITHER_FINE;
-  if (!strcmp(s, "medium")) return DITHER_MEDIUM;
-  if (!strcmp(s, "coarse")) return DITHER_COARSE;
-  if (!strcmp(s, "checker")) return DITHER_CHECKER;
-  return DITHER_NONE;
+static void fillEllipse(PaperCanvas &cv, int cx, int cy, int rx, int ry, uint8_t c) {
+  if (rx < 1) rx = 1;
+  if (ry < 1) ry = 1;
+  for (int dy = -ry; dy <= ry; ++dy) {
+    const float f = 1.0f - (float)(dy * dy) / (float)(ry * ry);
+    const int hw = (int)(rx * sqrtf(f < 0.0f ? 0.0f : f) + 0.5f);
+    cv.hline(cx - hw, cy + dy, 2 * hw + 1, c);
+  }
 }
 
-static inline bool maskBit(const uint8_t m[PORTRAIT_H][PORTRAIT_STRIDE], int x, int y) {
-  return (m[y][x >> 3] >> (7 - (x & 7))) & 1;
+struct PotatoArt {
+  int w, h, stride;
+  const uint8_t *body, *shade, *hi;
+  const int8_t (*eyes)[2];
+  const uint8_t *eyeR, *slit, *wide, *arc;
+  uint8_t glanceDx;
+  const int8_t (*dimples)[4];
+  int nDimples;
+  const int8_t (*flecks)[4];
+  int nFlecks;
+  uint8_t outline;        // px
+};
+
+static const PotatoArt POTATO_ART = {
+    POTATO_W, POTATO_H, POTATO_STRIDE, &POTATO_BODY[0][0], &POTATO_SHADE[0][0], &POTATO_HI[0][0],
+    POTATO_EYES, POTATO_EYE_R, POTATO_SLIT, POTATO_WIDE, POTATO_ARC, POTATO_GLANCE_DX,
+    POTATO_DIMPLES, 4, POTATO_FLECKS, 3, 2};
+static const PotatoArt PORTRAIT_ART = {
+    PORTRAIT_W, PORTRAIT_H, PORTRAIT_STRIDE, &PORTRAIT_BODY[0][0], &PORTRAIT_SHADE[0][0], &PORTRAIT_HI[0][0],
+    PORTRAIT_EYES, PORTRAIT_EYE_R, PORTRAIT_SLIT, PORTRAIT_WIDE, PORTRAIT_ARC, PORTRAIT_GLANCE_DX,
+    PORTRAIT_DIMPLES, 4, PORTRAIT_FLECKS, 3, 1};
+
+// assets/varieties.json, "dither" and "skin": how dark the skin prints and in
+// which ink. Red and Désirée are red; King Edward is pink-flecked: red
+// flecks on a pale skin. Everything else is black on white.
+struct SkinStyle {
+  uint8_t ink;        // PAPER_BLACK or PAPER_RED
+  uint8_t density;    // sixteenths, before shade/highlight
+  bool flecks;
+};
+
+static SkinStyle skinFor(const char *variety) {
+  SkinStyle st = {PAPER_BLACK, 6, false};
+  if (!strcmp(variety, "russet")) st.density = 8;
+  else if (!strcmp(variety, "purple_majesty")) st.density = 9;
+  else if (!strcmp(variety, "yukon_gold") || !strcmp(variety, "kennebec")) st.density = 4;
+  else if (!strcmp(variety, "fingerling") || !strcmp(variety, "maris_piper") || !strcmp(variety, "charlotte")) st.density = 2;
+  else if (!strcmp(variety, "red")) { st.ink = PAPER_RED; st.density = 7; }
+  else if (!strcmp(variety, "desiree")) { st.ink = PAPER_RED; st.density = 6; }
+  else if (!strcmp(variety, "king_edward")) { st.density = 3; st.flecks = true; }
+  return st;
 }
+
+enum EyeStyle : uint8_t { EYES_OVAL = 0, EYES_SLIT, EYES_ARC, EYES_WIDE };
 
 static const uint8_t BAYER4[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
-// Eyes: 0 neutral (open), 1 narrowed (aggrieved/waiting), 2 shut (asleep/dormant).
-static void drawPortrait(PaperCanvas &cv, int x0, int y0, PortraitDither dither, int eyes) {
-  for (int y = 0; y < PORTRAIT_H; ++y) {
-    for (int x = 0; x < PORTRAIT_W; ++x) {
-      if (!maskBit(PORTRAIT_BODY, x, y)) continue;
-      // Outline: a body pixel with a non-body 4-neighbour.
-      const bool edge = x == 0 || y == 0 || x == PORTRAIT_W - 1 || y == PORTRAIT_H - 1 ||
-                        !maskBit(PORTRAIT_BODY, x - 1, y) || !maskBit(PORTRAIT_BODY, x + 1, y) ||
-                        !maskBit(PORTRAIT_BODY, x, y - 1) || !maskBit(PORTRAIT_BODY, x, y + 1);
+static inline bool artBit(const uint8_t *m, int stride, int x, int y) {
+  return (m[y * stride + (x >> 3)] >> (7 - (x & 7))) & 1;
+}
+
+static bool artBody(const PotatoArt &a, int x, int y) {
+  if (x < 0 || y < 0 || x >= a.w || y >= a.h) return false;
+  return artBit(a.body, a.stride, x, y);
+}
+
+static void drawPotato(PaperCanvas &cv, int x0, int y0, const PotatoArt &a, const SkinStyle &skin,
+                       EyeStyle eyes, bool glance) {
+  for (int y = 0; y < a.h; ++y) {
+    for (int x = 0; x < a.w; ++x) {
+      if (!artBit(a.body, a.stride, x, y)) continue;
+      bool edge = false;
+      for (int d = 1; d <= a.outline && !edge; ++d)
+        edge = !artBody(a, x - d, y) || !artBody(a, x + d, y) || !artBody(a, x, y - d) || !artBody(a, x, y + d);
       if (edge) { cv.set(x0 + x, y0 + y, PAPER_BLACK); continue; }
-      // Skin tone in sixteenths, darker underneath, lighter at the highlight.
-      int v;
-      switch (dither) {
-        case DITHER_NONE: v = 0; break;
-        case DITHER_FINE: v = 4; break;
-        case DITHER_MEDIUM: v = 6; break;
-        case DITHER_COARSE: v = 8; break;
-        default: v = 8; break;
-      }
-      if (maskBit(PORTRAIT_SHADE, x, y)) v += 5;
-      if (maskBit(PORTRAIT_HI, x, y)) v -= 4;
+      int v = skin.density;
+      if (artBit(a.shade, a.stride, x, y)) v += 3;
+      if (artBit(a.hi, a.stride, x, y)) v -= 3;
       if (v < 0) v = 0;
       if (v > 15) v = 15;
-      bool dark;
-      if (dither == DITHER_CHECKER) dark = ((x + y) & 1) == 0 && v > 0;
-      else if (dither == DITHER_COARSE) dark = BAYER4[y & 1][x & 1] < v;   // 2x2 cells of the table
-      else dark = BAYER4[y & 3][x & 3] < v;
-      if (dark) cv.set(x0 + x, y0 + y, PAPER_BLACK);
+      if (BAYER4[y & 3][x & 3] < v) cv.set(x0 + x, y0 + y, skin.ink);
     }
   }
-  for (int i = 0; i < 4; ++i) cv.set(x0 + PORTRAIT_DIMPLES[i][0], y0 + PORTRAIT_DIMPLES[i][1], PAPER_BLACK);
+  if (skin.flecks) {
+    for (int i = 0; i < a.nFlecks; ++i) fillEllipse(cv, x0 + a.flecks[i][0], y0 + a.flecks[i][1], a.flecks[i][2], a.flecks[i][3], PAPER_RED);
+  }
+  for (int i = 0; i < a.nDimples; ++i) fillEllipse(cv, x0 + a.dimples[i][0], y0 + a.dimples[i][1], a.dimples[i][2], a.dimples[i][3], PAPER_BLACK);
+  const int dx = glance && eyes != EYES_ARC ? a.glanceDx : 0;
   for (int i = 0; i < 2; ++i) {
-    const int ex = x0 + PORTRAIT_EYES[i][0], ey = y0 + PORTRAIT_EYES[i][1];
-    // Clear a halo so the eye reads against the dither.
-    cv.fillRect(ex - 2, ey - 3, 5, 6, PAPER_WHITE);
-    if (eyes == 0) { cv.fillRect(ex - 1, ey - 2, 3, 4, PAPER_BLACK); cv.set(ex - 1, ey - 2, PAPER_WHITE); cv.set(ex + 1, ey - 2, PAPER_WHITE); cv.set(ex - 1, ey + 1, PAPER_WHITE); cv.set(ex + 1, ey + 1, PAPER_WHITE); }
-    else if (eyes == 1) cv.fillRect(ex - 1, ey - 1, 3, 2, PAPER_BLACK);
-    else cv.fillRect(ex - 2, ey, 5, 1, PAPER_BLACK);
+    const int ex = x0 + a.eyes[i][0] + dx, ey = y0 + a.eyes[i][1];
+    // A one-pixel halo so the eye reads against the dither, then the eye.
+    switch (eyes) {
+      case EYES_OVAL:
+        fillEllipse(cv, ex, ey, a.eyeR[0] + 1, a.eyeR[1] + 1, PAPER_WHITE);
+        fillEllipse(cv, ex, ey, a.eyeR[0], a.eyeR[1], PAPER_BLACK);
+        break;
+      case EYES_SLIT:
+        fillEllipse(cv, ex, ey + a.slit[2], a.slit[0] + 1, a.slit[1] + 1, PAPER_WHITE);
+        fillEllipse(cv, ex, ey + a.slit[2], a.slit[0], a.slit[1], PAPER_BLACK);
+        break;
+      case EYES_WIDE:
+        fillEllipse(cv, ex, ey, a.wide[0] + 1, a.wide[1] + 1, PAPER_WHITE);
+        fillEllipse(cv, ex, ey, a.wide[0], a.wide[1], PAPER_BLACK);
+        if (a.wide[0] >= 4) fillEllipse(cv, ex, ey, a.wide[0] - 3, a.wide[1] - 4, PAPER_WHITE);   // a ring: startled
+        break;
+      case EYES_ARC: {
+        const int hw = a.arc[0], depth = a.arc[1];
+        fillEllipse(cv, ex, ey + depth / 2, hw + 1, depth + 2, PAPER_WHITE);
+        for (int d = -hw; d <= hw; ++d) {
+          const float t = (float)d / (float)hw;
+          const int yy = ey + (int)(depth * (1.0f - t * t) + 0.5f);
+          cv.set(ex + d, yy, PAPER_BLACK);
+          if (a.outline > 1) cv.set(ex + d, yy + 1, PAPER_BLACK);
+        }
+        break;
+      }
+    }
   }
 }
 

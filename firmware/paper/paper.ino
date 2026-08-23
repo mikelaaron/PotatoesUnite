@@ -6,11 +6,13 @@
 // anything else or the board turns itself off on battery.
 //
 // It registers as board "epaper154", heartbeats every 120 s and after a key
-// press, and prints the Bulletin: masthead, headline, two items, and its own
-// scene line beside its portrait. When the Question is open the lower half
-// is the Question; a short BOOT press moves the cursor, a long press votes.
-// It is the potato that never gets picked up: orientation is always "up",
-// handling is the BOOT key, and the only event it ever sends is `tap`.
+// press, and the screen is the potato: the body, its name, its line, and —
+// when the Question is open — the options numbered 1..3. To vote, press
+// BOOT N times within two seconds; the LED blinks the count back, and two
+// seconds after the last press the choice is cast and the page reprinted
+// once with the chosen row inverted. It is the potato that never gets
+// picked up: orientation is always "up", handling is the BOOT key, and the
+// only event it ever sends is `tap`.
 
 #define FW_VERSION "0.1.0"
 
@@ -21,6 +23,7 @@
 #include <sys/time.h>
 #include <math.h>
 #include "driver/gpio.h"
+#include "esp_system.h"
 #include "esp_sntp.h"
 #include "HWCDC.h"
 
@@ -48,10 +51,11 @@ static SceneData scene;
 static bool haveScene = false;
 static int sceneRev = 0;
 static char choiceIds[MAX_CHOICES][24];
-static int8_t cursor = 0;
 static int8_t chosen = -1;
 static char chosenId[24];
 static char lastChoiceSig[96];
+static uint8_t pressCount = 0;           // BOOT presses in the current 2 s burst
+static uint32_t choiceHoldUntilMs = 0;   // after a vote: wait for the Scene so the page prints once
 
 static uint32_t bootMs = 0;
 static uint32_t lastHandledMs = 0;
@@ -59,7 +63,11 @@ static uint32_t heartbeatDueMs = 0;
 static uint32_t showClaimUntilMs = 0;
 static uint32_t lastPressMs = 0;
 static uint32_t ledOffAtMs = 0;
+// The LED blinks counts back: `ledBlinksLeft` edges remain, toggled every `ledStepMs`.
+static uint8_t ledBlinksLeft = 0;
+static uint32_t ledNextMs = 0, ledStepMs = 90;
 static bool forceRefresh = false;
+static char joinFailSsid[33];
 static bool nightOverride = false;           // dev: pretend it is night
 
 static bool shtOk = false;
@@ -84,7 +92,8 @@ static volatile long lastRefreshTookMs = 0;
 static volatile int refreshCount = 0;
 static bool everRefreshed = false;
 static uint32_t shownHash = 0;
-static char shownHeadline[80];
+static char shownHeadline[128];
+static PaperModel shownModel;
 
 // ------------------------------------------------------------------ power ---
 
@@ -112,6 +121,25 @@ static void powerOff() {
 static inline void ledOn() { digitalWrite(LED_PIN, LOW); }
 static inline void ledOff() { digitalWrite(LED_PIN, HIGH); }
 static void ledBlink(uint32_t ms) { ledOn(); ledOffAtMs = millis() + ms; }
+// N blinks, on/off `stepMs` each; restarts the pattern on every call.
+static void ledBlinkCount(uint8_t n, uint32_t stepMs) {
+  ledBlinksLeft = (uint8_t)(n * 2);
+  ledStepMs = stepMs;
+  ledNextMs = millis();
+  ledOffAtMs = 0;
+}
+static void ledService(uint32_t now) {
+  if (refreshing) return;              // the panel task owns the LED while printing
+  if (ledBlinksLeft) {
+    if ((int32_t)(now - ledNextMs) >= 0) {
+      if (ledBlinksLeft & 1) ledOff(); else ledOn();
+      --ledBlinksLeft;
+      ledNextMs = now + ledStepMs;
+    }
+    return;
+  }
+  if (ledOffAtMs && (int32_t)(now - ledOffAtMs) >= 0) { ledOff(); ledOffAtMs = 0; }
+}
 
 // ------------------------------------------------------------------- time ---
 
@@ -153,69 +181,47 @@ static void postEvent(EventType t, int32_t v = 0) {
 
 // ------------------------------------------------------------------ scene ---
 
-static const BulletinData *pickBulletin() {
-  if (!haveScene) return nullptr;
-  struct tm lt;
-  if (localNow(&lt)) {
-    const int mins = lt.tm_hour * 60 + lt.tm_min;
-    if (mins >= 18 * 60 + 30) {
-      if (scene.evening.present) return &scene.evening;
-      if (scene.morning.present) return &scene.morning;
-    } else if (mins >= 7 * 60 + 30) {
-      if (scene.morning.present) return &scene.morning;
-    }
-  }
-  return scene.bulletin.present ? &scene.bulletin : nullptr;
-}
-
-static PortraitDither ditherForVariety(const char *v) {
-  // assets/varieties.json, "dither".
-  if (!strcmp(v, "russet") || !strcmp(v, "purple_majesty")) return DITHER_COARSE;
-  if (!strcmp(v, "yukon_gold") || !strcmp(v, "kennebec")) return DITHER_FINE;
-  if (!strcmp(v, "red") || !strcmp(v, "king_edward") || !strcmp(v, "desiree")) return DITHER_MEDIUM;
-  return DITHER_NONE;   // fingerling, maris_piper, charlotte
-}
-
 static void buildModel() {
   memset(&model, 0, sizeof(model));
-  const BulletinData *b = pickBulletin();
-  if (b) {
-    model.hasBulletin = true;
-    model.no = b->no;
-    asciiFold(b->edition, model.edition, sizeof(model.edition));
-    for (char *c = model.edition; *c; ++c) if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
-    asciiFold(b->headline, model.headline, sizeof(model.headline));
-    model.nItems = b->nItems;
-    for (int i = 0; i < b->nItems; ++i) asciiFold(b->items[i], model.items[i], sizeof(model.items[i]));
-  }
-  model.incident = haveScene && !strcmp(scene.cue, "incident");
-  asciiFold(haveScene ? scene.line : "", model.line, sizeof(model.line));
   strncpy(model.name, identity.name, sizeof(model.name) - 1);
   strncpy(model.variety, identity.variety, sizeof(model.variety) - 1);
   strncpy(model.potatoId, identity.potatoId, sizeof(model.potatoId) - 1);
   strncpy(model.claim, identity.claim, sizeof(model.claim) - 1);
   model.showClaim = showClaimUntilMs && (int32_t)(millis() - showClaimUntilMs) < 0;
-  model.dither = ditherForVariety(identity.variety);
+  model.chosen = -1;
   if (haveScene) {
-    switch (scene.expression) {
-      case EXPR_AGGRIEVED: case EXPR_WAITING: model.eyes = 1; break;
-      case EXPR_ASLEEP: case EXPR_DORMANT: case EXPR_SPROUTED: model.eyes = 2; break;
-      default: model.eyes = 0; break;
-    }
-  }
-  if (haveScene && scene.nChoices > 0) {
-    model.question = true;
-    strncpy(model.qText, model.line, sizeof(model.qText) - 1);
+    model.expression = (uint8_t)scene.expression;
+    model.alarmed = !strcmp(scene.cue, "incident");
+    model.glance = scene.fileUnread > 0;
+    asciiFold(scene.line, model.line, sizeof(model.line));
     model.nOptions = scene.nChoices;
     for (int i = 0; i < scene.nChoices; ++i) asciiFold(scene.choices[i].label, model.options[i], sizeof(model.options[i]));
-    model.cursor = cursor;
     model.chosen = chosen;
+  } else if (identity.registered) {
+    asciiFold("I have eyes. All potatoes do. Mine are on you.", model.line, sizeof(model.line));   // §12, no scene yet
   }
-  char status[48];
-  { NetLock l; strncpy(status, net.status, sizeof(status) - 1); status[sizeof(status) - 1] = 0; }
-  if (!strcmp(status, "portal")) snprintf(model.status, sizeof(model.status), "JOIN %s", apName);
-  else if (strcmp(status, "online") != 0) strncpy(model.status, "NO NET", sizeof(model.status) - 1);
-  else if (!identity.registered) strncpy(model.status, "REGISTERING", sizeof(model.status) - 1);
+  bool online;
+  { NetLock l; online = net.online; }
+  if (!identity.registered && !online) {
+    // Off the Net and nobody yet: the join card. Nothing on this page may
+    // depend on the portal's state, the clock or the battery, so it prints
+    // once and stays until the Net answers.
+    strncpy(model.joinAp, apName, sizeof(model.joinAp) - 1);
+    strncpy(model.joinFailSsid, joinFailSsid, sizeof(model.joinFailSsid) - 1);
+  } else if (!online) {
+    strncpy(model.status, "NO NET", sizeof(model.status) - 1);
+  } else if (!identity.registered) {
+    strncpy(model.status, "REGISTERING", sizeof(model.status) - 1);
+  }
+}
+
+// Which field of the page changed, for the refresh log.
+#define PM_FIELD(f) if (memcmp(&a.f, &b.f, sizeof(a.f)) != 0) return #f;
+static const char *firstModelDiff(const PaperModel &a, const PaperModel &b) {
+  PM_FIELD(name) PM_FIELD(variety) PM_FIELD(potatoId) PM_FIELD(claim) PM_FIELD(showClaim) PM_FIELD(expression)
+  PM_FIELD(alarmed) PM_FIELD(glance) PM_FIELD(line) PM_FIELD(options) PM_FIELD(nOptions) PM_FIELD(chosen)
+  PM_FIELD(status) PM_FIELD(joinAp) PM_FIELD(joinFailSsid)
+  return "nothing (same model, different pixels?)";
 }
 
 static void applySceneJson(const char *json) {
@@ -226,7 +232,8 @@ static void applySceneJson(const char *json) {
   sceneRev = scene.rev;
   { NetLock l; net.revSeen = sceneRev; }
 
-  // A new set of choices resets the cursor; the same set keeps it and the vote.
+  // The vote is remembered by id, so it survives heartbeats that return the
+  // same choices; a different set of ids forgets it.
   char sig[96] = "";
   for (int i = 0; i < scene.nChoices; ++i) {
     strncat(sig, scene.choices[i].id, sizeof(sig) - strlen(sig) - 2);
@@ -234,7 +241,6 @@ static void applySceneJson(const char *json) {
   }
   if (strcmp(sig, lastChoiceSig) != 0) {
     strncpy(lastChoiceSig, sig, sizeof(lastChoiceSig) - 1);
-    cursor = 0;
     chosen = -1;
     for (int i = 0; i < scene.nChoices; ++i) {
       strncpy(choiceIds[i], scene.choices[i].id, sizeof(choiceIds[i]) - 1);
@@ -242,12 +248,10 @@ static void applySceneJson(const char *json) {
     }
     if (scene.nChoices == 0) chosenId[0] = 0;
   }
-  const BulletinData *b = pickBulletin();
-  USBSerial.printf("scene: rev %d %s \"%s\" choices %u cue %s unread %d | bulletin %s | today: morning %s, evening %s\n",
+  choiceHoldUntilMs = 0;   // the Scene is here; a held vote refresh may go
+  USBSerial.printf("scene: rev %d %s \"%s\" choices %u cue %s unread %d%s\n",
                    sceneRev, scene.expressionName, scene.line, (unsigned)scene.nChoices, scene.cue, scene.fileUnread,
-                   scene.bulletin.present ? scene.bulletin.headline : "none",
-                   scene.morning.present ? "yes" : "no", scene.evening.present ? "yes" : "no");
-  if (b) USBSerial.printf("scene: printing No. %d %s \"%s\" (%u items)\n", b->no, b->edition, b->headline, (unsigned)b->nItems);
+                   scene.bulletin.present ? " (bulletin present, not printed)" : "");
 }
 
 // Loop side of the Net: pick up what the task left.
@@ -270,6 +274,18 @@ static void netPoll(uint32_t tNow) {
     showClaimUntilMs = tNow + 600000;
     USBSerial.printf("identity: claim code %s in the footer for 10 min\n", identity.claim);
   }
+  bool joinFail = false;
+  char failSsid[33] = "";
+  uint8_t failCode = 0;
+  {
+    NetLock l;
+    if (net.joinFailFresh) { joinFail = true; net.joinFailFresh = false; strncpy(failSsid, net.joinFailSsid, 32); failCode = net.joinFailCode; }
+  }
+  if (joinFail) {
+    strncpy(joinFailSsid, failSsid, sizeof(joinFailSsid) - 1);
+    USBSerial.printf("wifi: portal save for \"%s\" did not connect (code %u) — page says so\n", failSsid, failCode);
+  }
+  { bool online; { NetLock l; online = net.online; } if (online && joinFailSsid[0]) joinFailSsid[0] = 0; }
   if (wifiLost) USBSerial.println("net: lost");
   if (wifiBack) postEvent(EV_WIFI_RESTORE, (int32_t)backDur);
   if (dormant) postEvent(EV_DORMANT_RESUME, (int32_t)dormDur);
@@ -305,36 +321,48 @@ static void vote(int idx) {
   if (!haveScene || idx < 0 || idx >= scene.nChoices) return;
   chosen = (int8_t)idx;
   strncpy(chosenId, choiceIds[idx], sizeof(chosenId) - 1);
-  USBSerial.printf("choice: id=%s label=\"%s\" rev=%d\n", choiceIds[idx], scene.choices[idx].label, sceneRev);
+  USBSerial.printf("choice: option %d id=%s label=\"%s\" rev=%d -> /v0/choice\n", idx + 1, choiceIds[idx], scene.choices[idx].label, sceneRev);
   if (identity.registered) netSendChoice(sceneRev, choiceIds[idx]);
+  choiceHoldUntilMs = millis() + 3000;   // print once, with the Scene the choice returns
+  forceRefresh = true;
 }
 
-static void bootShort() {
-  lastHandledMs = millis();
-  lastPressMs = millis();
-  ledBlink(120);
+// One BOOT press. Presses within 2 s of each other form a burst; the LED
+// blinks the running count back at once. The burst is judged in loop().
+static void bootPress() {
+  const uint32_t now = millis();
+  lastHandledMs = now;
+  lastPressMs = now;
+  if (pressCount < 9) ++pressCount;
+  ledBlinkCount(pressCount, 90);
+  USBSerial.printf("key: BOOT press %u\n", pressCount);
+}
+
+// Two seconds after the last press: a vote if the Question is open and the
+// count names an option, a triple blink and nothing if it does not, a tap
+// otherwise.
+static void judgeBurst() {
+  const uint8_t n = pressCount;
+  pressCount = 0;
   if (haveScene && scene.nChoices > 0) {
-    cursor = (int8_t)((cursor + 1) % scene.nChoices);
-    USBSerial.printf("key: BOOT short — cursor %d \"%s\"\n", cursor, scene.choices[cursor].label);
-  } else {
-    USBSerial.println("key: BOOT short — tap");
+    if (n >= 1 && n <= scene.nChoices) {
+      USBSerial.printf("key: %u press%s -> vote option %u\n", n, n == 1 ? "" : "es", n);
+      vote(n - 1);
+    } else {
+      USBSerial.printf("key: %u presses but %u options — rejected (triple blink, no refresh)\n", n, (unsigned)scene.nChoices);
+      ledBlinkCount(3, 60);
+    }
+    return;
   }
+  USBSerial.printf("key: %u press%s, no Question -> tap\n", n, n == 1 ? "" : "es");
   postEvent(EV_TAP);
-  forceRefresh = true;
 }
 
-static void bootLong() {
-  lastHandledMs = millis();
+static void pwrShort() {
+  showClaimUntilMs = millis() + 600000;
   lastPressMs = millis();
-  ledBlink(400);
-  if (haveScene && scene.nChoices > 0) {
-    USBSerial.printf("key: BOOT long — vote %d\n", cursor);
-    vote(cursor);
-  } else {
-    showClaimUntilMs = millis() + 600000;
-    USBSerial.printf("key: BOOT long — claim code %s in the footer for 10 min\n", identity.claim[0] ? identity.claim : "(none yet)");
-  }
   forceRefresh = true;
+  USBSerial.printf("key: PWR short — claim code %s under the name for 10 min\n", identity.claim[0] ? identity.claim : "(none yet)");
 }
 
 static Key bootKey = {BOOT_BUTTON_PIN, false, 0, false, 0};
@@ -386,13 +414,27 @@ static void displayTask(void *arg) {
 // Question. The first page waits up to 20 s for the Net so it is the real one.
 static void considerRefresh(uint32_t now, const char *why) {
   if (refreshing || refreshPending) return;
+  // Never refresh while Wi-Fi is joining: the panel's refresh current and the
+  // radio's TX bursts share one small rail, and a reset mid-connect loses the
+  // portal's save.
+  static bool heldLogged = false;
+  bool connecting;
+  { NetLock l; connecting = net.connecting; }
+  if (connecting) {
+    if (!heldLogged) { USBSerial.println("paper: holding refreshes while Wi-Fi connects"); heldLogged = true; }
+    return;
+  }
+  heldLogged = false;
+  if (choiceHoldUntilMs && (int32_t)(now - choiceHoldUntilMs) < 0) return;   // the vote's Scene is on its way
+  choiceHoldUntilMs = 0;
   buildModel();
   renderPaper(canvas, model, nullptr);
   const uint32_t h = canvas.hash();
   const bool changed = h != shownHash || !everRefreshed;
   if (!changed && !forceRefresh) return;
   if (lastPressMs && now - lastPressMs < 2000) return;
-  const char *head = model.hasBulletin ? model.headline : "";
+  // At night only a new line (a Bulletin headline arrives as one) may print.
+  const char *head = model.line;
   const bool headlineChanged = strcmp(head, shownHeadline) != 0;
   bool interaction = forceRefresh;
   if (!interaction && everRefreshed) {
@@ -405,13 +447,16 @@ static void considerRefresh(uint32_t now, const char *why) {
   PaperLog log;
   renderPaper(canvas, model, &log);
   memcpy(shadow, canvas.buf, PAPER_BYTES);
+  const char *diff = everRefreshed ? firstModelDiff(shownModel, model) : "first page";
   shownHash = h;
+  shownModel = model;
   strncpy(shownHeadline, head, sizeof(shownHeadline) - 1);
   everRefreshed = true;
   forceRefresh = false;
   refreshPending = true;
-  USBSerial.printf("paper: printing (%s%s%s) hash %08lx\n%s", why, interaction ? ", key" : "",
-                   headlineChanged ? ", new headline" : "", (unsigned long)h, log.text);
+  USBSerial.printf("paper: printing #%d — reason: %s; changed: %s%s; hash %08lx\n%s", refreshCount + 1, why, diff,
+                   interaction ? " (after a key)" : "", (unsigned long)h, log.text);
+  (void)headlineChanged;
 }
 
 // ---------------------------------------------------------------- sensors ---
@@ -448,9 +493,14 @@ void setup() {
   bootMs = millis();
   lastHandledMs = bootMs;
 
+  USBSerial.setTxBufferSize(4096);     // the page dump is ~600 bytes; the default 256 drops the tail
   USBSerial.begin(115200);
   USBSerial.setTxTimeoutMs(0);
-  USBSerial.printf("\npaper up. fw %s, board epaper154. GP17 latch HIGH and held.\n", FW_VERSION);
+  static const char *const RST[] = {"unknown", "power-on", "external", "software", "panic", "interrupt wdt", "task wdt",
+                                    "other wdt", "deep-sleep wake", "brownout", "sdio", "usb", "jtag", "efuse", "pwr glitch", "cpu lockup"};
+  const int rr = (int)esp_reset_reason();
+  USBSerial.printf("\npaper up. fw %s, board epaper154. GP17 latch HIGH and held. reset reason: %s (%d)\n", FW_VERSION,
+                   rr >= 0 && rr < 16 ? RST[rr] : "?", rr);
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   shtOk = shtc3Probe(&shtId);
@@ -504,7 +554,7 @@ void setup() {
                    epd.busy() ? "yes" : "no", EPD_ROTATE_180 ? ", rotated 180" : "");
   xTaskCreatePinnedToCore(displayTask, "epd", 4096, nullptr, 1, nullptr, 1);
   ledOff();
-  USBSerial.println("keys: BOOT short = tap / cursor, BOOT long (1.5 s) = vote / claim code, PWR long (3 s) = power off. 'h' for serial keys.");
+  USBSerial.println("keys: BOOT = tap, or N presses within 2 s = vote option N; PWR short = claim code, PWR 3 s = power off. 'h' for serial keys.");
 }
 
 // ---------------------------------------------------------------- serial ---
@@ -522,8 +572,12 @@ static void demoQuestion() {
 
 static void serialCommand(int c) {
   switch (c) {
-    case 't': bootShort(); break;
-    case 'l': bootLong(); break;
+    case 't': bootPress(); break;
+    case '1': case '2': case '3':
+      for (int i = 0; i < c - '0'; ++i) bootPress();
+      USBSerial.printf("(simulated %c presses)\n", c);
+      break;
+    case 'k': pwrShort(); break;
     case 'q': demoQuestion(); break;
     case 'b': netRequestHeartbeat(); USBSerial.println("heartbeat requested"); break;
     case 'r': forceRefresh = true; USBSerial.println("refresh forced"); break;
@@ -572,12 +626,12 @@ static void serialCommand(int c) {
                        (unsigned long)net.heartbeats, (unsigned long)net.failures, sceneRev, serverUrl, tzString, apName,
                        refreshCount, (long)lastRefreshTookMs);
       break;
-    case 'x': haveScene = false; chosen = -1; cursor = 0; forceRefresh = true; USBSerial.println("scene cleared"); break;
+    case 'x': haveScene = false; chosen = -1; forceRefresh = true; USBSerial.println("scene cleared"); break;
     case 'W': netForgetWifi(); break;
     case 'R': netReregister(); break;
     case 'O': powerOff(); break;
     case 'h':
-      USBSerial.println("keys: t short press, l long press, q demo Question, b heartbeat, r force refresh, n night override, p page text, s/S screen dump, T sensors, c clock, e events, i identity, x clear scene, W forget wifi, R register again, O power off");
+      USBSerial.println("keys: t one BOOT press, 1/2/3 a burst of N presses, k PWR short (claim code), q demo Question, b heartbeat, r force refresh, n night override, p page text, s/S screen dump, T sensors, c clock, e events, i identity, x clear scene, W forget wifi, R register again, O power off");
       break;
     default: break;
   }
@@ -589,9 +643,10 @@ void loop() {
   const uint32_t now = millis();
   while (USBSerial.available()) serialCommand(USBSerial.read());
 
-  pollKey(bootKey, now, 1500, bootShort, bootLong);
-  pollKey(pwrKey, now, 3000, []() { USBSerial.println("key: PWR short — nothing; hold 3 s to power off"); }, powerOff);
-  if (ledOffAtMs && (int32_t)(now - ledOffAtMs) >= 0 && !refreshing) { ledOff(); ledOffAtMs = 0; }
+  pollKey(bootKey, now, 60000, bootPress, []() {});   // BOOT has no long press
+  pollKey(pwrKey, now, 3000, pwrShort, powerOff);
+  if (pressCount && now - lastPressMs >= 2000) judgeBurst();
+  ledService(now);
 
   readSensors(now);
   netPoll(now);

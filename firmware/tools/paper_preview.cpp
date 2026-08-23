@@ -24,10 +24,10 @@ static void writePpm(const PaperCanvas &cv, const char *path) {
   fclose(f);
 }
 
-static void fill(PaperModel &m) {
+static void fill(PaperModel &m, const char *name, const char *variety, const char *id) {
   memset(&m, 0, sizeof(m));
-  strcpy(m.name, "Clive"); strcpy(m.variety, "russet"); strcpy(m.potatoId, "0002"); strcpy(m.claim, "BRK-7H2");
-  m.dither = DITHER_COARSE; m.chosen = -1;
+  strcpy(m.name, name); strcpy(m.variety, variety); strcpy(m.potatoId, id); strcpy(m.claim, "JXN-BNW");
+  m.chosen = -1;
 }
 
 int main(int argc, char **argv) {
@@ -38,32 +38,17 @@ int main(int argc, char **argv) {
 
   struct Scene { const char *name; void (*make)(PaperModel &); };
   static const Scene scenes[] = {
-    {"morning", [](PaperModel &m) {
-      fill(m); m.hasBulletin = true; m.no = 1; strcpy(m.edition, "MORNING");
-      strcpy(m.headline, "THE NET IS LIVE.");
-      strcpy(m.items[0], "Population: 14. All 14 are new. Nobody knows what they're doing. This is normal.");
-      strcpy(m.items[1], "Today's Question: ketchup. Polls close at 18:00."); m.nItems = 2;
+    {"rosemary", [](PaperModel &m) { fill(m, "Rosemary", "red", "0002");
       strcpy(m.line, "You weren't here. I voted Hunt's. It's in the File."); }},
-    {"evening", [](PaperModel &m) {
-      fill(m); m.hasBulletin = true; m.no = 4; strcpy(m.edition, "EVENING");
-      strcpy(m.headline, "AN INQUIRY, 9 TO 5 TO 3.");
-      strcpy(m.items[0], "The inquiry has concluded. Findings: it was dropped.");
-      strcpy(m.items[1], "Today: 5 potatoes left home, 1 in the dark, 0 shaken. The Net is calmer. Something is wrong."); m.nItems = 2;
-      strcpy(m.line, "Four hours, forty-five minutes. I counted."); m.eyes = 1; m.showClaim = true; }},
-    {"incident", [](PaperModel &m) {
-      fill(m); m.hasBulletin = true; m.no = 3; strcpy(m.edition, "MORNING"); m.incident = true;
-      strcpy(m.headline, "INCIDENT.");
-      strcpy(m.items[0], "A potato was dropped at 09:12 in a region we will not name. It is fine. The Hands responsible have been noted.");
-      strcpy(m.items[1], "All members: check your footing."); m.nItems = 2;
-      strcpy(m.line, "I'm noting this."); strcpy(m.status, "NO NET"); }},
-    {"question", [](PaperModel &m) {
-      fill(m); m.hasBulletin = true; m.no = 1; strcpy(m.edition, "MORNING");
-      strcpy(m.headline, "THE DROPPED POTATO IS RESTING.");
-      strcpy(m.items[0], "Its neighbor has sent a pebble. The Net does not know what this means but it was kind."); m.nItems = 1;
-      m.question = true; strcpy(m.qText, "Ketchup. Which would you least object to being served with?");
-      strcpy(m.options[0], "HEINZ"); strcpy(m.options[1], "HUNT'S"); strcpy(m.options[2], "WHATEVER'S THERE"); m.nOptions = 3;
-      m.cursor = 1; m.chosen = 2; }},
-    {"nonet", [](PaperModel &m) { fill(m); m.name[0] = 0; strcpy(m.line, ""); strcpy(m.status, "JOIN POTATO-B458"); }},
+    {"question", [](PaperModel &m) { fill(m, "Rosemary", "red", "0002"); m.expression = 1;
+      strcpy(m.line, "Ketchup. Which would you least object to being served with?");
+      strcpy(m.options[0], "HEINZ"); strcpy(m.options[1], "HUNT'S"); strcpy(m.options[2], "WHATEVER'S THERE"); m.nOptions = 3; m.chosen = 1; }},
+    {"aggrieved", [](PaperModel &m) { fill(m, "Clive", "russet", "0003"); m.expression = 2;
+      strcpy(m.line, "Four hours, forty-five minutes. I counted."); strcpy(m.status, "NO NET"); }},
+    {"asleep", [](PaperModel &m) { fill(m, "Doreen", "purple_majesty", "0001"); m.expression = 4; }},
+    {"alarmed", [](PaperModel &m) { fill(m, "Edward", "king_edward", "0004"); m.alarmed = true; m.glance = true; m.showClaim = true;
+      strcpy(m.line, "INCIDENT. A potato was dropped at 09:12."); }},
+    {"nonet", [](PaperModel &m) { memset(&m, 0, sizeof(m)); m.chosen = -1; strcpy(m.joinAp, "POTATO-A8C4"); strcpy(m.joinFailSsid, "Fenton"); }},
   };
   for (const Scene &s : scenes) {
     s.make(m);

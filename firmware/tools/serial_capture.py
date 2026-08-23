@@ -7,10 +7,17 @@
 wait 2s then send 't', ... — for the firmware's serial dev commands.
 
 Needs pyserial (`pip install pyserial`). The S3's USB CDC is the chip itself:
-DTR/RTS feed its reset/boot sequence, so they are forced low before the port
-is opened. Reopens while the port re-enumerates after an upload or reset, so
-a boot banner can be caught. `arduino-cli monitor` cannot be used for this:
-it needs a TTY and prints nothing through a pipe.
+DTR/RTS feed its reset sequence (reset = RTS asserted while DTR is not). On
+macOS the TTY open raises both lines, and pyserial then applies its presets
+DTR first — so "dtr=False, rts=False set before open" still produced the
+exact reset sequence and every capture began with `rst:0x15
+(USB_UART_CHIP_RESET)`. The order here never passes through RTS-high/DTR-low:
+dsrdtr=True keeps pyserial's hands off DTR at open (it stays high), rts=False
+is applied at open (RTS low while DTR is still high: not a reset), and DTR is
+dropped afterwards. Listening never resets the board. Reopens while the port
+re-enumerates after an upload, so a boot banner can still be caught.
+`arduino-cli monitor` cannot be used for this: it needs a TTY and prints
+nothing through a pipe.
 """
 import sys, time
 import serial
@@ -29,12 +36,15 @@ start = time.time()
 end = start + secs
 out = open(log, "wb")
 while time.time() < end:
-    s = serial.Serial()
-    s.port, s.baudrate, s.timeout = port, 115200, 0.2
-    s.dtr = False
-    s.rts = False
+    s = serial.Serial()          # no port yet: nothing is opened
+    s.baudrate, s.timeout = 115200, 0.2
+    s.dsrdtr = True              # leave DTR alone at open (macOS raises it)
+    s.rts = False                # applied at open: RTS low while DTR is high
+    s.dtr = False                # recorded; applied below, after RTS is low
+    s.port = port
     try:
         s.open()
+        s.dtr = False            # now both low; no reset at any step
     except serial.SerialException:
         time.sleep(0.1)
         continue
