@@ -19,7 +19,7 @@
 // Build with `make -C firmware build`. Monitor with dtr=off,rts=off — the
 // S3's USB CDC is the chip itself and either line asserted parks it.
 
-#define FW_VERSION "0.1.0"
+#include "version.h"
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -527,6 +527,26 @@ static void netPoll(uint32_t tNow) {
   }
   if (statusFresh) USBSerial.printf("net status line: \"%s\"\n", netStatusLine);
 
+  // An update is installed in the other slot: reboot at a quiet moment —
+  // no Question on the buttons, no open request, nobody touching, and
+  // battery at 30% or on VBUS. The line first, then six seconds, then restart.
+  static uint32_t rebootAtMs = 0;
+  if (ota.ready && !rebootAtMs) {
+    const bool quiet = uiChoiceCount == 0 && !request.active && !touching && !uiCardActive() &&
+                       (vbusGood || battery.pct >= 30);
+    if (quiet) {
+      say(LINE_UPDATED, 8.0f);
+      rebootAtMs = tNow + 6000;
+      USBSerial.printf("ota: quiet moment — rebooting into %s in 6 s\n", ota.version);
+    }
+  }
+  if (rebootAtMs && (int32_t)(tNow - rebootAtMs) >= 0) {
+    USBSerial.println("ota: restart");
+    USBSerial.flush();
+    delay(50);
+    ESP.restart();
+  }
+
   if (heartbeatDueMs && (int32_t)(tNow - heartbeatDueMs) >= 0) {
     heartbeatDueMs = 0;
     netRequestHeartbeat();
@@ -808,13 +828,15 @@ static void serialCommand(int c) {
       break;
     }
     case 'c': showStatusCard(); break;
+    case 'u': otaRequestCheck(); USBSerial.println("ota: check requested"); break;
+    case 'X': USBSerial.println("restart requested"); USBSerial.flush(); delay(100); ESP.restart(); break;
     case 'b': netRequestHeartbeat(); USBSerial.println("heartbeat requested"); break;
     case 'i':
-      USBSerial.printf("identity: %s, %s #%s %s claim %s seed %08lx | net %s hb %lu fail %lu rev %d | server %s tz %s\n",
+      USBSerial.printf("identity: %s, %s #%s %s claim %s seed %08lx | net %s hb %lu fail %lu rev %d | server %s tz %s | fw %s ota: %s\n",
                        identity.registered ? "registered" : "not registered", identity.name,
                        identity.potatoId, identity.variety, identity.claim, (unsigned long)poolSeed,
                        net.status, (unsigned long)net.heartbeats, (unsigned long)net.failures,
-                       sceneRev, serverUrl, tzString);
+                       sceneRev, serverUrl, tzString, FW_VERSION, ota.lastResult);
       break;
     case 'W': netForgetWifi(); break;
     case 'R': netReregister(); break;

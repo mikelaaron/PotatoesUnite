@@ -1,0 +1,13 @@
+# Potatoes Unite — AMOLED citizen (amoled18), 16 MB flash. FROZEN: never change
+# these offsets. nvs/otadata/ota_0 sit exactly where Arduino's huge_app put
+# them, so a device flashed before this table keeps its NVS (secret, identity,
+# scene) untouched, and arduino-cli's hardcoded upload offsets (0xe000
+# boot_app0, 0x10000 app) stay valid. Two 3 MB OTA slots; the app updates
+# itself into the inactive one. LittleFS holds cached pools.
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+ota_0,      app,  ota_0,    0x10000,  0x300000,
+ota_1,      app,  ota_1,    0x310000, 0x300000,
+littlefs,   data, spiffs,   0x610000, 0x100000,
+coredump,   data, coredump, 0xFF0000, 0x10000,

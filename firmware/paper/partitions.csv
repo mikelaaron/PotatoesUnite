@@ -1,0 +1,11 @@
+# Potatoes Unite — e-paper press (epaper154), ESP32-S3-PICO-1-N8R8, 8 MB
+# flash. FROZEN: never change these offsets. nvs/otadata/ota_0 sit exactly
+# where Arduino's default_8MB put them, so an existing device keeps its NVS,
+# and arduino-cli's hardcoded upload offsets stay valid. Two 2.5 MB OTA slots.
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+ota_0,      app,  ota_0,    0x10000,  0x280000,
+ota_1,      app,  ota_1,    0x290000, 0x280000,
+littlefs,   data, spiffs,   0x510000, 0x100000,
+coredump,   data, coredump, 0x7F0000, 0x10000,

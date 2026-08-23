@@ -197,3 +197,20 @@ again, `O` power off (latch low).
   Rosemary #0002 (red), neighbor Doreen #0001.
 - **Panel orientation** relative to the USB port is unconfirmed (no eyes on
   it from here); `PAPER_ROTATE=1` if it is upside down.
+
+
+## Partitions, versions, updates
+
+`paper/partitions.csv` is the **frozen** 8 MB layout (`PartitionScheme=custom`):
+`nvs` 0x9000/20 KB, `otadata` 0xe000, `ota_0` 0x10000/2.5 MB, `ota_1`
+0x290000/2.5 MB, `littlefs` 0x510000/1 MB, `coredump`. `nvs`/`otadata`/`ota_0`
+are where Arduino's `default_8MB` had them, so an existing press keeps its
+NVS. The real app limit is the 2.5 MB slot (2,621,440 bytes). `version.h`
+holds the one `FW_VERSION`. OTA: once a day and on serial `u`, `GET
+/v0/firmware?board=epaper154&fw=<version>`; a newer image goes into the
+inactive slot (SHA-256 checked) and the press reboots at a quiet moment —
+never mid-refresh, no Question open, ≥30 % or on VBUS — with no refresh of
+its own; the new image is marked valid after its first good heartbeat, else
+the bootloader rolls back. `ota.h` is an identical copy of the potato's.
+A `/v0/choice` is posted once per distinct (rev, option); repeating the same
+press count on the same Scene is not re-posted. NVS keys: `firmware/NVS.md`.

@@ -135,6 +135,8 @@ static const char *const LINE_NET_BACK = "Back. I missed the Bulletins. Give me 
 static const char *const LINE_SATURDAY = "It's Saturday. You're allowed. I'm noting it anyway.";
 // With no scene at all (never registered, nothing cached), §12 on eyes.
 static const char *const LINE_EYES = "I have eyes. All potatoes do. Mine are on you.";
+// Before the reboot that installs an update.
+static const char *const LINE_UPDATED = "I've been updated. I feel the same.";
 
 // Every single line, for the host length check (docs/COPY_REVIEW.md §1: a
 // scene line is clipped at 60 characters; nothing here may exceed it at its
@@ -145,7 +147,7 @@ static const char *const ALL_SINGLE_LINES[] = {
     LINE_ALONE_48H, LINE_ALONE_72H, LINE_ALONE_7D, LINE_RETURN, LINE_RETURN_LONG,
     LINE_PLUGGED_OVERNIGHT, LINE_FULL, LINE_UNPLUGGED, LINE_BATT_30, LINE_BATT_20,
     LINE_BATT_10, LINE_BATT_5, LINE_DORMANT_3D, LINE_NET_LOST, LINE_NET_BACK,
-    LINE_SATURDAY, LINE_EYES,
+    LINE_SATURDAY, LINE_EYES, LINE_UPDATED,
 };
 static const int ALL_SINGLE_LINES_N = (int)(sizeof(ALL_SINGLE_LINES) / sizeof(ALL_SINGLE_LINES[0]));
 

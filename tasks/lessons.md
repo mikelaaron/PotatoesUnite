@@ -192,3 +192,20 @@ takes fifteen seconds to redraw is an interaction that cannot be seen.
 *next* refresh, never need one to be understood — count presses, blink the
 count back on the LED, cast, print once. And before designing a second
 device's screen, put the same potato on it first; the rest is typography.
+
+## macOS does not lock a tty: esptool plus a serial capture on one port parks the chip
+
+**2026-08-23.** To catch a boot banner I armed a pyserial capture on each
+board's port and then ran `esptool … --before default_reset --after
+hard_reset chip_id` on the same port. macOS let both processes open the tty,
+esptool's reset sequence put each S3 into the ROM download mode, and the
+closing hard reset did not take while the other process held DTR/RTS. Both
+potatoes went silent — no serial, no heartbeats — for five minutes until a
+clean `esptool` reset with nothing else on the port. The symptom is
+indistinguishable from a crash except that the port still enumerates.
+
+**How to apply:** one process per port, always. To capture a boot: attach the
+capture first and reboot from inside (the firmware's serial `X`), or run
+esptool first and attach after; never both at once. If a board goes quiet
+right after a tool touched its port, reset it with esptool on a free port
+before suspecting firmware.

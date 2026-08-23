@@ -58,7 +58,7 @@ python3 firmware/tools/serial_capture.py /dev/cu.usbmodem2101 20 /tmp/potato.log
 Serial dev keys (lower case, `h` lists them): `t` tap, `n` night, `p` pickup,
 `d` drop, `k` dark-restored, `q` demo Question with three buttons, `1`/`2`/`3` press a button, `x` clear,
 `a`/`w`/`z`/`v` expressions, `e` event queue, `c` status card (what long-press shows), `b` heartbeat
-now, `i` identity and net status, `W` forget Wi-Fi credentials, `R` register again (e.g. after pointing at a new server; the server also triggers this by answering a heartbeat with 404).
+now, `u` OTA check now, `i` identity and net status, `W` forget Wi-Fi credentials, `R` register again (e.g. after pointing at a new server; the server also triggers this by answering a heartbeat with 404).
 
 ## Wi-Fi setup
 
@@ -117,6 +117,26 @@ shows a plain status card in the text band for 20 s (name, number and
 variety; claim code; battery and charging state; local and UTC time; Net
 state) — no quips, a tap dismisses it early. The claim code is still shown as
 a line for 30 s right after registration.
+
+## Partitions, versions, updates
+
+`potato/partitions.csv` is the **frozen** 16 MB layout (`PartitionScheme=custom`;
+the core copies the sketch's csv into the build): `nvs` 0x9000/20 KB, `otadata`
+0xe000, `ota_0` 0x10000/3 MB, `ota_1` 0x310000/3 MB, `littlefs` 0x610000/1 MB,
+`coredump`. The first three sit exactly where Arduino's `huge_app` put them,
+so flashing this layout over an older device keeps its NVS — secret, name,
+scene — and arduino-cli's hardcoded upload offsets still apply. The
+"Sketch uses" line is reported against 16 MB under the custom scheme; the
+real limit is the 3 MB slot (3,145,728 bytes). NVS keys: `firmware/NVS.md`.
+
+`version.h` holds the one `FW_VERSION`. Once a day (and on serial `u`) the
+net task asks `GET /v0/firmware?board=amoled18&fw=<version>`; a newer
+manifest is streamed into the inactive slot, SHA-256-checked, and the
+potato reboots at a quiet moment (no Question, no request, no touch, ≥30 %
+or on VBUS) after saying "I've been updated. I feel the same." The new image
+boots pending verification and is marked valid after its first good
+heartbeat; otherwise the bootloader rolls back. Boot banner: `ota: fw … running
+from ota_0 @0x010000 (3072 KB slot), next slot ota_1; image state …`.
 
 ## Identity and state (NVS namespace `potato`)
 

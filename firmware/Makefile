@@ -1,4 +1,8 @@
-FQBN   ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=huge_app
+# PartitionScheme=custom: the core copies <sketch>/partitions.csv into the
+# build (platform.txt prebuild hook 3). potato/partitions.csv is frozen.
+# Slot size is 3 MB (0x300000); the "Sketch uses" line reports against the
+# custom scheme's 16 MB, so check headroom against 3145728 yourself.
+FQBN   ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=custom
 SKETCH ?= potato
 # Match usbmodem/usbserial only. A bare /dev/cu.* match picks up
 # cu.Bluetooth-Incoming-Port and fails the upload with a confusing error.
@@ -78,7 +82,8 @@ clean:
 # settings). Two boards share this Mac, so paper-upload/monitor refuse to
 # guess a port: pass PORT=/dev/cu.usbmodemXXXX on the command line, and the
 # upload first reads the chip's MAC and refuses the AMOLED potato's.
-PAPER_FQBN ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=default_8MB
+# paper/partitions.csv (frozen): two 2.5 MB OTA slots (0x280000 each).
+PAPER_FQBN ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=custom
 PAPER_ROTATE ?= 0
 PAPER_HW_SPI ?= 1
 DOREEN_MAC ?= 28:84:85:90:b4:58

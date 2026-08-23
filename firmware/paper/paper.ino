@@ -14,7 +14,7 @@
 // picked up: orientation is always "up", handling is the BOOT key, and the
 // only event it ever sends is `tap`.
 
-#define FW_VERSION "0.1.0"
+#include "version.h"
 
 #include <Arduino.h>
 #include <Wire.h>
@@ -313,12 +313,33 @@ static void netPoll(uint32_t tNow) {
     netUpdateSnapshot(battPct, charging, vbus, "up", (tNow - lastHandledMs) / 1000,
                       haveTemp, tempRawC - SHTC3_BOARD_HEAT_C, hasOff, hasOff ? utcOffsetMin() : 0);
   }
+
+  // An update is installed in the other slot: reboot at a quiet moment — not
+  // mid-refresh, no Question open, battery at 30% or on VBUS. No refresh for
+  // it; the page after reboot is the same page.
+  if (ota.ready && !refreshing && !refreshPending && !(haveScene && scene.nChoices > 0) &&
+      (vbus || battPct >= 30)) {
+    USBSerial.printf("ota: quiet moment — rebooting into %s\n", ota.version);
+    USBSerial.flush();
+    delay(100);
+    ESP.restart();
+  }
 }
 
 // ------------------------------------------------------------------- keys ---
 
 static void vote(int idx) {
   if (!haveScene || idx < 0 || idx >= scene.nChoices) return;
+  // One /v0/choice per distinct vote: the same option on the same Scene
+  // rev again is a repeat press, not a new vote.
+  static int lastVoteRev = -1;
+  static char lastVoteId[24] = "";
+  if (sceneRev == lastVoteRev && !strcmp(choiceIds[idx], lastVoteId)) {
+    USBSerial.printf("choice: option %d id=%s already cast on rev %d — not re-posted\n", idx + 1, choiceIds[idx], sceneRev);
+    return;
+  }
+  lastVoteRev = sceneRev;
+  strncpy(lastVoteId, choiceIds[idx], sizeof(lastVoteId) - 1);
   chosen = (int8_t)idx;
   strncpy(chosenId, choiceIds[idx], sizeof(chosenId) - 1);
   USBSerial.printf("choice: option %d id=%s label=\"%s\" rev=%d -> /v0/choice\n", idx + 1, choiceIds[idx], scene.choices[idx].label, sceneRev);
@@ -572,6 +593,8 @@ static void demoQuestion() {
 
 static void serialCommand(int c) {
   switch (c) {
+    case 'u': otaRequestCheck(); USBSerial.println("ota: check requested"); break;
+    case 'X': USBSerial.println("restart requested"); USBSerial.flush(); delay(100); ESP.restart(); break;
     case 't': bootPress(); break;
     case '1': case '2': case '3':
       for (int i = 0; i < c - '0'; ++i) bootPress();

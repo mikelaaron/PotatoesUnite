@@ -203,6 +203,8 @@ static int httpPostJson(const char *path, const String &body, String &resp) {
   return code;
 }
 
+#include "ota.h"   // needs resolveUrl(), netLog(), BOARD_NAME, FW_VERSION above
+
 // --------------------------------------------------------------- protocol ---
 
 static bool doRegister() {
@@ -295,6 +297,7 @@ static bool doHeartbeat() {
     ++net.heartbeats;
     net.lastHttpOk = true;
   }
+  otaConfirmValid();   // a new image has proven itself: cancel the rollback
   if (nowEpoch > 1700000000) netPrefs.putULong("last_epoch", (unsigned long)nowEpoch);
   netLog("heartbeat ok: %d events drained, %u bytes back", nEvents, resp.length());
   storeScene(resp);
@@ -490,6 +493,7 @@ static void netTask(void *arg) {
       lastHeartbeatMs = millis();
       doHeartbeat();
     }
+    otaTick(true);
     vTaskDelay(pdMS_TO_TICKS(250));
   }
 }
@@ -504,6 +508,7 @@ static void netBegin(Preferences &loopPrefs, EventQueue *events) {
   strncpy(net.status, "starting", sizeof(net.status));
   netPrefs.begin("potato", false);
   loadIdentity(loopPrefs);
+  otaBegin();
   net.registered = identity.registered;
 
   // The factory MAC, readable before the Wi-Fi driver is up. Last two bytes
