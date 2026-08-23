@@ -14,7 +14,7 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 ## Now
 - [x] `server/` — one Node process, zero deps (`node:sqlite`), protocol v0, the board, the File, 30 Questions + pools as data, 19 tests. `cd server && npm start` prints the LAN URL for the device.
 - [x] `firmware/potato` — fork of creature: lying-down potato per art spec, text line + up to three touch buttons, captive-portal Wi-Fi (AP POTATO-xxxx), protocol v0 (register/heartbeat/scene/choice, NVS identity + cached scene), IMU events, AXP2101 battery. Flashed and verified over serial; 41% of flash, 55 fps.
-- [ ] Live: both talking on the LAN. Pick it up, see it in the File.
+- [x] Live: both talking on the LAN (22 Aug night). Doreen #0001 registered, heartbeats, File fills. Ration applied on both sides after the first handling session; copy review applied; local times on the Net and the File; status card on long-press; charge current 150 mA for the 400 mAh cell.
 
 ## Next
 - [ ] `assets/varieties.json` + the potato look (art) — same potato on device, File, board, cards.
@@ -29,3 +29,9 @@ Two desks, one week, no bricks, no blight. One of us says a potato "decided" som
 - [ ] One boot in ~10 after a USB reset came up with XCA9554/CST820/AXP2101 "not found" (no touch/PMU until next reboot). Likely an I2C slave holding SDA across reset; add a 9-clock bus-recovery pulse before `Wire.begin`.
 - [ ] `sound` is always "quiet" (ES8311 mic path not wired). `cue: throat_clear` logged, not played. No sprout drawing yet. Saturday line and "charged while you slept" not implemented.
 - [ ] Real server needs `potatoes.local` advertised (mDNS) or an IP URL set in the portal; dev uses gitignored `firmware/potato/secrets.h`.
+
+## Next session
+- [ ] Handle Doreen for real for a day; read the File in the morning. Watch the ration (`m` over serial dumps its state).
+- [ ] 13:00 UTC: first Question opens (ketchup). Check the buttons, the vote, the 23:00 UTC Count on the Net.
+- [ ] Decide: "Fed. In a sense." as a steady-state server line while plugged in — keep or drop (it's the slot candidate whenever nothing else is speaking).
+- [ ] Middle dot on the status card renders as " / " (ASCII font) — draw a 2 px dot or accept.
