@@ -80,12 +80,13 @@ clean:
 # upload first reads the chip's MAC and refuses the AMOLED potato's.
 PAPER_FQBN ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=default_8MB
 PAPER_ROTATE ?= 0
+PAPER_HW_SPI ?= 1
 DOREEN_MAC ?= 28:84:85:90:b4:58
 
 .PHONY: paper-build paper-upload paper-monitor paper-mac paper-preview paper-portrait
 
 paper-build:
-	arduino-cli compile --fqbn $(PAPER_FQBN) --build-property "compiler.cpp.extra_flags=-DEPD_ROTATE_180=$(PAPER_ROTATE)" paper
+	arduino-cli compile --fqbn $(PAPER_FQBN) --build-property "compiler.cpp.extra_flags=-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI)" paper
 
 # Explicit PORT only: `make paper-upload PORT=/dev/cu.usbmodem2101`. The MAC
 # comes from the USB descriptors (tools/usb_mac.sh), never by opening the

@@ -1,0 +1,187 @@
+#pragma once
+
+#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ArduinoJson.h>
+#include "events.h"
+
+// Protocol v0 wire format (docs/PROTOCOL.md), kept free of Arduino so the
+// same code runs in firmware/tools/protocol_test.cpp on the host. Builds the
+// three request bodies and parses a Scene. Nothing here knows about Wi-Fi,
+// the screen, or the secret's origin.
+//
+// Copied from firmware/potato/protocol.h for the e-paper press, plus what
+// the press needs: temp_c and utc_offset_min in the heartbeat, and the
+// Bulletin (latest, and today's two editions) out of the Scene. The two
+// copies should be unified once both boards have lived a week.
+
+enum Expression : uint8_t {
+  EXPR_NEUTRAL = 0, EXPR_WAITING, EXPR_AGGRIEVED, EXPR_PLEASED, EXPR_ASLEEP, EXPR_DORMANT, EXPR_SPROUTED
+};
+
+static const int MAX_LINE = 128;
+static const int MAX_CHOICES = 3;
+
+struct Choice {
+  char id[24];
+  char label[17];   // ≤ 16 chars per the protocol
+};
+
+struct HeartbeatSnapshot {
+  int pct;
+  bool charging, vbus;
+  char orientation[10];
+  uint32_t sinceHandledS;
+  const char *sound;     // "quiet" | "normal" | "loud"
+  bool hasTemp;          // boards with a sensor
+  float tempC;
+  bool hasOffset;        // minutes east of UTC, once the clock is set
+  int utcOffsetMin;
+};
+
+static const int BULLETIN_ITEMS = 2;   // the e-paper prints the headline and two items
+
+struct BulletinData {
+  bool present;
+  int no;
+  char edition[10];
+  char headline[80];
+  char items[BULLETIN_ITEMS][160];
+  uint8_t nItems;
+};
+
+struct SceneData {
+  int rev;
+  Expression expression;
+  char expressionName[12];
+  char line[MAX_LINE];
+  Choice choices[MAX_CHOICES];
+  uint8_t nChoices;
+  char cue[16];
+  int fileUnread;
+  uint32_t expiresAt;
+  bool hasRequest;
+  char requestId[12];
+  char requestText[MAX_LINE];
+  char requestCheck[24];
+  float requestForS;
+  uint32_t requestExpiresAt;
+  BulletinData bulletin;           // the latest printed edition
+  BulletinData morning, evening;   // today's, either may be absent
+};
+
+static inline void copyStr(char *dst, size_t cap, const char *src) {
+  strncpy(dst, src ? src : "", cap - 1);
+  dst[cap - 1] = 0;
+}
+
+static inline Expression expressionFrom(const char *s) {
+  if (!strcmp(s, "waiting")) return EXPR_WAITING;
+  if (!strcmp(s, "aggrieved")) return EXPR_AGGRIEVED;
+  if (!strcmp(s, "pleased")) return EXPR_PLEASED;
+  if (!strcmp(s, "asleep")) return EXPR_ASLEEP;
+  if (!strcmp(s, "dormant")) return EXPR_DORMANT;
+  if (!strcmp(s, "sprouted")) return EXPR_SPROUTED;
+  return EXPR_NEUTRAL;
+}
+
+static void parseBulletin(JsonVariantConst v, BulletinData &b) {
+  JsonObjectConst o = v.as<JsonObjectConst>();
+  if (o.isNull()) { b.present = false; return; }
+  b.present = true;
+  b.no = o["no"] | 0;
+  copyStr(b.edition, sizeof(b.edition), o["edition"] | "");
+  copyStr(b.headline, sizeof(b.headline), o["headline"] | "");
+  b.nItems = 0;
+  for (JsonVariantConst it : o["items"].as<JsonArrayConst>()) {
+    if (b.nItems >= BULLETIN_ITEMS) break;
+    copyStr(b.items[b.nItems++], sizeof(b.items[0]), it | "");
+  }
+}
+
+// A Scene from heartbeat or choice. Missing fields take neutral defaults so a
+// minimal {"rev":1,"line":"..."} is a valid scene. Returns false on bad JSON.
+static bool parseScene(const char *json, SceneData &out) {
+  JsonDocument doc;
+  if (deserializeJson(doc, json) != DeserializationError::Ok) return false;
+  memset(&out, 0, sizeof(out));
+  parseBulletin(doc["bulletin"], out.bulletin);
+  parseBulletin(doc["bulletins"]["morning"], out.morning);
+  parseBulletin(doc["bulletins"]["evening"], out.evening);
+  out.rev = doc["rev"] | 0;
+  copyStr(out.expressionName, sizeof(out.expressionName), doc["expression"] | "neutral");
+  out.expression = expressionFrom(out.expressionName);
+  copyStr(out.line, sizeof(out.line), doc["line"] | "");
+  copyStr(out.cue, sizeof(out.cue), doc["cue"] | "none");
+  out.fileUnread = doc["file_unread"] | 0;
+  out.expiresAt = doc["expires_at"] | 0u;
+  for (JsonObject c : doc["choices"].as<JsonArray>()) {
+    if (out.nChoices >= MAX_CHOICES) break;
+    Choice &ch = out.choices[out.nChoices++];
+    copyStr(ch.id, sizeof(ch.id), c["id"] | "");
+    copyStr(ch.label, sizeof(ch.label), c["label"] | "");
+  }
+  JsonObject rq = doc["request"].as<JsonObject>();
+  if (!rq.isNull()) {
+    out.hasRequest = true;
+    copyStr(out.requestId, sizeof(out.requestId), rq["id"] | "");
+    copyStr(out.requestText, sizeof(out.requestText), rq["text"] | "");
+    copyStr(out.requestCheck, sizeof(out.requestCheck), rq["check"] | "");
+    out.requestForS = (float)(rq["for_s"] | 0);
+    out.requestExpiresAt = rq["expires_at"] | 0u;
+    // still:<s> and held:<s> carry their duration in the check itself.
+    const char *colon = strchr(out.requestCheck, ':');
+    if (colon && (!strncmp(out.requestCheck, "still:", 6) || !strncmp(out.requestCheck, "held:", 5))) {
+      out.requestForS = (float)atoi(colon + 1);
+    }
+  }
+  return true;
+}
+
+static size_t buildRegisterJson(const char *secretHex, const char *board, const char *fw,
+                                char *out, size_t cap) {
+  JsonDocument doc;
+  doc["secret"] = secretHex;
+  doc["board"] = board;
+  doc["fw"] = fw;
+  return serializeJson(doc, out, cap);
+}
+
+// Event times are kept as millis on the device and converted here. t = 0
+// means the device had no clock yet; the server should use arrival time.
+static size_t buildHeartbeatJson(const char *secretHex, int revSeen, const HeartbeatSnapshot &snap,
+                                 const Event *evs, int nEvents, long nowEpoch, uint32_t nowMs,
+                                 char *out, size_t cap) {
+  JsonDocument doc;
+  doc["secret"] = secretHex;
+  doc["rev_seen"] = revSeen;
+  JsonObject b = doc["battery"].to<JsonObject>();
+  b["pct"] = snap.pct;
+  b["charging"] = snap.charging;
+  b["vbus"] = snap.vbus;
+  doc["orientation"] = snap.orientation;
+  doc["since_handled_s"] = snap.sinceHandledS;
+  doc["sound"] = snap.sound;
+  if (snap.hasTemp) doc["temp_c"] = (float)((int)(snap.tempC * 10.0f + (snap.tempC >= 0 ? 0.5f : -0.5f))) / 10.0f;
+  if (snap.hasOffset) doc["utc_offset_min"] = snap.utcOffsetMin;
+  JsonArray arr = doc["events"].to<JsonArray>();
+  const bool synced = nowEpoch > 1700000000L;
+  for (int i = 0; i < nEvents; ++i) {
+    JsonObject e = arr.add<JsonObject>();
+    e["t"] = synced ? (long)(nowEpoch - (long)((nowMs - evs[i].ms) / 1000)) : 0L;
+    e["type"] = EVENT_NAMES[evs[i].type];
+    const char *k = eventValueKey(evs[i].type);
+    if (k && evs[i].sval[0]) e[k] = evs[i].sval;
+    else if (k) e[k] = evs[i].value;
+  }
+  return serializeJson(doc, out, cap);
+}
+
+static size_t buildChoiceJson(const char *secretHex, int rev, const char *id, char *out, size_t cap) {
+  JsonDocument doc;
+  doc["secret"] = secretHex;
+  doc["scene_rev"] = rev;
+  doc["choice_id"] = id;
+  return serializeJson(doc, out, cap);
+}

@@ -96,6 +96,13 @@ sequence, the panel must be reset to wake from deep sleep, and BUSY is LOW
 while busy (the vendor's comment says the opposite; its code waits for HIGH).
 GxEPD2 has no driver for it; the vendor's bit-banged driver ports to hardware
 SPI in forty lines. The frame is two bits per pixel, four per byte, MSB first.
+The one thing that bit: the vendor's ESP-IDF driver resets the panel with
+50 ms / 20 ms / 50 ms and its Arduino example with 200 / 2 / 200. With the
+short timing the controller ignored every command after reset — BUSY still
+went idle (that was its own reset finishing), so it *looked* alive and the
+refresh "finished" in 200 ms. The vendor's own Arduino sketch, flashed
+unmodified with timestamps on its BUSY waits, was the thing that proved the
+hardware and isolated the timing (a refresh is 13.9 s, power-on 100 ms).
 
 **How to apply:** treat a refresh as an event, not a frame. Render to a
 buffer, hash it, and refresh only when the hash changes, rate-limited; keep
