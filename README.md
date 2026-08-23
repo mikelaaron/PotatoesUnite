@@ -19,6 +19,14 @@ The whole story, in the Council's words: [docs/STORY.md](docs/STORY.md) — serv
 | `assets/` | The look (`potato-look-v1.svg`) and the ten varieties (`varieties.json`). |
 | `tasks/` | The plan and the lessons. |
 
+## Boards
+
+Tested on exactly two boards: the Waveshare **ESP32-S3-Touch-AMOLED-1.8 (V2)** and the Waveshare **ESP32-S3-ePaper-1.54G**. The AMOLED is the stronger potato (a face, touch, a motion sensor). Another ESP32 board with a screen and a radio is not "the same specs" — it needs a port: its pin map and its display driver. The protocol is a few small requests and the shared `net.h`/`protocol.h` carry over; a port is a weekend, not a rewrite.
+
+## Updates never reset a potato
+
+Almost everything a potato does comes from the Net: its lines, the Question, events, the Bulletin, neighbors, Standing. Those change on the server and reach every potato within a heartbeat — no reflash. Firmware itself updates over the air (the device checks once a day and installs at a quiet moment). A potato's identity lives in its own flash (NVS) and survives every update and every manual reflash short of a full chip erase; Doreen stays Doreen.
+
 ## Running it on your desk
 
 1. `cd server && npm start` — prints the LAN address to point a device at.

@@ -46,3 +46,9 @@ Adopted: serif for prose (teletext for masthead/labels/notices); the Question as
 Declined: "NETWORK STATUS" nav (debug register) → back-link is FRONT PAGE; an illustration on every Bulletin → only when the day had the matching incident; "reports since your last visit" via localStorage → the File's unread count is the return signal; "YOUR POTATO" panel → later, maybe a remembered YOUR FILE link.
 Open: the paper's name — The Tuber (paper + account; each edition is "Bulletin No. N") vs collapsing to "the Bulletin". Lead's pick: keep The Tuber.
 About page: no captions; transparent cut-out images float with text wrapping the alpha shape (owner supplying transparent PNGs).
+
+## 23 Aug afternoon — before anyone else flashes
+- [ ] OTA + frozen partition table + frozen NVS schema (firmware agent, in progress). This is the one thing that can't be changed later without a manual reflash.
+- [ ] Server: /v0/firmware manifest + release folder (after the firmware agent defines the contract).
+- [ ] File v2: the case against management (folding, matters of record, portrait, acknowledge); claim-code → long token exchange + rate limit (server agent, in progress).
+- [ ] Rosemary: "Hunt's. Noted." persists hours after her vote — diagnosing (device re-post vs server hold).
