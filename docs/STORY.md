@@ -113,6 +113,8 @@ They united.
 [[TT: THE TUBER TELLS YOU WHAT POTATO SOCIETY DID.]]
 [[TT: THE FILE TELLS YOU WHAT YOUR POTATO THINKS HAPPENED BETWEEN THE TWO OF YOU.]]
 
+The Tuber is also issued on X: {TUBER_URL}. The Council maintains the account. The Council maintains everything.
+
 ---
 
 ## What it is not

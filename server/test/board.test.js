@@ -87,7 +87,7 @@ test('masthead: lede, clock, the return signal, nav, footer', () => {
   assert.match(html, /--red: #e0684f/, 'the marker red has a dark-theme value');
   assert.match(html, /\.lede \{ margin: 0 0 var\(--s2\); color: var\(--ink\); \}/, 'the lede is left-aligned prose');
   assert.doesNotMatch(html, /issued on/);
-  assert.match(renderBoard(w.board(), { tuberUrl: 'https://x.com/thetuber' }), /<p>Editions are also issued on <a href="https:\/\/x\.com\/thetuber">X<\/a>\.<\/p>/);
+  assert.match(renderBoard(w.board(), { tuberUrl: 'https://x.com/thetuber' }), /<p>Editions are also issued on X: <a href="https:\/\/x\.com\/thetuber">@thetuber<\/a>\.<\/p>/);
   set(at(0, 5, 1)); // five minutes after the morning print
   html = renderBoard(w.board());
   assert.match(html, /EDITION PRINTED\. NEXT IN 23 H\./);

@@ -145,3 +145,14 @@ test('Part D copy: the port sentence, the two teletext lines, Issued by The Tube
   const { w } = makeWorld();
   assert.match(renderBoard(w.board()), /<\/ul><div class="small">Issued by The Tuber\.<\/div>/);
 });
+
+test('/about carries the Tuber handle when TUBER_URL is set, and reads clean without it', () => {
+  const d = new Data({ dataDir: DATA_DIR, assetsDir: ASSETS_DIR, docsDir: DOCS_DIR });
+  const url = 'https://x.com/IssuedByCouncil';
+  const linked = renderAbout(storyToHtml(d.story, { tuberUrl: url }), { tuberUrl: url });
+  assert.match(linked, /The Tuber is also issued on X: <a href="https:\/\/x\.com\/IssuedByCouncil">@IssuedByCouncil<\/a>\. The Council maintains the account\./);
+  assert.match(linked, /Editions are also issued on X: <a href="https:\/\/x\.com\/IssuedByCouncil">@IssuedByCouncil<\/a>\./, 'the footer names the handle too');
+  const bare = renderAbout(storyToHtml(d.story, {}), {});
+  assert.match(bare, /The Tuber is also issued on X\. The Council maintains the account\./, 'unset, the sentence still reads');
+  assert.doesNotMatch(bare, /\{TUBER_URL\}/);
+});

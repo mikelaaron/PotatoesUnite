@@ -4,6 +4,7 @@
 import { escapeHtml as h, fewerThanFive } from './text.js';
 import { hm, dayHeader, dayStart } from './clock.js';
 import { potatoSvg } from './portrait.js';
+import { tuberHandle } from './markdown.js';
 
 const CSS = `
 :root { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d7462; --bar: #1c1a16; --barbg: #d9cfb2; --wash: #e6dcc2; --red: #B4281E;
@@ -223,7 +224,7 @@ const utc = (t, attrs = '') => `<time data-utc="${Math.round(t)}"${attrs}>${h(hm
 // One sentence and the privacy record. On /about the record is on the page itself, so no link there.
 export function footer({ tuberUrl = '', privacyHere = false } = {}) {
   const record = privacyHere ? 'Privacy record →' : '<a href="/about#privacy">Privacy record →</a>';
-  return `<footer><p>No location. No audio. Public counts start at five potatoes. ${record}</p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`;
+  return `<footer><p>No location. No audio. Public counts start at five potatoes. ${record}</p>${tuberUrl ? `<p>Editions are also issued on X: <a href="${h(tuberUrl)}">${h(tuberHandle(tuberUrl))}</a>.</p>` : ''}</footer>`;
 }
 
 // Server-side first render of the countdown; the script keeps it current.
@@ -433,7 +434,7 @@ ${cards}
 </ol>
 <p><a href="/flash/agent">Or hand this page to your coding agent →</a></p>
 <p class="muted">Tested on exactly these two devices. Another model needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.</p>
-<footer><p>No location. No audio. Public counts start at five potatoes. <a href="/about#privacy">Privacy record →</a>${githubUrl ? ` <a href="${h(githubUrl)}">CODE →</a>` : ''}</p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`);
+<footer><p>No location. No audio. Public counts start at five potatoes. <a href="/about#privacy">Privacy record →</a>${githubUrl ? ` <a href="${h(githubUrl)}">CODE →</a>` : ''}</p>${tuberUrl ? `<p>Editions are also issued on X: <a href="${h(tuberUrl)}">${h(tuberHandle(tuberUrl))}</a>.</p>` : ''}</footer>`);
 }
 
 // GET /flash/agent — docs/FLASH_WITH_AN_AGENT.md, when it exists.

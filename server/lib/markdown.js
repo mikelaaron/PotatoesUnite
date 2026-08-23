@@ -124,13 +124,20 @@ export function renderMarkdown(md, { illustrationsDir = null, artifactsDir = nul
   return out.join('\n');
 }
 
-// docs/STORY.md → the /about page body. Drops the trailing "Short forms" section and resolves {GITHUB_URL}.
-export function storyToHtml(md, { githubUrl = '', illustrationsDir = null, artifactsDir = null } = {}) {
+// The account name as a handle: https://x.com/IssuedByCouncil → @IssuedByCouncil.
+export const tuberHandle = (url) => '@' + String(url).replace(/\/+$/, '').split('/').pop();
+
+// docs/STORY.md → the /about page body. Drops the trailing "Short forms" section and resolves
+// {GITHUB_URL} and {TUBER_URL}. Unset, the placeholders vanish along with their leading colons,
+// so the sentences still read.
+export function storyToHtml(md, { githubUrl = '', tuberUrl = '', illustrationsDir = null, artifactsDir = null } = {}) {
   let s = String(md || '');
   const cut = s.search(/^## Short forms\s*$/m);
   if (cut >= 0) s = s.slice(0, cut);
   s = s.replace(/^# [^\n]*\n/, ''); // the masthead already says it
   if (githubUrl) s = s.replace(/\{GITHUB_URL\}/g, `[${githubUrl}](${githubUrl})`);
   else s = s.replace(/:\s*\{GITHUB_URL\}/g, '').replace(/\s*\{GITHUB_URL\}/g, '');
+  if (tuberUrl) s = s.replace(/\{TUBER_URL\}/g, `[${tuberHandle(tuberUrl)}](${tuberUrl})`);
+  else s = s.replace(/:\s*\{TUBER_URL\}/g, '').replace(/\s*\{TUBER_URL\}/g, '');
   return renderMarkdown(s, { illustrationsDir, artifactsDir });
 }

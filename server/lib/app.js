@@ -151,7 +151,7 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
       if (res.headOnly) return res.end();
       return fs.createReadStream(file).pipe(res);
     }
-    if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, illustrationsDir, artifactsDir }), { tuberUrl }));
+    if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, tuberUrl, illustrationsDir, artifactsDir }), { tuberUrl }));
     if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions(), { tuberUrl })); }
     let em = p.match(/^\/editions\/(\d{4}-\d{2}-\d{2})\/(morning|evening)$/);
     if (m === 'GET' && em) {
