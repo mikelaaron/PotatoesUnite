@@ -26,6 +26,17 @@ a { color: inherit; }
 .prose hr { border: 0; border-top: 1px solid var(--rule); margin: 1.4rem 0; }
 .prose em { font-style: italic; }
 .prose > p:first-of-type { font-size: 1.15em; }
+/* illustrations (docs/ILLUSTRATION_BRIEF.md §4): 720px figures, 3:2, 48px rhythm, teletext captions */
+.ill { position: relative; max-width: 720px; margin: 48px auto; }
+.ill img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
+figcaption { color: var(--faint); font-size: .75em; letter-spacing: .15em; text-transform: uppercase; text-align: center; margin-top: .5rem; }
+.insert { position: absolute; top: 14%; right: 10%; background: #000; color: #e8dfcb; font-family: inherit; font-size: 1.1em; line-height: 1; letter-spacing: .12em; padding: .35em .7em; box-shadow: inset 0 0 0 1px #e8dfcb, 0 0 0 3px #000; }
+.artifact { width: 60%; max-width: 480px; margin: 48px auto; }
+.artifact svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+.artifact-bulletin svg { transform: rotate(-1.5deg); }
+.artifact-neighbor svg { transform: rotate(1.5deg); }
+.artifact-text { background: #F3EBD6; color: #1C1A16; border: 1px solid #1C1A16; padding: .8rem 1rem; font-size: .8em; white-space: pre-wrap; margin: 0; }
+.prose pre { overflow-x: auto; }
 .now { text-align: center; color: var(--faint); margin: 0 0 1rem; }
 h2 { font-size: 1em; text-transform: uppercase; letter-spacing: .2em; border-bottom: 1px solid var(--rule); margin: 1.6rem 0 .5rem; padding-bottom: .1rem; color: var(--faint); }
 .small { color: var(--faint); font-size: .8em; margin: -.3rem 0 .4rem; letter-spacing: .1em; }

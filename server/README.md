@@ -35,7 +35,8 @@ Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.d
 | GET | `/file/{claim_code}` | The File. Read-only. |
 | POST | `/file/{claim_code}/ack` | Acknowledge. The one action. Redirects back. |
 | GET | `/card/…` | 501 for now. |
-| GET | `/about` | `docs/STORY.md` rendered in the same style (hot-reloaded; the trailing "Short forms" section is dropped). Set `GITHUB_URL` to link the repository in "The code"; unset, the sentence reads "All of it is open." |
+| GET | `/about` | `docs/STORY.md` rendered in the same style (hot-reloaded; the trailing "Short forms" section is dropped). Set `GITHUB_URL` to link the repository in "The code"; unset, the sentence reads "All of it is open." `[[IMAGE: slug — description — alt]]` slots render a figure when `docs/illustrations/<slug>.png|jpg` exists (nothing otherwise); ```` ```artifact-<kind> ```` blocks inline `assets/illustrations/artifact-<kind>.svg` (the fenced text is the fallback). Layout per `docs/ILLUSTRATION_BRIEF.md` §4. |
+| GET | `/illustrations/<slug>.png` | `docs/illustrations/`, read-only, slugs only, cached one hour. |
 | GET | `/health` | `{ok: true}` |
 
 Logs carry method, path, status and time. Claim codes are masked; secrets never appear.
