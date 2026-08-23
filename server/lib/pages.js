@@ -135,6 +135,7 @@ const TIME_SCRIPT = `
     if (isNaN(d.getTime())) continue;
     if (el.hasAttribute('data-local-24')) el.textContent = f24(d);
     else if (el.hasAttribute('data-local-day')) el.textContent = WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()];
+    else if (el.hasAttribute('data-local-daytime')) el.textContent = WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()] + ' ' + f24(d);
     else if (el.hasAttribute('data-local-end')) { var slot = el.parentNode.querySelector('.local-slot'); if (slot) slot.textContent = ' \\u00b7 ' + f12(d) + ' where you are'; }
     else el.insertAdjacentText('afterend', ' \\u00b7 ' + f12(d) + ' where you are');
   }
@@ -321,7 +322,7 @@ ${d.withheld ? `<div class="withheld"${live ? ` data-utc="${Math.round(dayStart(
 </section>`;
   }).join('\n') : `<p class="muted">${h(f.emptyText)}</p>`;
   const matters = f.matters.length
-    ? f.matters.map((m) => `<div class="entry${m.unread ? ' unread' : ''}"><span class="t">${h(m.day)} ${h(m.time)}</span><span class="txt">${h(m.text)}</span><span class="note">${h(m.note)}</span></div>`).join('\n')
+    ? f.matters.map((m) => `<div class="entry${m.unread ? ' unread' : ''}"><span class="t"${live ? ` data-utc="${Math.round(m.t)}" data-local-daytime` : ''}>${h(m.day)} ${h(m.time)}</span><span class="txt">${h(m.text)}</span><span class="note">${h(m.note)}</span></div>`).join('\n')
     : `<p class="muted">${h(f.mattersEmpty)}</p>`;
   const neighbor = f.neighbor ? `${f.neighbor.name.toUpperCase()} #${f.neighbor.id}${f.neighbor.tags.map((x) => ` · ${x}`).join('')}` : f.neighborLine.toUpperCase();
   return layout(title, `

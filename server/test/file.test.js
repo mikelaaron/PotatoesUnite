@@ -73,3 +73,20 @@ test('notes: about a third at most, by seed, and never on handling', () => {
   const allowed = new Set(['dark_end', 'curing', 'no_neighbor', 'neighbor_assigned', 'handled', 'power', 'sprouted', 'question_absent', 'question_present', 'question_withdrawn', 'request_done', 'request_expired', 'event_vote', 'event_absent']);
   assert.ok(noted.every((e) => allowed.has(e.kind)), noted.map((e) => e.kind).join(','));
 });
+
+test('matters of record rows carry the instant, so the script renders them local like the record', () => {
+  const { w, set } = makeWorld({ start: at(7, 0, -1) });
+  const secret = SECRET(140);
+  const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
+  set(at(15, 2)); hb(w, secret, [{ t: at(13, 0), type: 'facedown_start' }, { t: at(15, 2), type: 'facedown_end', dur_s: 2 * 3600 }]);
+  let f = w.file(claim_code); f.key = 'b'.repeat(48);
+  let html = renderFile(f);
+  assert.match(html, /<div class="matters">\s*<div class="entry[^"]*"><span class="t" data-utc="\d+" data-local-daytime>TUE 25 AUG 15:02<\/span><span class="txt">Restored from the dark\. 2h 0m\.<\/span>/);
+  assert.ok(html.includes("el.hasAttribute('data-local-daytime')) el.textContent = WD[d.getDay()] + ' ' + d.getDate() + ' ' + MO[d.getMonth()] + ' ' + f24(d);"), 'the script knows the day-and-time form');
+  // a File already in the potato's own time is left alone
+  hb(w, secret, [], { utc_offset_min: -240 });
+  f = w.file(claim_code); f.key = 'b'.repeat(48);
+  html = renderFile(f);
+  assert.match(html, /<div class="matters">\s*<div class="entry[^"]*"><span class="t">TUE 25 AUG 11:02<\/span>/);
+  assert.doesNotMatch(html, /data-local-daytime>/);
+});
