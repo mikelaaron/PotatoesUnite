@@ -4,6 +4,7 @@ import path from 'node:path';
 import { HttpError } from './world.js';
 import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions, renderAcknowledged } from './pages.js';
 import { storyToHtml, mimeFor, findIllustration } from './markdown.js';
+import { offer, BOARD_RE, BIN_RE } from './releases.js';
 
 const BODY_LIMIT = 64 * 1024;
 
@@ -85,6 +86,29 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
     if (m === 'POST' && p === '/v0/register') return json(res, 200, world.register(await readJson(req)));
     if (m === 'POST' && p === '/v0/heartbeat') return json(res, 200, world.heartbeat(await readJson(req)));
     if (m === 'POST' && p === '/v0/choice') { const r = world.choice(await readJson(req)); return json(res, r.status, r.scene); }
+
+    // Firmware: the device asks once a day. No secret: an image is not a secret and the device is not yet trusted to be itself.
+    if (m === 'GET' && p === '/v0/firmware') {
+      const board = String(url.searchParams.get('board') || '').toLowerCase();
+      const fw = String(url.searchParams.get('fw') || '0.0.0');
+      if (!BOARD_RE.test(board)) throw new HttpError(400, 'board must be a slug');
+      world.data.reload();
+      const o = offer(world.data.releases[board], board, fw);
+      log(`firmware check board=${board} fw=${fw} → ${o ? o.version : 'nothing newer'}`);
+      if (!o) { res.writeHead(204, { 'cache-control': 'no-store' }); return res.end(); }
+      return json(res, 200, o);
+    }
+    let rm = p.match(/^\/releases\/([a-z0-9]+)\/([^/]+)$/);
+    if (m === 'GET' && rm && BIN_RE.test(rm[2])) {
+      const file = world.data.releasesDir ? path.join(world.data.releasesDir, rm[1], rm[2]) : null;
+      let st = null;
+      try { st = file && fs.statSync(file); } catch { st = null; }
+      if (!st || !st.isFile()) return json(res, 404, { error: 'no such image' });
+      res.writeHead(200, { 'content-type': 'application/octet-stream', 'content-length': st.size, 'cache-control': 'public, max-age=300', 'last-modified': st.mtime.toUTCString() });
+      if (res.headOnly) return res.end();
+      return fs.createReadStream(file).pipe(res);
+    }
+    if (p.startsWith('/releases/')) return json(res, 404, { error: 'no such image' });
 
     if (m === 'GET' && p === '/') {
       const b = world.board();

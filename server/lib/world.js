@@ -41,9 +41,9 @@ const unit = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const iso = (s) => Math.floor(Date.parse(s) / 1000);
 
 export class World {
-  constructor({ dbPath = ':memory:', dataDir, assetsDir, docsDir = null, now, random = Math.random, log = () => {} } = {}) {
+  constructor({ dbPath = ':memory:', dataDir, assetsDir, docsDir = null, releasesDir = null, now, random = Math.random, log = () => {} } = {}) {
     this.store = new Store(dbPath);
-    this.data = new Data({ dataDir, assetsDir, docsDir, log });
+    this.data = new Data({ dataDir, assetsDir, docsDir, releasesDir, log });
     this.now = now || (() => Math.floor(Date.now() / 1000));
     this.random = random;
     this.log = log;

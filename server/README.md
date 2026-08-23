@@ -88,6 +88,14 @@ Append to `data/questions.json`:
 
 Optional flags: `"withdrawn": true` (runs, then the Count says it was withdrawn; no tally published), `"trigger": "after_drop"` (only runs the day after a drop incident; it preempts the rotation). Max three options; device labels (`short` or `label`) must be ≤ 16 chars. The rotation asks the least-recently-asked Question first, file order breaking ties — so a new Question runs the next day. `npm test` checks the limits.
 
+## Firmware releases
+
+```sh
+npm run release -- amoled18 ~/build/potato.ino.bin 0.2.1 "Fixes the ceiling situation."
+```
+
+Copies the plain app `.bin` (not the merged bootloader image) to `data/releases/<board>/<version>.bin`, computes sha256 and size, and writes `manifest.json` atomically; the server offers it within ~2 s. Devices ask `GET /v0/firmware?board=<board>&fw=<running>` once a day and get the manifest (200) when it is numerically newer, else 204; the image is served at `/releases/<board>/<version>.bin`. Binaries are git-ignored.
+
 ## Pushing things (the owner's console)
 
 ```sh

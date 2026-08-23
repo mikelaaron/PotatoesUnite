@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test 'test/*.test.js'",
-    "push": "node scripts/push.js"
+    "push": "node scripts/push.js",
+    "release": "node scripts/release.js"
   },
   "engines": {
     "node": ">=22.13"

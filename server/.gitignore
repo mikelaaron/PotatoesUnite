@@ -1,3 +1,5 @@
 data/*.db
 data/*.db-*
 node_modules/
+data/releases/*/*.bin
+data/releases/*/*.tmp

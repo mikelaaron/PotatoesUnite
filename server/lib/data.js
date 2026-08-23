@@ -4,11 +4,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export class Data {
-  constructor({ dataDir, assetsDir, docsDir = null, pollMs = 2000, log = () => {} }) {
+  constructor({ dataDir, assetsDir, docsDir = null, releasesDir = null, pollMs = 2000, log = () => {} }) {
     this.dataDir = dataDir;
     this.assetsDir = assetsDir;
     this.docsDir = docsDir;
+    this.releasesDir = releasesDir == null ? path.join(dataDir, 'releases') : releasesDir;
     this.story = '';
+    this.releases = {};
     this.pollMs = pollMs;
     this.log = log;
     this.files = new Map(); // path → { mtimeMs, value }
@@ -50,6 +52,15 @@ export class Data {
     const v = read(path.join(this.assetsDir, 'varieties.json'), { varieties: [] });
     this.varieties = Array.isArray(v) ? v : (v.varieties || []);
     if (this.docsDir) this.story = read(path.join(this.docsDir, 'STORY.md'), '', (s) => s);
+    // firmware manifests: data/releases/<board>/manifest.json
+    const releases = {};
+    let boards = [];
+    try { boards = fs.readdirSync(this.releasesDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch { /* no releases yet */ }
+    for (const b of boards) {
+      const m = read(path.join(this.releasesDir, b, 'manifest.json'), null);
+      if (m && typeof m === 'object') releases[b] = m;
+    }
+    this.releases = releases;
     return changed;
   }
 
