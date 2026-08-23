@@ -87,6 +87,10 @@ int main() {
   n = buildHeartbeatJson("00ff", 0, snap, evs, 1, 0L, 10000, body, sizeof(body));
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);
   CHECK((back["events"][0]["t"] | -1L) == 0L);                  // no clock yet
+  HeartbeatSnapshot blind = {-1, false, true, "up", 0, "quiet"};  // PMU missing
+  n = buildHeartbeatJson("00ff", 0, blind, evs, 0, 0L, 10000, body, sizeof(body));
+  CHECK(deserializeJson(back, body) == DeserializationError::Ok);
+  CHECK(back["battery"]["pct"].isNull() && !back["battery"].isNull());   // present, null pct
 
   n = buildRegisterJson("00ff", "amoled18", "0.1.0", body, sizeof(body));
   CHECK_STR(body, "{\"secret\":\"00ff\",\"board\":\"amoled18\",\"fw\":\"0.1.0\"}");
