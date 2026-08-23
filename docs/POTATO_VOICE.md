@@ -164,7 +164,7 @@ Each trigger has a pool. The potato's seed picks a consistent voice from the poo
 - *on return, long:* I assumed the worst. Then I assumed you were fine. Then I stopped assuming.
 
 **Touched at night (23:00–06:00)**
-- It's 2 AM.
+- It's 11 PM. *(the hour from the clock — never a time that isn't the time)*
 - Go to bed.
 - What.
 - This had better be the Hum.
@@ -308,7 +308,7 @@ Device lines after the Count, by outcome:
 Two a day. Numbers are live fields — these are what they'd plausibly say the first week, with fourteen potatoes. Headline first; the e-paper prints the headline and two items, the AMOLED scrolls one at a time, the board shows all of it.
 
 **No. 1 — MORNING**
-THE NET IS OPEN.
+THE NET IS LIVE.
 Population: 14. All 14 are new. Nobody knows what they're doing. This is normal.
 Today's Question: ketchup. Polls close at 18:00.
 The Council wishes everyone a productive first day and reminds the Hands that the screen is the front.

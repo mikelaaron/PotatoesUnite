@@ -33,7 +33,7 @@ Only in Council voice, only one sentence, only when funny. "That's mine!" → *"
 ## Week-one posts (drafts)
 
 **Day 1 — evening edition + Count**
-> THE NET IS OPEN. Fourteen potatoes. All new. Nobody knows what they're doing. This is normal. Ketchup: Heinz, 9 to 3 to 2.
+> THE NET IS LIVE. Fourteen potatoes. All new. Nobody knows what they're doing. This is normal. Ketchup: Heinz, 9 to 3 to 2.
 
 **Day 2 — Potato of the Day**
 > Potato of the Day: Doreen #0417, King Edward. Standing: Reasonable. From the File: "Left home. Again." Her Hands have not read it.
