@@ -126,6 +126,7 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
       return html(res, 200, renderEditions([e], { single: true, tuberUrl }));
     }
     if (m === 'GET' && p === '/health') return json(res, 200, { ok: true, t: world.now() });
+    if (m === 'GET' && p === '/v0/fleet') return json(res, 200, { fleet: world.fleet() });
 
     let fm = p.match(/^\/illustrations\/([^/]+)$/);
     if (m === 'GET' && fm) return illustration(res, fm[1]);

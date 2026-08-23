@@ -80,3 +80,27 @@ test('GET /v0/firmware: 204 with nothing, 200 with the manifest once released; t
     assert.notEqual(spawnSync(process.execPath, [path.join(DATA_DIR, '..', 'scripts', 'release.js'), 'amoled18', bin, 'two'], { env: { ...process.env, RELEASES_DIR: releases } }).status, 0);
   } finally { server.close(); }
 });
+
+test('heartbeats report the running firmware and board; /v0/fleet shows what stuck', async () => {
+  const w = new World({ dbPath: ':memory:', dataDir: DATA_DIR, assetsDir: ASSETS_DIR, now: () => 1787648400 });
+  const secret = 'c'.repeat(32);
+  w.register({ secret, board: 'amoled18', fw: '0.1.0' });
+  assert.equal(w.byId('0001').fw, '0.1.0');
+  w.heartbeat({ secret, board: 'amoled18', fw: '0.2.1', events: [] });
+  assert.equal(w.byId('0001').fw, '0.2.1', 'the heartbeat carries the version that actually booted');
+  w.heartbeat({ secret, fw: 'not a version; <script>', events: [] });
+  assert.equal(w.byId('0001').fw, '0.2.1', 'nonsense is ignored');
+  w.heartbeat({ secret, board: 'epaper154', fw: '0.2.2', events: [] });
+  assert.equal(w.byId('0001').board, 'epaper154');
+  w.register({ secret, board: 'amoled18', fw: '0.2.3' });
+  assert.equal(w.byId('0001').fw, '0.2.3', 'register updates too');
+  const server = http.createServer(createApp({ world: w, illustrationsDir: null, artifactsDir: null }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  try {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/v0/fleet`);
+    assert.equal(r.status, 200);
+    const { fleet } = await r.json();
+    assert.deepEqual(fleet, [{ id: '0001', board: 'amoled18', fw: '0.2.3', last_seen: '2026-08-25T09:00:00Z' }]);
+    assert.ok(!JSON.stringify(fleet).includes(secret) && !/claim|name/.test(JSON.stringify(fleet)));
+  } finally { server.close(); }
+});

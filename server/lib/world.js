@@ -220,11 +220,14 @@ export class World {
     const sound = SOUNDS.has(body.sound) ? body.sound : 'quiet';
     const since = Math.max(0, num(body.since_handled_s, 0));
     const off = Number.isFinite(Number(body.utc_offset_min)) ? Math.max(-840, Math.min(840, Math.round(Number(body.utc_offset_min)))) : p.utc_offset_min;
+    // The running firmware and board come with every heartbeat: after an OTA the server sees which version actually stuck.
+    const board = typeof body.board === 'string' && /^[a-z0-9]{1,32}$/.test(body.board) ? body.board : p.board;
+    const fw = typeof body.fw === 'string' && /^[\w.+-]{1,32}$/.test(body.fw) ? body.fw : p.fw;
     this.store.run(
-      `UPDATE potatoes SET last_seen_t = ?, battery_pct = ?, charging = ?, vbus = ?, orientation = ?, since_handled_s = ?, sound = ?, temp_c = ?, utc_offset_min = ? WHERE id = ?`,
+      `UPDATE potatoes SET last_seen_t = ?, battery_pct = ?, charging = ?, vbus = ?, orientation = ?, since_handled_s = ?, sound = ?, temp_c = ?, utc_offset_min = ?, board = ?, fw = ? WHERE id = ?`,
       t, b.pct == null ? null : Math.round(num(b.pct)), b.charging ? 1 : 0, b.vbus ? 1 : 0, orientation, since, sound,
-      body.temp_c == null ? null : num(body.temp_c), off ?? null, p.id);
-    Object.assign(p, { last_seen_t: t, battery_pct: b.pct == null ? null : Math.round(num(b.pct)), charging: b.charging ? 1 : 0, vbus: b.vbus ? 1 : 0, orientation, since_handled_s: since, sound, utc_offset_min: off ?? null });
+      body.temp_c == null ? null : num(body.temp_c), off ?? null, board, fw, p.id);
+    Object.assign(p, { last_seen_t: t, battery_pct: b.pct == null ? null : Math.round(num(b.pct)), charging: b.charging ? 1 : 0, vbus: b.vbus ? 1 : 0, orientation, since_handled_s: since, sound, utc_offset_min: off ?? null, board, fw });
 
     const events = (Array.isArray(body.events) ? body.events : [])
       .filter((e) => e && EVENT_TYPES.has(e.type))
@@ -881,6 +884,11 @@ export class World {
   bulletin(day, edition) {
     const r = this.store.get('SELECT * FROM bulletins WHERE day = ? AND edition = ?', day, edition);
     return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t, day: r.day } : null;
+  }
+
+  // What is running where. Pseudonymous ids only; nothing that opens a File.
+  fleet() {
+    return this.store.all('SELECT id, board, fw, last_seen_t FROM potatoes ORDER BY id').map((r) => ({ id: r.id, board: r.board, fw: r.fw, last_seen: C.isoDate(r.last_seen_t) }));
   }
 
   // The archive: every edition, newest first; or one.

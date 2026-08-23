@@ -41,6 +41,7 @@ Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.d
 | GET | `/about` | `docs/STORY.md` rendered in the same style (hot-reloaded; the trailing "Short forms" section is dropped). Set `GITHUB_URL` to link the repository in "The code"; unset, the sentence reads "All of it is open." `[[IMAGE: slug — description — alt]]` slots render a figure when `docs/illustrations/<slug>.png|jpg` exists (nothing otherwise); ```` ```artifact-<kind> ```` blocks inline `assets/illustrations/artifact-<kind>.svg` (the fenced text is the fallback). Layout per `docs/ILLUSTRATION_BRIEF.md` §4. |
 | GET | `/editions` | Every edition, newest first. `/editions/<YYYY-MM-DD>/<morning\|evening>` for one. |
 | GET | `/illustrations/<slug>.png` | `docs/illustrations/`, read-only, slugs only, cached one hour. |
+| GET | `/v0/fleet` | `{fleet: [{id, board, fw, last_seen}]}` — what is running where, for the lead. No names, codes or secrets. |
 | GET | `/health` | `{ok: true}` |
 
 Logs carry method, path, status and time. Claim codes are masked; secrets never appear.
