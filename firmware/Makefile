@@ -130,6 +130,12 @@ paper-portrait:
 # Then the server agent's `npm run release -- <id> <bin> <version> "notes"`
 # writes the manifest /v0/firmware serves. Never flash a release by USB to
 # test OTA; that is what OTA is for.
+#
+# The compile log lives NEXT TO the build path, never inside it: when the
+# flags fingerprint changes (release and webflash share build/<board> but
+# webflash bakes in SERVER_URL_DEFAULT), arduino-cli wipes the build path
+# mid-compile and takes an in-flight log with it — the compile "succeeds",
+# the log is gone, and grep dies with a bare "No such file or directory".
 RELEASE_DIR ?= $(CURDIR)/../server/data/releases
 
 release:
@@ -142,9 +148,9 @@ release:
 	esac; \
 	VER=$$(sed -n 's/.*#define FW_VERSION "\(.*\)".*/\1/p' $(BOARD)/version.h); \
 	[ -n "$$VER" ] || { echo "no FW_VERSION in $(BOARD)/version.h"; exit 1; }; \
-	BP=$(CURDIR)/build/$(BOARD); mkdir -p $$BP; \
-	arduino-cli compile --fqbn $$FQ --build-property "compiler.cpp.extra_flags=$$FLAGS" --build-path $$BP $(BOARD) > $$BP/compile.log 2>&1 || { tail -30 $$BP/compile.log; exit 1; }; \
-	grep "Sketch uses" $$BP/compile.log; \
+	BP=$(CURDIR)/build/$(BOARD); LOG=$$BP-compile.log; mkdir -p $$BP; \
+	arduino-cli compile --fqbn $$FQ --build-property "compiler.cpp.extra_flags=$$FLAGS" --build-path $$BP $(BOARD) > $$LOG 2>&1 || { tail -30 $$LOG; exit 1; }; \
+	grep "Sketch uses" $$LOG; \
 	OUT=$(RELEASE_DIR)/$$ID; mkdir -p $$OUT; cp $$BP/$(BOARD).ino.bin $$OUT/$$VER.bin; \
 	SIZE=$$(stat -f%z $$OUT/$$VER.bin); SHA=$$(shasum -a 256 $$OUT/$$VER.bin | cut -d' ' -f1); \
 	[ $$SIZE -le $$SLOT ] || { echo "TOO BIG: $$SIZE > slot $$SLOT"; exit 1; }; \
@@ -178,9 +184,9 @@ webflash:
 	  *) echo "BOARD must be potato or paper"; exit 1;; \
 	esac; \
 	VER=$$(sed -n 's/.*#define FW_VERSION "\(.*\)".*/\1/p' $(BOARD)/version.h); \
-	BP=$(CURDIR)/build/$(BOARD); mkdir -p $$BP; \
-	arduino-cli compile --fqbn $$FQ --build-property "compiler.cpp.extra_flags=$$FLAGS" --build-path $$BP $(BOARD) > $$BP/compile.log 2>&1 || { tail -30 $$BP/compile.log; exit 1; }; \
-	grep "Sketch uses" $$BP/compile.log; \
+	BP=$(CURDIR)/build/$(BOARD); LOG=$$BP-compile.log; mkdir -p $$BP; \
+	arduino-cli compile --fqbn $$FQ --build-property "compiler.cpp.extra_flags=$$FLAGS" --build-path $$BP $(BOARD) > $$LOG 2>&1 || { tail -30 $$LOG; exit 1; }; \
+	grep "Sketch uses" $$LOG; \
 	[ -n "$(PUBLIC_SERVER_URL)" ] && echo "baked-in server: $(PUBLIC_SERVER_URL)" || echo "server default: http://potatoes.local:8080 (dev; set PUBLIC_SERVER_URL for the public flasher)"; \
 	OUT=$(RELEASE_DIR)/$$ID; mkdir -p $$OUT; \
 	"$(ESPTOOL)" --chip esp32s3 merge-bin -o $$OUT/webflash-$$VER.bin \

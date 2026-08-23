@@ -59,7 +59,8 @@ Adopted: pools walk as seeded shuffle bags (full pool before any repeat, no repe
 Changed from the proposal: instead of a rare *pool* at 1-in-12, the seed gives each potato **one** signature rare line for keeps (Doreen keeps "I'm not insured."), every tenth eligible pick-up — the catchphrase is the personality, the ration makes it land. Cut the mug-adjacent lines ("So this is happening.", "I see we're doing this.", "You have my attention.", "So this is the decision.") and generic filler ("Another adjustment.", "A change has been made.", "All right.", "Apparently we're moving.").
 Firmware-only extras: morning pool (first spoken pick-up 04–12 local) and restless pool (fourth spoken session in one day). Server keeps core + signature only.
 - [x] Voice doc §3/§15, `reactions.json`, `pools.h` + `potato.ino` all updated; 66 server tests + host protocol_test pass; potato firmware builds as 0.2.3.
-- [ ] Release 0.2.3 to Doreen: `make -C firmware release BOARD=potato` → `npm run release`. (Server restart picks up the new pools; the paper board has no local pools.)
+- [x] `make release BOARD=potato` — 0.2.3.bin built (first run hit the compile.log wipe; Makefile fixed: the log now lives next to the build path, not inside it, because arduino-cli wipes the path when the flags fingerprint changes — release ↔ webflash alternation).
+- [ ] Publish 0.2.3 to Doreen: `cd server && npm run release -- amoled18 data/releases/amoled18/0.2.3.bin 0.2.3 "..."`. Restart the server so the new pools load; the paper board has no local pools.
 
 ## Public launch checklist (23 Aug evening)
 - [x] Host: Railway chosen; domain purchased there (name TBD in docs). Deploy per docs/DEPLOY.md; needs the repo on GitHub or `railway up`.
