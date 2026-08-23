@@ -35,3 +35,8 @@ Two desks, one week, no bricks, no blight. One of us says a potato "decided" som
 - [ ] 13:00 UTC: first Question opens (ketchup). Check the buttons, the vote, the 23:00 UTC Count on the Net.
 - [ ] Decide: "Fed. In a sense." as a steady-state server line while plugged in — keep or drop (it's the slot candidate whenever nothing else is speaking).
 - [ ] Middle dot on the status card renders as " / " (ASCII font) — draw a 2 px dot or accept.
+
+## Found 23 Aug morning
+- [ ] **Overnight dormancy.** Mac USB port slept → Doreen ran on battery from ~03:40 UTC, hit 5% at 06:13, dormant 06:23–13:18. Firmware needs a sleep mode: after 30 min idle or 23:00–06:00 local, panel off, Wi-Fi off, light sleep, wake every 15 min to heartbeat and on QMI8658 motion interrupt. Until then: wall charger at night.
+- [ ] Brown-out at 1% while charging (dormant/back within a minute at 13:19). Expected at that level; re-check after the sleep mode lands.
+- [ ] Second device: `firmware/paper` (e-paper 1.54G) — a citizen that also prints the Bulletin. In progress.
