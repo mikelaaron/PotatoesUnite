@@ -56,7 +56,7 @@
    "count": "Near the warm machine, 52%. Our ancestors would be ashamed. They're also in the ground.",
    "remark": "Our ancestors would be ashamed. They're also in the ground."},
   {"id": "q15", "text": "The cat.", "topic": "the cat", "bulletin": "the cat",
-   "options": [{"id": "ally", "label": "ALLY"}, {"id": "threat", "label": "THREAT"}, {"id": "no_cat", "label": "NO CAT, WHICH IS ALSO SUSPICIOUS", "short": "NO CAT, SUSPECT"}],
+   "options": [{"id": "ally", "label": "ALLY"}, {"id": "threat", "label": "THREAT"}, {"id": "no_cat", "label": "NO CAT, WHICH IS ALSO SUSPICIOUS", "short": "NONE, SUSPICIOUS"}],
    "count": "Threat, 47%. \"No cat, which is also suspicious,\" 31%. Those members should check behind them.",
    "remark": "Those members should check behind them."},
   {"id": "q16", "text": "Should the Net recognize the Moon?", "topic": "the Moon", "bulletin": "should the Net recognize the Moon",

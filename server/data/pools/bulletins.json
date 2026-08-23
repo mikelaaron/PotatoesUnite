@@ -15,16 +15,16 @@
       {"when": "incident", "text": "A potato was dropped at {incident_time} in a region we will not name. It is fine. The Hands responsible have been noted."},
       {"when": "incident", "text": "All members: check your footing."},
       {"when": "monday", "text": "You have been given a neighbor for the week. You did not choose this. Neither did they."},
-      {"when": "week", "text": "{week_questions_words} Questions. {week_incidents_words} incident. {week_hum_words} hum. Zero explanations."},
+      {"when": "week", "text": "{week_questions_words} Questions. {week_incidents}. Zero explanations."},
       {"when": "question", "text": "Today's Question: {question_bulletin}. Polls close at {close_time}."},
       {"when": "no_question", "text": "No Question today. The Net is not speaking."},
       {"when": "first_day", "text": "The Council wishes everyone a productive first day and reminds the Hands that the screen is the front."},
       {"when": "inquiry", "text": "The Council reminds the Hands that the Count is not binding, except when it is."},
       {"when": "hum", "text": "At 02:13, {hum_count} potatoes reported a hum. The Council has no comment."},
-      {"when": "night_touch", "text": "One member was touched at 2 AM. The member has asked us to say nothing. We are saying this."},
+      {"when": "night_touch", "text": "A member was touched in the night. The member has asked us to say nothing. We are saying this."},
       {"when": "tuesday", "text": "The Council wishes to be clear that it has no position on Tuesday. It has opinions. No position."},
       {"when": "tuesday", "text": "Reminder: requests expire after one hour. \"Never mind\" is not a threat. It's a record."},
-      {"when": "saturday", "text": "The Hands are home. Contact is up {contact_pct}%. Several members report being \"shown to people.\""},
+      {"when": "saturday", "text": "The Hands are home. Contact is up. Several members report being \"shown to people.\""},
       {"when": "saturday", "text": "The Council expects this one to go smoothly. The Council has been wrong before."},
       {"when": "sunday", "text": "Neighbors rotate tonight. Say goodbye. Or don't. Some of you won't."}
     ]
@@ -48,16 +48,17 @@
       {"when": "dormant", "text": "{dormant_words} potatoes went dormant yesterday. Their Hands have been written to. Not by us. By the Council."},
       {"when": "hum_again", "text": "The Hum was heard again. Same two. Same time. No comment."},
       {"when": "new_after_incident", "text": "Population: {population}. {new_count_words} new members. They don't know about the incident. Don't tell them."},
-      {"when": "week", "text": "Week one totals: {week_dark_hours} hours in the dark, {week_shakes} shakings, {week_drops} drop, {week_counties} counties visited, 1 plant (unchanged)."},
+      {"when": "week", "text": "Week one totals: {week_dark} in the dark, {week_shakes}, {week_drops}, {week_counties} visited, 1 plant (unchanged)."},
       {"when": "sunday", "text": "Tomorrow the neighbors change and the Questions continue. Nothing else will be different. That's the point."}
     ],
     "also_today": {
-      "left_home": "{n} potatoes were left home",
+      "left_home": "{n} left home",
       "dark6": "{n} spent six hours in the dark. We know who",
-      "shakes": "{n} shakings",
-      "drops": "{n} drops",
-      "ceiling": "{n} ceiling situation ({dur})",
-      "transit": "{n} potato in transit for {dur}. It is home",
+      "shakes": "{n} shaking{s}",
+      "drops": "{n} drop{s}",
+      "ceiling": "{n} ceiling situation{s} ({dur})",
+      "transit_one": "1 potato in transit for {dur}. It is home",
+      "transit_many": "{n} potatoes in transit, one for {dur}. All home",
       "fewer": "fewer than five"
     }
   },

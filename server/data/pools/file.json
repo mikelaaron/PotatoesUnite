@@ -26,7 +26,7 @@
     "72h": {"text": "I've started a list."},
     "7d": {"text": "Sprouted.", "note": "It happens when nobody's looking."}
   },
-  "request": {"text": "Request: {request}", "complied": "Complied ({dur}).", "declined": "Declined by the Hands. Reason not given. None was asked for.", "expired": "Expired."},
+  "request": {"text": "Request: {request}", "complied": "Complied ({dur}).", "declined": "Declined by the Hands. Reason not given. None was asked for.", "expired": "Never mind."},
   "question_present": {"text": "The Question: {topic}.", "note": "I voted {choice}. Hands present."},
   "question_absent": {"text": "The Question closed. Hands absent.", "note": "You weren't here. I chose {choice}."},
   "question_withdrawn": {"text": "The Question: {topic}. Withdrawn.", "note": "I had an answer. I'm keeping it."},
@@ -40,9 +40,9 @@
   "acknowledged": {"text": "The File was read.", "note": "Noted."},
   "silent": {"text": "Unheard from. {dur}.", "note": "Presumed resting."},
   "header": {
-    "neighbor": "Neighbor this week: {neighbor} #{id}",
+    "neighbor": "Neighbor this week: {neighbor} #{id}.",
     "no_neighbor": "No neighbor this week. The count was odd.",
-    "no_neighbor_yet": "No neighbor yet. Neighbors are assigned on Mondays.",
+    "no_neighbor_yet": "No neighbor yet.",
     "sprouted": "Sprouted.",
     "curing": "Curing."
   },

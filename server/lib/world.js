@@ -35,6 +35,7 @@ const ORIENTATIONS = new Set(['up', 'down', 'side', 'inverted']);
 const SOUNDS = new Set(['quiet', 'normal', 'loud']);
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+const unit = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const iso = (s) => Math.floor(Date.parse(s) / 1000);
 
 export class World {
@@ -323,7 +324,8 @@ export class World {
       case 'transit_start': return { line: sp(R.transit.start, 'transit'), expression: 'neutral' };
       case 'wifi_restore': {
         const n = Math.floor(rx.dur_s / (12 * HOUR));
-        return n >= 1 ? { line: fill(sp(R.wifi_restored, 'wifi'), { n_words: numberWords(n) }), expression: 'neutral' } : null;
+        if (n < 1) return null;
+        return { line: n > 20 ? sp(R.wifi_restored_many, 'wifimany') : fill(sp(R.wifi_restored, 'wifi'), { n_words: numberWords(n) }), expression: 'neutral' };
       }
       case 'loud': return { line: h32(p.seed, 'horns') % 7 === 0 ? sp(R.loud_rare, 'loudr') : sp(R.loud, 'loud', st.loud_count || 0), expression: 'aggrieved' };
       case 'pickup': return { line: sp(R.pickup, 'pickup', rx.at), expression: 'neutral' };
@@ -651,7 +653,7 @@ export class World {
     if (tally.withdrawn || !q || !q.options.length) return { kind: 'withdrawn' };
     if (!v) return null;
     const opt = q.options.find((o) => o.id === v.choice_id) || { label: v.choice_id };
-    const fields = { choice: sayLabel(opt.label), pct_words: numberWords(tally.pct[v.choice_id] || 0), pct: tally.pct[v.choice_id] || 0 };
+    const fields = { choice: sayLabel(opt.short || opt.label), pct_words: numberWords(tally.pct[v.choice_id] || 0), pct: tally.pct[v.choice_id] || 0 };
     if (!v.by_hands) return { kind: 'alone', ...fields };
     return { kind: tally.winners.includes(v.choice_id) ? 'majority' : 'minority', ...fields };
   }
@@ -795,10 +797,11 @@ export class World {
       population: fewerThanFive(population), WEEKDAY: C.weekdayName(ds).toUpperCase(),
       question_bulletin: q ? q.bulletin || q.topic : '', close_time: `${C.hm(ds + C.CLOSE_H * HOUR)} UTC`,
       incident_time: yesterday.drop_t ? C.hm(yesterday.drop_t) : '', hum_count: yesterday.hum,
-      contact_pct: yesterday.pickups ? Math.max(0, Math.round(((today.pickups - yesterday.pickups) / yesterday.pickups) * 100)) : 0,
       week_questions_words: numberWords(Math.min(7, idx + 1)).replace(/^./, (c) => c.toUpperCase()),
-      week_incidents_words: numberWords(this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'drop' AND t >= ? AND t < ?`, ds - 7 * DAY, ds).n).replace(/^./, (c) => c.toUpperCase()),
-      week_hum_words: 'One',
+      week_incidents: (() => {
+        const n = this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'drop' AND t >= ? AND t < ?`, ds - 7 * DAY, ds).n;
+        return n === 0 ? 'No incidents' : `${numberWords(n).replace(/^./, (c) => c.toUpperCase())} incident${n === 1 ? '' : 's'}`;
+      })(),
     };
     let headline, items;
     if (edition === 'morning') {
@@ -812,13 +815,15 @@ export class World {
       const unanimous = tally && !tally.withdrawn && tally.total >= 5 && tally.winners.length === 1 && tally.counts[tally.winners[0]] === tally.total;
       const parts = [];
       const A = B.also_today || {};
-      const ft = (n2) => fewerThanFive(n2);
-      if (today.left_home) parts.push(fill(A.left_home, { n: ft(today.left_home) }));
-      if (today.dark6) parts.push(fill(A.dark6, { n: ft(today.dark6) }));
-      if (today.shakes) parts.push(fill(A.shakes, { n: ft(today.shakes) }));
-      if (today.drops) parts.push(fill(A.drops, { n: ft(today.drops) }));
-      if (today.ceiling) parts.push(fill(A.ceiling, { n: ft(today.ceiling), dur: durWords(today.ceiling_max).toLowerCase() }));
-      if (today.transit) parts.push(fill(A.transit, { n: ft(today.transit), dur: durWords(today.transit_max).toLowerCase() }));
+      // {n} is the number or "fewer than five"; {s}/{es} are '' for exactly one, the suffix otherwise.
+      const nf = (n2, extra = {}) => ({ n: fewerThanFive(n2), s: n2 === 1 ? '' : 's', es: n2 === 1 ? '' : 'es', ...extra });
+      if (today.left_home) parts.push(fill(A.left_home, nf(today.left_home)));
+      if (today.dark6) parts.push(fill(A.dark6, nf(today.dark6)));
+      if (today.shakes) parts.push(fill(A.shakes, nf(today.shakes)));
+      if (today.drops) parts.push(fill(A.drops, nf(today.drops)));
+      if (today.ceiling) parts.push(fill(A.ceiling, nf(today.ceiling, { dur: durWords(today.ceiling_max).toLowerCase() })));
+      if (today.transit === 1) parts.push(fill(A.transit_one, { dur: durWords(today.transit_max).toLowerCase() }));
+      else if (today.transit > 1) parts.push(fill(A.transit_many, nf(today.transit, { dur: durWords(today.transit_max).toLowerCase() })));
       const standingDown = this.active(t).some((m) => {
         const L = this.pools.net.standing;
         return this.standingLabel(m, t) === L[2] && t - m.created_t >= 2 * DAY && this.standingScore(m, ds) > -2;
@@ -835,10 +840,10 @@ export class World {
         remark: q ? fill(q.remark || '', { pct: pctFields }) : '', also_today: parts.join('. '),
         dormant_words: numberWords(yesterday.dormant).replace(/^./, (c) => c.toUpperCase()),
         new_count_words: numberWords(today.new_members).replace(/^./, (c) => c.toUpperCase()),
-        week_dark_hours: this.store.get(`SELECT COALESCE(SUM(dur_s), 0) n FROM entries WHERE kind = 'dark_end' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n / HOUR | 0,
-        week_shakes: this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'shake' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n,
-        week_drops: this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'drop' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n,
-        week_counties: this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'transit_end' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n,
+        week_dark: unit(this.store.get(`SELECT COALESCE(SUM(dur_s), 0) n FROM entries WHERE kind = 'dark_end' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n / HOUR | 0, 'hour', 'hours'),
+        week_shakes: unit(this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'shake' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n, 'shaking', 'shakings'),
+        week_drops: unit(this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'drop' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n, 'drop', 'drops'),
+        week_counties: unit(this.store.get(`SELECT COUNT(*) n FROM entries WHERE kind = 'transit_end' AND t >= ? AND t < ?`, ds - 6 * DAY, ds + DAY).n, 'county', 'counties'),
       });
       const H = B.headline;
       if (!tally) headline = H.none;
@@ -905,7 +910,7 @@ export class World {
       expires.push(C.closeAt(t) - HOUR > t ? C.closeAt(t) - HOUR : C.closeAt(t));
     } else if (open && vote && t - vote.t < 10 * MIN) {
       const opt = q.options.find((o) => o.id === vote.choice_id) || { label: vote.choice_id };
-      line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.label) }); expires.push(vote.t + 10 * MIN);
+      line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.short || opt.label) }); expires.push(vote.t + 10 * MIN);
     } else if (row && row.closed && t - C.closeAt(t) < 3 * HOUR && t >= C.closeAt(t) && this.countOutcome(p, day)) {
       const out = this.countOutcome(p, day);
       line = fill(sp(N.count[out.kind], 'count', day), out);
@@ -917,7 +922,7 @@ export class World {
       line = req.text; expression = 'waiting'; choices = (reqDef && reqDef.choices) || []; expires.push(req.expires_t);
     } else if (open && vote) {
       const opt = q.options.find((o) => o.id === vote.choice_id) || { label: vote.choice_id };
-      line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.label) }); expires.push(C.closeAt(t));
+      line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.short || opt.label) }); expires.push(C.closeAt(t));
     }
 
     if (!line && !silence && !lineBc) {
@@ -1021,7 +1026,7 @@ export class World {
       if (cands.length) {
         const p = this.byId(cands[h32(day, 'potd') % cands.length]);
         const e = this.store.get(`SELECT * FROM entries WHERE potato_id = ? AND t >= ? AND t < ? AND withheld = 0 ORDER BY standing ASC, t DESC LIMIT 1`, p.id, ds - DAY, ds);
-        potd = { name: p.name, id: p.id, variety: this.variety(p.variety).name, excerpt: e ? `${C.hm(e.t)}  ${e.text}${e.note ? `  ${e.note}` : ''}` : '' };
+        potd = { name: p.name, id: p.id, variety: this.variety(p.variety).name, excerpt: e ? `${e.text}${e.note ? `  ${e.note}` : ''}` : '' };
       }
     }
     return {

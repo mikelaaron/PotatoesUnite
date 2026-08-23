@@ -53,7 +53,7 @@ test('neighbors: odd count leaves one potato alone, pairs are symmetric, and the
   for (const r of rows) if (r.neighbor_id) assert.equal(rows.find((x) => x.potato_id === r.neighbor_id).neighbor_id, r.potato_id);
   const files = codes.map((c) => w.file(c));
   assert.equal(files.filter((f) => f.neighborLine === 'No neighbor this week. The count was odd.').length, 1);
-  assert.equal(files.filter((f) => /^Neighbor this week: \w+ #\d{4}$/.test(f.neighborLine)).length, 4);
+  assert.equal(files.filter((f) => /^Neighbor this week: \w+ #\d{4}\.$/.test(f.neighborLine)).length, 4);
   // gossip reaches the neighbor
   const pair = rows.find((r) => r.neighbor_id);
   const a = w.byId(pair.potato_id), b = w.byId(pair.neighbor_id);

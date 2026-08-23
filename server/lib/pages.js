@@ -194,8 +194,8 @@ ${d.withheld ? `<div class="withheld"${live ? ` data-utc="${Math.round(dayStart(
   return layout(title, `
 <header class="file-head">
 <h1>${h(f.name.toUpperCase())} #${h(f.id)} · ${h(f.variety.name.toUpperCase())} · STANDING: ${h(f.standing.toUpperCase())}${f.sprouted ? '<span class="sprout" title="Sprouted">⌇</span>' : ''}</h1>
-<p>${h(f.neighborLine)}${f.curing ? ' · Curing.' : ''}${f.sprouted ? ' · Sprouted.' : ''}</p>
-<p class="muted"><span${live ? ' data-tz-note' : ''}>${f.offsetKnown ? 'Times are local to the device.' : 'Times are UTC.'}</span>${f.unread ? ` ${f.unread} unread.` : ''}</p>
+<p>${h([f.neighborLine, f.curing ? 'Curing.' : '', f.sprouted ? 'Sprouted.' : ''].filter(Boolean).join(' '))}</p>
+<p class="muted"><span${live ? ' data-tz-note' : ''}>${f.offsetKnown ? 'Times are local to the potato.' : 'Times are UTC.'}</span>${f.unread ? ` ${f.unread} unread.` : ''}</p>
 </header>
 <div${live ? ' data-file-utc' : ''}>
 ${days}

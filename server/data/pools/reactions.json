@@ -31,15 +31,15 @@
     "72h": ["I've started a list."],
     "7d": ["The plant and I have an understanding now."],
     "return": ["Oh. It's you."],
-    "return_long": ["I assumed the worst. Then I assumed you were fine. Then I stopped assuming."]
+    "return_long": ["I assumed the worst. Then that you were fine. Then nothing."]
   },
-  "night": ["It's 2 AM.", "Go to bed.", "What.", "This had better be the Hum."],
+  "night": ["It's {hour}.", "Go to bed.", "What.", "This had better be the Hum."],
   "loud": ["Is that jazz.", "Lower, please.", "I've told the Net about your music. They're sympathetic."],
   "loud_rare": ["Horns. Finally."],
   "temperature": [
     "It's {temp_f} in here. Just so we're clear.",
     "Warm. Why is it warm.",
-    "I have questions about the temperature. All of them are \"why.\""
+    "Questions about the temperature. All of them are \"why.\""
   ],
   "_temperature_sample": "It's 63 in here. Just so we're clear.",
   "transit": {
@@ -49,6 +49,7 @@
   "plugged": ["Fed. In a sense."],
   "wifi_lost": ["The Net's gone. It's just us."],
   "wifi_restored": ["Back. I missed {n_words} Bulletins. Give me a moment."],
+  "wifi_restored_many": ["Back. I missed the Bulletins. Give me a moment."],
   "_wifi_restored_sample": "Back. I missed two Bulletins. Give me a moment.",
   "saturday": ["It's Saturday. You're allowed. I'm noting it anyway."]
 }
