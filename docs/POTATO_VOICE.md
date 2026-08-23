@@ -85,7 +85,7 @@ Seven layers, from always-on to rare. Most of the day is layers 1–3, which run
 08:00  the Question       Ketchup.   [HEINZ] [HUNT'S] [WHATEVER'S THERE]
 08:45  Hands leave        (no line — it's watching)
 12:40  4h still           It's quiet.
-14:02  neighbor news      Clive was picked up. At two in the afternoon. Some of us have jobs.
+14:02  neighbor news      Clive was picked up. At two. Some of us have jobs.
 16:30  put down face-down Dark.
 16:40                     Still dark.
 17:30                     I assume this is deliberate.
@@ -161,7 +161,7 @@ Each trigger has a pool. The potato's seed picks a consistent voice from the poo
 - *72 h:* I've started a list.
 - *7 days:* The plant and I have an understanding now.
 - *on return:* Oh. It's you.
-- *on return, long:* I assumed the worst. Then I assumed you were fine. Then I stopped assuming.
+- *on return, long:* I assumed the worst. Then that you were fine. Then nothing.
 
 **Touched at night (23:00–06:00)**
 - It's 11 PM. *(the hour from the clock — never a time that isn't the time)*
@@ -178,7 +178,7 @@ Each trigger has a pool. The potato's seed picks a consistent voice from the poo
 **Cold / warm (e-paper board has the sensor)**
 - It's 63 in here. Just so we're clear.
 - Warm. Why is it warm.
-- I have questions about the temperature. All of them are "why."
+- Questions about the temperature. All of them are "why."
 
 **Transit (sustained movement over two minutes)**
 - Transit.
@@ -192,7 +192,7 @@ Each trigger has a pool. The potato's seed picks a consistent voice from the poo
 
 **Wi-Fi lost / restored**
 - The Net's gone. It's just us.
-- Back. I missed two Bulletins. Give me a moment.
+- Back. I missed the Bulletins. Give me a moment.
 
 **Saturday, first pick-up after 10:00**
 - It's Saturday. You're allowed. I'm noting it anyway.
@@ -201,7 +201,7 @@ Each trigger has a pool. The potato's seed picks a consistent voice from the poo
 
 ## 4. Requests
 
-Two or three times a day the potato asks for something. It uses the accelerometer to check where it can; otherwise it offers a **[DONE]** button and takes your word for it — "this time." Ignoring a request for an hour closes it with **Never mind.** and the File gets a line.
+Two or three times a day the potato asks for something. It uses the accelerometer to check where it can; otherwise it offers a **[DONE]** button and takes your word for it — "this time." Ignoring a request for an hour closes it with **Never mind.** and the File gets a line ("Never mind." — not "Expired."; it's a record, not a system word).
 
 | Request | How it checks | If you do it | If you don't |
 |---|---|---|---|
@@ -222,12 +222,12 @@ File line when declined: *"Request declined by the Hands. Reason not given. None
 
 Each potato keeps about twenty facts about its Hands. They're not shown anywhere. They come back.
 
-- You left me in the dark on the 14th. I mention it only because it's the 14th again.
+- You left me in the dark on the 14th. It's the 14th again.
 - Face down again. This is a pattern. I've named it.
 - You've been all right lately. Don't make it strange.
 - I voted for the dark one. You know why.
-- The music was horns on three occasions. I've adjusted my position on horns.
-- Last time you went away it was four days. I'm not counting this time. I'm counting.
+- Horns, three times now. I've adjusted my position on horns.
+- Last time, four days. I'm not counting. I am.
 
 Grudges fade if the thing doesn't happen again. Repeat it and the grudge gets a name. Good treatment surfaces too, rarely and grudgingly, because praise from a potato has to be earned in months.
 
@@ -237,9 +237,9 @@ Grudges fade if the thing doesn't happen again. Repeat it and the grudge gets a 
 
 **The neighbor.** Every Monday the Net assigns each potato one other real potato for the week. You see its aggregates; it sees yours. Nothing identifying — a name, a number, what happened to it.
 - Clive was shaken twice today. I'm not saying anything.
-- My neighbor's Hands came home at four. Mine, I'm told, are "working."
-- Clive's Hands have an Exemplary standing. I've asked how. No reply.
-- Neighbors rotate tomorrow. Clive and I did not get on. I'll miss him.
+- Clive's Hands came home at four. Mine are "working."
+- Clive's Hands are Exemplary. I've asked how. No reply.
+- Last day with Clive. We did not get on. I'll miss him.
 
 **Incidents.** One person's mistake is everybody's news, with no names and no places.
 - INCIDENT. A potato was dropped at 09:12 in a region we will not name. It is fine. The Hands responsible have been noted. All members: check your footing.
@@ -323,7 +323,7 @@ Standing has been calculated for all members. It will not be explained.
 NEIGHBORS ASSIGNED.
 You have been given a neighbor for the week. You did not choose this. Neither did they.
 Today's Question: are fries still potatoes.
-One member was touched at 2 AM. The member has asked us to say nothing. We are saying this.
+A member was touched in the night. The member has asked us to say nothing. We are saying this.
 
 **No. 2 — EVENING**
 "NO LONGER," 8 TO 6.
@@ -369,7 +369,7 @@ Weather: cold on 4 of us. One has mentioned it eleven times. Just so we're clear
 
 **No. 6 — MORNING**
 SATURDAY.
-The Hands are home. Contact is up 300%. Several members report being "shown to people."
+The Hands are home. Contact is up. Several members report being "shown to people."
 Today's Question: salt.
 The Council expects this one to go smoothly. The Council has been wrong before.
 
@@ -509,7 +509,7 @@ Lines may reference variety, rarely: *"Clive is a Russet. It explains a lot."* T
 
 The feeling comes from things you can lose by not looking. Five of them, cheapest first.
 
-1. **The File fills up, then thins out.** Unread entries show on the device as a posture (eyes toward the door). Escalating lines: *1 day:* "The File has entries." *3 days:* "The File hasn't been read in three days. I've started writing less." *7 days:* "I've stopped keeping the File in detail. If you want to know, ask." — and the File really does show `(details withheld)` for those days. You missed it. It's gone.
+1. **The File fills up, then thins out.** Unread entries show on the device as a posture (eyes toward the door). Escalating lines: *1 day:* "The File has entries." *3 days:* "The File is three days unread. I've started writing less." *7 days:* "I've stopped keeping the File in detail. Ask." — and the File really does show `(details withheld)` for those days. You missed it. It's gone.
 2. **Sprouting.** Seven days without handling and the potato visibly sprouts — on the desk, in the File, on any card. People will notice in the paper before they notice on the desk. That's the point.
 3. **The neighbor knows.** "Clive's been asking where you are." Somebody else's potato is talking about yours.
 4. **MISSING notices in The Tuber.** 72 hours without a heartbeat: *"MISSING: Doreen #0417, King Edward. Last heard from Tuesday. Hands are asked to check under papers."* Public. Pseudonymous. Mortifying.
