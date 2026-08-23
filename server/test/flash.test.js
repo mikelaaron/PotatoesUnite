@@ -106,11 +106,12 @@ test('/flash/agent: the Council line until the doc appears, the rendered doc aft
   } finally { server.close(); }
 });
 
-test('THE TUBER → under the masthead when TUBER_URL is set', async () => {
+test('THE TUBER nameplate under the masthead — plain ink, no link; the X link lives in the footer', async () => {
   const { server, base } = await serve({ app: { tuberUrl: 'https://x.com/thetuber' } });
   try {
     const html = await (await fetch(`${base}/`)).text();
-    assert.match(html, /<p class="tt follow"><a href="https:\/\/x\.com\/thetuber">THE TUBER →<\/a><\/p>/);
+    assert.match(html, /<p class="tt paper-name">THE TUBER<\/p>/);
+    assert.doesNotMatch(html, /THE TUBER →/, 'the nameplate is not a link');
     assert.match(html, /Editions are also issued on/);
   } finally { server.close(); }
 });

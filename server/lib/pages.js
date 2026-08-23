@@ -24,8 +24,7 @@ body.paper-doc { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d
 .board-card esp-web-install-button button, .board-card .connect { font-family: var(--tt); font-size: 1.2em; background: var(--ink); color: var(--paper); border: 0; padding: .45rem 1.6rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
 .board-card .unsupported { display: block; color: var(--faint); font-size: .85em; margin-top: .5rem; }
 .requirements { color: var(--faint); }
-.follow { text-align: center; margin: .2rem 0 0; }
-.follow a { text-decoration: none; border-bottom: 1px solid var(--faint); color: var(--faint); letter-spacing: .15em; }
+.paper-name { text-align: center; margin: .2rem 0 0; font-size: 1.8em; letter-spacing: .12em; color: var(--ink); }
 .oneliner { background: var(--wash); border: 1px solid var(--rule); padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
 html { background: var(--paper); }
 body { margin: 0 auto; max-width: 65ch; padding: 1.5rem 1rem 3rem; background: var(--paper); color: var(--ink);
@@ -299,7 +298,7 @@ export function renderBoard(b, { tuberUrl = '' } = {}) {
   const potd = b.potd ? `<h2>Potato of the Day</h2><p>${h(b.potd.name)} #${h(b.potd.id)} · ${h(b.potd.variety)}</p>${b.potd.excerpt ? `<p class="notice">${h(b.potd.excerpt)}</p>` : ''}` : '';
   return layout('POTATOES UNITE!', `
 <header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a> · <a href="/flash">Flash</a></div></header>
-${tuberUrl ? `<p class="tt follow"><a href="${h(tuberUrl)}">THE TUBER →</a></p>` : ''}
+<p class="tt paper-name">THE TUBER</p>
 <p class="now">It is ${utc(b.t)}.</p>
 <p class="next" data-next-utc="${h(b.nextPrint)}" data-printed-utc="${h(b.lastPrint || 0)}">${h(nextLine(b.t, b.lastPrint, b.nextPrint))}</p>
 <p class="lede">${h(LEDE)}</p>
