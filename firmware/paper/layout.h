@@ -154,8 +154,12 @@ static void renderPaper(PaperCanvas &cv, const PaperModel &m, PaperLog *log) {
   const bool question = m.nOptions > 0;
   y = drawCentredLines(cv, y, m.line, question ? 2 : 3, 8, PAPER_BLACK, log, "line: ");
   if (question) {
-    y = y < 166 ? 166 : y;
-    const int rowH = 11;
+    // Rows of 10 from y=160 leave the bottom 10 px for the voting hint: the
+    // Hands did not know the options were pressed, not tapped. The hint is
+    // a courtesy (the File can vote too), one line, in the tiny face — the
+    // body face cannot fit forty characters across 196 px.
+    y = y < 160 ? 160 : y;
+    const int rowH = 10;
     for (int i = 0; i < m.nOptions && i < PAPER_MAX_OPTIONS; ++i) {
       if (y + rowH > PAPER_H) break;
       const bool chosen = m.chosen == i;
@@ -163,9 +167,15 @@ static void renderPaper(PaperCanvas &cv, const PaperModel &m, PaperLog *log) {
       if (chosen) cv.fillRect(0, y, PAPER_W, rowH, PAPER_BLACK);
       char row[24];
       snprintf(row, sizeof(row), "%d %s", i + 1, m.options[i]);
-      drawText(cv, 8, y + 9, row, FONT_BODY, ink);
+      drawText(cv, 8, y + 8, row, FONT_BODY, ink);
       if (log) log->add("  %s%s", row, chosen ? "   <-- chosen" : "");
       y += rowH;
+    }
+    const char *hint = m.nOptions >= 3 ? "PRESS BOOT: ONCE, TWICE, OR THREE TIMES."
+                       : m.nOptions == 2 ? "PRESS BOOT: ONCE OR TWICE." : "PRESS BOOT: ONCE.";
+    if (y + 7 <= PAPER_H) {
+      drawTextCentered(cv, PAPER_W / 2, y + 6, hint, FONT_TINY, PAPER_BLACK);
+      if (log) log->add("  %s", hint);
     }
   }
 }
