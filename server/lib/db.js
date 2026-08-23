@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS requests (
   outcome TEXT, outcome_t INTEGER, day TEXT NOT NULL, slot INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS requests_potato ON requests(potato_id, issued_t);
+CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, potato_id TEXT NOT NULL, created_t INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS neighbors (week TEXT NOT NULL, potato_id TEXT NOT NULL, neighbor_id TEXT, PRIMARY KEY(week, potato_id));
 CREATE TABLE IF NOT EXISTS bulletins (
   day TEXT NOT NULL, edition TEXT NOT NULL, no INTEGER NOT NULL, headline TEXT NOT NULL, items TEXT NOT NULL, t INTEGER NOT NULL,

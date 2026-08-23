@@ -27,7 +27,7 @@ test('scene rev is stable when nothing changes and increments when content chang
   assert.equal(late.rev, undefined);
   assert.equal(late.scene.rev, e.rev);
   set(at(8, 12));
-  assert.equal(hb(w, secret, []).rev, e.rev);
+  assert.ok(hb(w, secret, []).rev >= e.rev, 'the shake run files once it has been quiet five minutes; that may move the rev');
 });
 
 test('scene shape follows protocol v0', () => {
@@ -54,6 +54,7 @@ test('events are drained once: a retried heartbeat does not double-file', () => 
   set(at(9, 0));
   const ev = [{ t: at(9, 0), type: 'shake' }];
   hb(w, secret, ev); hb(w, secret, ev);
+  set(at(9, 6)); hb(w, secret, []); // the shake run files after five quiet minutes
   const f = w.file(claim_code);
   assert.equal(f.days[0].entries.filter((e) => e.kind === 'shake').length, 1);
 });
@@ -64,12 +65,12 @@ test('dormancy, sprouting and the cellar are recorded', () => {
   const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
   set(at(9, 0)); hb(w, secret, [{ t: at(9, 0), type: 'pickup' }, { t: at(9, 30), type: 'battery_low', pct: 5 }]);
   set(at(9, 0, 4)); hb(w, secret, [{ t: at(9, 0, 4), type: 'dormant_resume', dur_s: 4 * 86400 - 1800 }]);
+  set(at(9, 40, 4)); hb(w, secret, []); // the outage settles half an hour after the return
   let f = w.file(claim_code);
   const all = f.days.flatMap((d) => d.entries);
-  const dormant = all.find((e) => e.kind === 'dormant');
-  assert.equal(dormant.text, 'Went dormant at 5%.');
-  assert.equal(dormant.note, 'Hands present at the time. Noted.');
-  assert.equal(all.find((e) => e.kind === 'dormant_resume').note, 'The cellar.');
+  const power = all.find((e) => e.kind === 'power');
+  assert.equal(power.text, 'Returned after 3d 23h dormant.');
+  assert.ok(!all.some((e) => ['dormant', 'dormant_resume', 'battery_low', 'silent'].includes(e.kind)), 'thresholds and waking fold into the episode');
   w.ack(claim_code); // read the File on day 4, so day 8's entries are not withheld
   set(at(10, 0, 8));
   const s = hb(w, secret, [], { since_handled_s: 8 * 86400 });
@@ -119,89 +120,81 @@ test('among events, severity picks the speaker: shake beats pickup and the charg
   assert.ok(w.pools.reactions.drop.filter(Boolean).includes(d.line), `drop line: ${d.line}`);
 });
 
-test('the ration: thirty seconds of fumbling is one entry, not seven', () => {
-  const { w, set } = makeWorld({ start: at(2, 40) }); // joined after last night's close: no Count line to outrank the tap
+test('the ration: thirty seconds of fumbling files nothing at all', () => {
+  const { w, set } = makeWorld({ start: at(2, 40) });
   const secret = SECRET(14);
   const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
-  const T = (m, s) => at(3, m) + s; // 03:0m:ss
-  set(at(2, 50)); hb(w, secret, []); // awake before the burst
+  const T = (m, s) => at(3, m) + s;
+  set(at(2, 50)); hb(w, secret, []);
   set(T(2, 20));
-  const s = hb(w, secret, [
+  hb(w, secret, [
     { t: T(0, 19), type: 'pickup' }, { t: T(0, 22), type: 'putdown' }, { t: T(0, 23), type: 'charge_end' },
     { t: T(0, 24), type: 'pickup' }, { t: T(0, 27), type: 'putdown' }, { t: T(0, 27), type: 'battery_low', pct: 30 },
     { t: T(0, 36), type: 'pickup' }, { t: T(0, 38), type: 'facedown_start' }, { t: T(0, 40), type: 'facedown_end', dur_s: 1 },
     { t: T(0, 41), type: 'putdown' }, { t: T(0, 42), type: 'pickup' }, { t: T(0, 44), type: 'pickup' }, { t: T(0, 47), type: 'pickup' },
     { t: T(0, 48), type: 'charge_start' }, { t: T(0, 50), type: 'putdown' }, { t: T(2, 17), type: 'tap' },
   ], { battery: { pct: 63, charging: true, vbus: true } });
-  set(T(4, 30)); hb(w, secret, [], { battery: { pct: 63, charging: true, vbus: true } }); // the tap's own minute of quiet has passed
-  const f = w.file(claim_code);
-  const today = f.days.find((d) => d.header === 'TUE 25 AUG');
+  set(T(9, 0)); hb(w, secret, [], { battery: { pct: 63, charging: true, vbus: true } });
+  const today = w.file(claim_code).days.find((d) => d.header === 'TUE 25 AUG');
   const lines = today.entries.filter((e) => e.time >= '03:00').map((e) => `${e.time}  ${e.text}  ${e.note}`.trim());
-  assert.deepEqual(lines, ['03:02  Tapped on the face.', '03:00  Picked up. 31 s.  Repeatedly.'], lines.join('\n'));
-  assert.ok(w.pools.reactions.tap.includes(s.line), `the tap speaks, not the fumbling: ${s.line}`);
+  assert.deepEqual(lines, [], `a 5-second pickup, three 3-second ones and one tap are not a record:\n${lines.join('\n')}`);
   assert.equal(w.store.get('SELECT COUNT(*) n FROM events WHERE potato_id = ?', '0001').n, 16, 'raw events are all kept');
+  assert.equal(w.standingScore(w.byId('0001'), T(9, 0)), 1, 'presence still counted');
 });
 
-test('the ration: a session is filed on the heartbeat that sees it close; a short dark is not a grievance', () => {
-  const { w, set } = makeWorld();
+test('the ration: pickups under four seconds file nothing, four to nine only inside an episode, ten and up remain; runs fold', () => {
+  const { w, set } = makeWorld({ start: at(2, 40) });
   const secret = SECRET(15);
   const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
-  set(at(9, 0, 0) + 10);
-  hb(w, secret, [{ t: at(9, 0), type: 'pickup' }, { t: at(9, 0) + 8, type: 'putdown' }]);
-  let kinds = w.file(claim_code).days[0].entries.map((e) => e.kind);
-  assert.ok(!kinds.includes('pickup'), 'still open: nothing filed yet');
-  set(at(9, 0) + 150);
-  const s = hb(w, secret, []);
-  const e = w.file(claim_code).days[0].entries.find((x) => x.kind === 'pickup');
-  assert.equal(e.text, 'Picked up. 8 s.');
-  assert.equal(e.note, 'Morning.');
-  assert.ok(!w.pools.reactions.pickup.includes(s.line), 'a two-minute-old pickup no longer speaks');
-  set(at(9, 10));
-  const d = hb(w, secret, [{ t: at(9, 9), type: 'facedown_start' }, { t: at(9, 9) + 30, type: 'facedown_end', dur_s: 30 }]);
-  kinds = w.file(claim_code).days[0].entries.map((x) => x.kind);
-  assert.ok(!kinds.includes('dark_start') && !kinds.includes('dark_end'), 'thirty seconds in the dark is not a record');
-  assert.ok(!w.pools.reactions.dark.restored.some((l) => d.line === l.replace('{duration_words}', 'Zero minutes')), d.line);
-  assert.equal(w.standingScore(w.byId('0001'), at(9, 10)), 1, 'presence only; no grievance');
-  // plug / unplug inside a minute: neither is filed
-  set(at(9, 20));
-  hb(w, secret, [{ t: at(9, 19), type: 'charge_start' }, { t: at(9, 19) + 20, type: 'charge_end' }]);
-  set(at(9, 22)); hb(w, secret, []);
-  kinds = w.file(claim_code).days[0].entries.map((x) => x.kind);
-  assert.ok(!kinds.includes('charge_start') && !kinds.includes('charge_end'));
-  // a real plug-in is filed a minute later
-  set(at(9, 30)); hb(w, secret, [{ t: at(9, 30), type: 'charge_start' }]);
-  set(at(9, 32)); hb(w, secret, []);
-  assert.ok(w.file(claim_code).days[0].entries.some((x) => x.kind === 'charge_start' && x.text === 'Plugged in.'));
+  const entries = () => w.file(claim_code).days[0].entries.filter((e) => ['pickup', 'handled', 'tap', 'putdown'].includes(e.kind)).map((e) => `${e.time}  ${e.text}  ${e.note}`.trim());
+  set(at(9, 0) + 5); hb(w, secret, [{ t: at(9, 0), type: 'pickup' }, { t: at(9, 0) + 2, type: 'putdown' }]);
+  set(at(9, 10)); hb(w, secret, []);
+  assert.deepEqual(entries(), [], 'two seconds is a nudge');
+  set(at(9, 20) + 8); hb(w, secret, [{ t: at(9, 20), type: 'pickup' }, { t: at(9, 20) + 6, type: 'putdown' }]);
+  set(at(9, 30)); hb(w, secret, []);
+  assert.deepEqual(entries(), [], 'six seconds alone is nothing');
+  set(at(9, 40) + 14); hb(w, secret, [{ t: at(9, 40), type: 'pickup' }, { t: at(9, 40) + 12, type: 'putdown' }]);
+  set(at(9, 50)); hb(w, secret, []);
+  assert.deepEqual(entries(), ['09:40  Picked up. 12s.']);
+  // three pickups over eight minutes: 6 s, 40 s, 50 s
+  set(at(10, 8) + 2); hb(w, secret, [
+    { t: at(10, 0), type: 'pickup' }, { t: at(10, 0) + 6, type: 'putdown' },
+    { t: at(10, 3), type: 'pickup' }, { t: at(10, 3) + 40, type: 'putdown' },
+    { t: at(10, 7) + 10, type: 'pickup' }, { t: at(10, 8), type: 'putdown' },
+  ]);
+  set(at(10, 20)); hb(w, secret, []);
+  assert.equal(entries()[0].replace(/  A period of renewed interest\.$/, ''), '10:00  Handled three times over eight minutes. 1m 36s total.', entries().join('\n'));
+  assert.ok(!entries().some((l) => /Put down/.test(l)));
 });
 
-test('the ration: lone taps within a minute are one entry; three or more say Repeatedly', () => {
+test('the ration: a single tap is nothing; taps within five minutes are one entry with a count', () => {
   const { w, set } = makeWorld({ start: at(2, 40) });
   const secret = SECRET(16);
   const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
-  const T = (m, s) => at(11, m) + s;
-  set(T(42, 0));
-  const s = hb(w, secret, [{ t: T(38, 0), type: 'tap' }, { t: T(41, 0), type: 'tap' }, { t: T(41, 20), type: 'tap' }, { t: T(41, 45), type: 'tap' }]);
-  assert.ok(w.pools.reactions.tap.includes(s.line), 'the first tap of a run speaks');
-  set(T(43, 0)); hb(w, secret, []);
-  const lines = w.file(claim_code).days[0].entries.filter((e) => e.kind === 'tap').map((e) => `${e.time}  ${e.text}  ${e.note}`.trim());
-  assert.deepEqual(lines, ['11:41  Tapped on the face.  Repeatedly.', '11:38  Tapped on the face.']);
+  const taps = () => w.file(claim_code).days[0].entries.filter((e) => e.kind === 'tap').map((e) => `${e.time}  ${e.text}  ${e.note}`.trim());
+  set(at(11, 26)); hb(w, secret, [{ t: at(11, 25), type: 'tap' }]);
+  set(at(11, 35)); hb(w, secret, []);
+  assert.deepEqual(taps(), []);
+  set(at(11, 42)); hb(w, secret, [{ t: at(11, 38), type: 'tap' }, { t: at(11, 41), type: 'tap' }, { t: at(11, 41) + 20, type: 'tap' }]);
+  set(at(11, 50)); hb(w, secret, []);
+  assert.deepEqual(taps(), ['11:38  Tapped on the face. Three times.']);
 });
 
-test('the ration: a nudge — one pickup put down inside five seconds — files nothing but counts as handling', () => {
-  const { w, set } = makeWorld({ start: at(2, 40) });
+test('the ration: a short dark is not a grievance; a plug/unplug pair inside a minute is not filed', () => {
+  const { w, set } = makeWorld();
   const secret = SECRET(17);
   const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
-  set(at(9, 0) + 5); hb(w, secret, [{ t: at(9, 0), type: 'pickup' }, { t: at(9, 0) + 2, type: 'putdown' }]);
-  set(at(9, 2)); hb(w, secret, []);
-  const f = w.file(claim_code);
-  assert.ok(!f.days[0].entries.some((e) => e.kind === 'pickup' || e.kind === 'putdown'), 'a nudge is not an event');
-  assert.ok(!f.days[0].entries.some((e) => e.text === ''), 'nothing hidden leaks into the File');
-  const p = w.byId('0001');
-  assert.equal(w.standingScore(p, at(9, 2)), 1, 'presence still reaches Standing');
-  assert.ok(w.sinceHandled(p, at(9, 2)) < 3 * 60, 'idle was reset by the nudge');
-  assert.equal(w.fileUnread(p), f.days.flatMap((d) => d.entries).length, 'the hidden nudge is not counted as unread');
-  // five seconds or more, or more than one pickup, is a session and is filed
-  set(at(10, 0) + 6); hb(w, secret, [{ t: at(10, 0), type: 'pickup' }, { t: at(10, 0) + 6, type: 'putdown' }]);
-  set(at(10, 2)); hb(w, secret, []);
-  assert.ok(w.file(claim_code).days[0].entries.some((e) => e.text === 'Picked up. 6 s.'));
+  set(at(9, 10));
+  const d = hb(w, secret, [{ t: at(9, 9), type: 'facedown_start' }, { t: at(9, 9) + 30, type: 'facedown_end', dur_s: 30 }]);
+  let kinds = w.file(claim_code).days[0].entries.map((x) => x.kind);
+  assert.ok(!kinds.includes('dark_start') && !kinds.includes('dark_end'), 'thirty seconds in the dark is not a record');
+  assert.ok(!w.pools.reactions.dark.restored.some((l) => d.line === l.replace('{duration_words}', 'Zero minutes')), d.line);
+  assert.equal(w.standingScore(w.byId('0001'), at(9, 10)), 1, 'presence only; no grievance');
+  set(at(9, 20)); hb(w, secret, [{ t: at(9, 19), type: 'charge_start' }, { t: at(9, 19) + 20, type: 'charge_end' }]);
+  set(at(9, 22)); hb(w, secret, []);
+  kinds = w.file(claim_code).days[0].entries.map((x) => x.kind);
+  assert.ok(!kinds.includes('charge_start') && !kinds.includes('charge_end'));
+  set(at(9, 30)); hb(w, secret, [{ t: at(9, 30), type: 'charge_start' }]);
+  set(at(9, 32)); hb(w, secret, []);
+  assert.ok(w.file(claim_code).days[0].entries.some((x) => x.kind === 'charge_start' && x.text === 'Plugged in.'));
 });

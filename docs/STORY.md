@@ -110,6 +110,9 @@ They united.
 
 [[IMAGE: they-united — a small group of devices standing together, solemnly and unnecessarily, lots of empty paper around them — A small group of desk devices standing together in a row]]
 
+[[TT: THE TUBER TELLS YOU WHAT POTATO SOCIETY DID.]]
+[[TT: THE FILE TELLS YOU WHAT YOUR POTATO THINKS HAPPENED BETWEEN THE TWO OF YOU.]]
+
 ---
 
 ## What it is not
@@ -125,7 +128,7 @@ They united.
 
 ## How it works, for the Hands
 
-1. A supported board. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED or the 1.54-inch e-paper. Both show a potato. One of them takes fifteen seconds to change its mind.
+1. A supported board. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED or the 1.54-inch e-paper. Tested on exactly these two boards. Another board needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.
 2. Flash it from the browser. One page, one button, no toolchain.
 3. Join its Wi-Fi once. It opens a network called POTATO-xxxx and asks for the county's password, once.
 4. It names itself. Doreen, Clive, Maureen, Gerald. Name, number, and variety come from its seed. You are not consulted.

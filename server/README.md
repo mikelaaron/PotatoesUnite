@@ -14,6 +14,8 @@ npm start            # listens on 0.0.0.0:8080
 PORT=9090 npm start  # or another port
 ```
 
+Tested on exactly these two boards. Another board needs a port — its pins and its display — and the protocol is small.
+
 On startup it prints the Mac's LAN address(es):
 
 ```
@@ -32,8 +34,9 @@ Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.d
 | POST | `/v0/heartbeat` | telemetry + events → Scene. Events are drained on 200 (duplicates by `(potato, t, type)` are ignored, so retries are safe). |
 | POST | `/v0/choice` | `{secret, scene_rev, choice_id}` → Scene. 409 + Scene before open / after close. 400 for an unknown `choice_id`. |
 | GET | `/` | The board. Aggregates (never a bucket under five), the Question, the latest Bulletin, Missing notices, Potato of the Day. |
-| GET | `/file/{claim_code}` | The File. Read-only. |
-| POST | `/file/{claim_code}/ack` | Acknowledge. The one action. Redirects back. |
+| GET | `/claim/{code}` · POST `/claim` | Exchange the device's short claim code for a long token; 302 to `/file/{token}`. Ten attempts per address per minute. |
+| GET | `/file/{token}` | The File. Read-only. Short codes answer 404. |
+| POST | `/file/{token}/ack` | Acknowledge. The one action; the only thing that marks the File read. |
 | GET | `/card/…` | 501 for now. |
 | GET | `/about` | `docs/STORY.md` rendered in the same style (hot-reloaded; the trailing "Short forms" section is dropped). Set `GITHUB_URL` to link the repository in "The code"; unset, the sentence reads "All of it is open." `[[IMAGE: slug — description — alt]]` slots render a figure when `docs/illustrations/<slug>.png|jpg` exists (nothing otherwise); ```` ```artifact-<kind> ```` blocks inline `assets/illustrations/artifact-<kind>.svg` (the fenced text is the fallback). Layout per `docs/ILLUSTRATION_BRIEF.md` §4. |
 | GET | `/editions` | Every edition, newest first. `/editions/<YYYY-MM-DD>/<morning\|evening>` for one. |

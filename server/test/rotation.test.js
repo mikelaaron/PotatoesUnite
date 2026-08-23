@@ -57,3 +57,33 @@ test('the rotation never repeats the previous slot when it has a choice, and the
   assert.ok(a.rev < b.rev && b.rev < c.rev, `revs ${a.rev} ${b.rev} ${c.rev}`);
   set(at(7, 30)); assert.equal(beat().rev, c.rev, 'within a slot the rev is stable');
 });
+
+test('a device that re-posts the same choice every heartbeat: the ack shows once, for ten minutes', () => {
+  const { w, set } = makeWorld({ start: at(12, 50) });
+  const secret = SECRET(93);
+  w.register({ secret, board: 'epaper154', fw: '0.1.0' });
+  const beat = () => w.heartbeat({ secret, rev_seen: 0, battery: { pct: 80 }, orientation: 'up', since_handled_s: 99999, sound: 'quiet', temp_c: 31, utc_offset_min: -240, events: [] });
+  set(at(15, 14)); beat();
+  const first = w.choice({ secret, scene_rev: 1, choice_id: 'hunts' });
+  assert.equal(first.scene.line, "Hunt's. Noted.");
+  const voteT = w.store.get('SELECT t FROM votes WHERE potato_id = ?', '0001').t;
+  const q = w.questionFor('2026-08-25');
+  for (let t = at(15, 16); t <= at(16, 16); t += 120) {
+    set(t);
+    const s = beat();
+    const r = w.choice({ secret, scene_rev: s.rev, choice_id: 'hunts' }); // the device re-posts
+    assert.equal(r.status, 200);
+    assert.equal(w.store.get('SELECT t FROM votes WHERE potato_id = ?', '0001').t, voteT, 'the same choice again is not a new vote');
+    if (t < at(15, 24)) assert.equal(s.line, "Hunt's. Noted.", `ack holds at ${new Date(t * 1000).toISOString()}`);
+    else {
+      assert.notEqual(s.line, "Hunt's. Noted.", `ack must be gone at ${new Date(t * 1000).toISOString()}`);
+      assert.notEqual(s.line, q.text, 'never back to the Question text after voting');
+      assert.ok(s.line.length > 0, 'the rotation speaks');
+    }
+    assert.equal(s.choices.length, 3, 'the buttons stay while the Question is open, so a re-vote is possible');
+  }
+  set(at(16, 20));
+  const changed = w.choice({ secret, scene_rev: 1, choice_id: 'heinz' });
+  assert.equal(changed.scene.line, 'Heinz. Noted.', 'a different choice is a new vote and gets its own acknowledgement');
+  assert.notEqual(w.store.get('SELECT t FROM votes WHERE potato_id = ?', '0001').t, voteT);
+});

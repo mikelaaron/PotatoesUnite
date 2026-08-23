@@ -109,6 +109,7 @@ export function renderMarkdown(md, { illustrationsDir = null, artifactsDir = nul
       continue;
     }
     if ((m = line.match(/^```([\w-]*)\s*$/))) { flushPara(); flushList(); fence = { info: m[1], lines: [] }; continue; }
+    if ((m = line.match(/^\[\[TT:\s*(.*?)\s*\]\]$/))) { flushPara(); flushList(); out.push(`<p class="tt">${escapeHtml(m[1])}</p>`); continue; }
     if ((m = line.match(/^\[\[IMAGE:\s*([a-z0-9-]+)\s+—\s+(.*?)\s+—\s+(.*?)\s*\]\]$/))) {
       flushPara(); flushList();
       const ill = findIllustration(illustrationsDir, m[1]);

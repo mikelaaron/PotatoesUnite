@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { HttpError } from './world.js';
-import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions } from './pages.js';
+import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions, renderAcknowledged } from './pages.js';
 import { storyToHtml, mimeFor, findIllustration } from './markdown.js';
 
 const BODY_LIMIT = 64 * 1024;
@@ -29,7 +29,41 @@ const html = (res, status, body, extra = {}) => {
   res.end(res.headOnly ? undefined : body);
 };
 
-export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '', tuberUrl = '', log = () => {} }) {
+const NO_SUCH_CODE = 'The Council has no record of that claim code.';
+const TOO_MANY = 'The Council is not taking further attempts from you this minute.';
+
+// Ten claim attempts per address per minute. In memory; the Council keeps no longer record of who tried.
+function limiter(max = 10, windowS = 60) {
+  const seen = new Map();
+  return (ip, now = Date.now() / 1000) => {
+    const arr = (seen.get(ip) || []).filter((t) => now - t < windowS);
+    arr.push(now); seen.set(ip, arr);
+    if (seen.size > 10000) for (const [k, v] of seen) if (!v.some((t) => now - t < windowS)) seen.delete(k);
+    return arr.length <= max;
+  };
+}
+
+function readForm(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', (c) => { size += c.length; if (size > 4096) { reject(new HttpError(413, 'body too large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Object.fromEntries(new URLSearchParams(Buffer.concat(chunks).toString('utf8')))));
+    req.on('error', reject);
+  });
+}
+
+export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '', tuberUrl = '', log = () => {}, claimLimit = limiter() }) {
+  // The short code on the device buys a long token; the File lives at the token. Never at the code.
+  function claim(req, res, code) {
+    const ip = (req.socket && req.socket.remoteAddress) || '?';
+    if (!claimLimit(ip)) return html(res, 429, renderMessage('NOT NOW', TOO_MANY), { 'retry-after': '60' });
+    const p = world.byClaim(String(code || '').trim().toUpperCase());
+    if (!p) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
+    const token = world.mintToken(p);
+    res.writeHead(302, { location: `/file/${token}`, 'cache-control': 'no-store' });
+    res.end();
+  }
+
   // docs/illustrations, read-only, one hour of cache. Names are slugs only; nothing else is reachable.
   function illustration(res, name) {
     const m = name.match(/^([a-z0-9-]+)\.(png|jpg|jpeg|webp)$/);
@@ -72,17 +106,24 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
     let fm = p.match(/^\/illustrations\/([^/]+)$/);
     if (m === 'GET' && fm) return illustration(res, fm[1]);
 
-    fm = p.match(/^\/file\/([A-Za-z0-9-]{3,16})$/);
+    fm = p.match(/^\/claim\/([^/]{1,16})$/);
+    if (m === 'GET' && fm) return claim(req, res, decodeURIComponent(fm[1]));
+    if (m === 'POST' && p === '/claim') return claim(req, res, (await readForm(req)).code);
+
+    fm = p.match(/^\/file\/([a-f0-9]{48})$/);
     if (m === 'GET' && fm) {
       const f = world.file(fm[1]);
-      if (!f) return html(res, 404, renderMessage('NO SUCH FILE', 'The Council has no record of that claim code.'));
+      if (!f) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
+      f.key = fm[1];
       return html(res, 200, renderFile(f));
     }
-    fm = p.match(/^\/file\/([A-Za-z0-9-]{3,16})\/ack$/);
+    fm = p.match(/^\/file\/([a-f0-9]{48})\/ack$/);
     if (m === 'POST' && fm) {
-      if (!world.ack(fm[1])) return html(res, 404, renderMessage('NO SUCH FILE', 'The Council has no record of that claim code.'));
-      return html(res, 303, '', { location: `/file/${fm[1].toUpperCase()}` });
+      const line = world.ack(fm[1]);
+      if (!line) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
+      return html(res, 200, renderAcknowledged(line));
     }
+    if (p.startsWith('/file/')) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE)); // short codes no longer resolve
     if (p.startsWith('/card/')) return json(res, 501, { error: 'cards are not printed yet. The Tuber is hiring.' });
     if (p === '/favicon.ico') { res.writeHead(204); return res.end(); }
     if (p.startsWith('/v0/')) return json(res, 404, { error: 'no such endpoint' });

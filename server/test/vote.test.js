@@ -33,7 +33,7 @@ test('present Hands: the choice is recorded and the File says Hands present', ()
   const r = w.choice({ secret, scene_rev: s.rev, choice_id: 'hunts' });
   assert.equal(r.status, 200);
   assert.equal(r.scene.line, "Hunt's. Noted.");
-  assert.equal(r.scene.choices.length, 0, 'no buttons after voting');
+  assert.equal(r.scene.choices.length, 3, 'the buttons stay while the Question is open; a re-vote is possible');
   const r2 = w.choice({ secret, scene_rev: s.rev, choice_id: 'heinz' });
   assert.equal(r2.scene.line, 'Heinz. Noted.', 're-tapping before the close changes the vote');
 });

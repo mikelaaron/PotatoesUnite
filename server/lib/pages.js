@@ -3,6 +3,7 @@
 // Times are rendered in UTC; a tiny inline script adds the viewer's local time and keeps the countdown current.
 import { escapeHtml as h, fewerThanFive } from './text.js';
 import { hm, dayHeader, dayStart } from './clock.js';
+import { potatoSvg } from './portrait.js';
 
 const CSS = `
 :root { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d7462; --bar: #1c1a16; --barbg: #d9cfb2; --wash: #e6dcc2;
@@ -60,9 +61,27 @@ footer { clear: both; margin-top: 2.5rem; border-top: 1px solid var(--rule); pad
 /* editions archive */
 .edition { margin: 1.4rem 0 2rem; }
 .edition h2 { margin-bottom: .2rem; }
+/* the claim form */
+.claim { margin: 1.6rem 0 0; }
+.claim label { display: block; color: var(--faint); letter-spacing: .2em; text-transform: uppercase; margin-bottom: .3rem; }
+.claim input { font-family: var(--tt); font-size: 1.2em; letter-spacing: .12em; text-transform: uppercase; width: 9ch; background: var(--wash); color: var(--ink); border: 1.5px solid var(--rule); padding: .25rem .5rem; }
+.claim button { margin-left: .5rem; font-size: 1em; padding: .3rem 1rem; }
 /* the File */
-.file-head { border-bottom: 4px double var(--rule); padding-bottom: .5rem; margin-bottom: .5rem; }
-.file-head h1 { font-size: 1.5em; margin: 0; letter-spacing: .04em; word-break: break-word; }
+.file-head { border-bottom: 4px double var(--rule); padding-bottom: .8rem; margin-bottom: .5rem; }
+.file-head .portrait { display: block; margin: 0 0 .6rem; }
+.file-head h1 { font-size: 2.2em; margin: 0; letter-spacing: .06em; line-height: 1; }
+.file-head .id { margin: .1rem 0 .6rem; color: var(--faint); letter-spacing: .08em; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: .1rem 1.2rem; margin: .4rem 0; }
+.facts dt { color: var(--faint); letter-spacing: .15em; }
+.facts dd { margin: 0; letter-spacing: .04em; }
+.aside { color: var(--faint); margin: .1rem 0 .6rem; }
+.since { margin: .6rem 0 0; letter-spacing: .06em; }
+.matters .entry { grid-template-columns: 9.5rem 1fr; }
+@media (min-width: 40rem) { .matters .entry { grid-template-columns: 9.5rem minmax(0, 1fr) minmax(0, 40%); } }
+.marker { color: #B4281E; letter-spacing: .2em; margin: .6rem 0 .2rem; }
+.boundary { border: 0; border-top: 1px solid var(--rule); margin: .4rem 0 .6rem; }
+.acked { text-align: center; font-size: 1.6em; letter-spacing: .1em; margin: 4rem 0; }
+.file-foot { letter-spacing: .06em; }
 .day { margin-top: 1.2rem; }
 .day h2 { margin-bottom: .2rem; }
 .entry { display: grid; grid-template-columns: 4.2rem 1fr; gap: 0 .6rem; padding: .12rem 0; }
@@ -204,7 +223,8 @@ function editionHtml(b, { link = false } = {}) {
   return `<article class="edition"><h2>${link ? `<a href="/editions/${h(b.day)}/${h(b.edition)}">${h(when)}</a>` : h(when)}</h2>
 <div class="small">No. ${h(b.no)}</div>
 <p class="head">${withTimes(b.headline, b.t)}</p>
-<ul class="items">${b.items.map((i) => `<li>${withTimes(i, b.t)}</li>`).join('')}</ul></article>`;
+<ul class="items">${b.items.map((i) => `<li>${withTimes(i, b.t)}</li>`).join('')}</ul>
+<div class="small">Issued by The Tuber.</div></article>`;
 }
 
 function ballotHtml(b) {
@@ -249,7 +269,7 @@ export function renderBoard(b, { tuberUrl = '' } = {}) {
   const bulletin = b.bulletin
     ? `<h2>The Bulletin · ${h(String(b.bulletin.edition).toUpperCase())}</h2><div class="small">No. ${h(b.bulletin.no)}</div>${doc}
 <p class="head">${withTimes(b.bulletin.headline, b.bulletin.t)}</p>
-<ul class="items">${b.bulletin.items.map((i) => `<li>${withTimes(i, b.bulletin.t)}</li>`).join('')}</ul>`
+<ul class="items">${b.bulletin.items.map((i) => `<li>${withTimes(i, b.bulletin.t)}</li>`).join('')}</ul><div class="small">Issued by The Tuber.</div>`
     : `<h2>The Bulletin</h2>${doc}<p class="muted">No Bulletin yet. The press is warming up.</p>`;
   const earlier = b.earlier && b.earlier.length
     ? `<h2>Earlier editions</h2><ul class="editions">${b.earlier.map((e) => `<li><a href="/editions/${h(e.day)}/${h(e.edition)}">${h(dayHeader(e.t))} · ${h(String(e.edition).toUpperCase())} — ${h(e.headline)}</a></li>`).join('')}</ul>`
@@ -269,6 +289,7 @@ ${earlier}
 ${agg}
 ${missing}
 ${potd}
+<form class="claim" method="post" action="/claim"><label class="tt" for="claim-code">Claim your File</label><input id="claim-code" name="code" maxlength="8" placeholder="BRK-7H2" autocomplete="off" spellcheck="false"><button type="submit">Open</button></form>
 ${footer({ tuberUrl })}`);
 }
 
@@ -285,22 +306,51 @@ export function renderFile(f) {
   const title = `${f.name.toUpperCase()} #${f.id} · ${f.variety.name.toUpperCase()} · STANDING: ${f.standing.toUpperCase()}`;
   const live = !f.offsetKnown;
   const tAttr = (t) => (live ? ` data-utc="${Math.round(t)}" data-local-24` : '');
-  const days = f.days.length ? f.days.map((d) => `<section class="day"><h2>${h(d.header)}</h2>
-${d.entries.map((e) => `<div class="entry${e.unread ? ' unread' : ''}"${live ? ` data-utc="${Math.round(e.t)}"` : ''}><span class="t"${tAttr(e.t)}>${h(e.time)}</span><span class="txt">${h(e.text)}</span><span class="note">${h(e.note)}</span></div>`).join('\n')}
+  const entry = (e) => `<div class="entry${e.unread ? ' unread' : ''}"${live ? ` data-utc="${Math.round(e.t)}"` : ''}><span class="t"${tAttr(e.t)}>${h(e.time)}</span><span class="txt">${h(e.text)}</span><span class="note">${h(e.note)}</span></div>`;
+  // THE RECORD, newest first. The new entries come first; a rule marks where they end.
+  let boundaryDone = f.unread === 0;
+  const days = f.days.length ? f.days.map((d) => {
+    const rows = d.entries.map((e) => {
+      let pre = '';
+      if (!boundaryDone && !e.unread) { boundaryDone = true; pre = '<hr class="boundary">'; }
+      return pre + entry(e);
+    }).join('\n');
+    return `<section class="day"><h2>${h(d.header)}</h2>
+${rows}
 ${d.withheld ? `<div class="withheld"${live ? ` data-utc="${Math.round(dayStart(d.t) + 43200)}"` : ''}>${h(f.withheldText)}</div>` : ''}
-</section>`).join('\n') : `<p class="muted">${h(f.emptyText)}</p>`;
+</section>`;
+  }).join('\n') : `<p class="muted">${h(f.emptyText)}</p>`;
+  const matters = f.matters.length
+    ? f.matters.map((m) => `<div class="entry${m.unread ? ' unread' : ''}"><span class="t">${h(m.day)} ${h(m.time)}</span><span class="txt">${h(m.text)}</span><span class="note">${h(m.note)}</span></div>`).join('\n')
+    : `<p class="muted">${h(f.mattersEmpty)}</p>`;
+  const neighbor = f.neighbor ? `${f.neighbor.name.toUpperCase()} #${f.neighbor.id}${f.neighbor.tags.map((x) => ` · ${x}`).join('')}` : f.neighborLine.toUpperCase();
   return layout(title, `
 <header class="file-head">
-<h1>${h(f.name.toUpperCase())} #${h(f.id)} · ${h(f.variety.name.toUpperCase())} · STANDING: ${h(f.standing.toUpperCase())}${f.sprouted ? '<span class="sprout" title="Sprouted">⌇</span>' : ''}</h1>
-<p>${h([f.neighborLine, f.curing ? 'Curing.' : '', f.sprouted ? 'Sprouted.' : ''].filter(Boolean).join(' '))}</p>
-<p class="muted"><span${live ? ' data-tz-note' : ''}>${f.offsetKnown ? 'Times are local to the potato.' : 'Times are UTC.'}</span>${f.unread ? ` ${f.unread} unread.` : ''}</p>
+${potatoSvg(f.variety, f.seed, { name: f.name, expression: f.expression, sprouted: f.sprouted, size: 120 })}
+<h1>${h(f.name.toUpperCase())}</h1>
+<p class="tt id">#${h(f.id)} · ${h(f.variety.name.toUpperCase())}${f.curing ? ' · CURING' : ''}${f.sprouted ? ' · SPROUTED' : ''}</p>
+<dl class="facts tt"><dt>Standing</dt><dd>${h(f.standing.toUpperCase())}</dd><dt>Current neighbor</dt><dd>${h(neighbor)}</dd></dl>
+${f.neighborAside ? `<p class="aside">${h(f.neighborAside)}</p>` : ''}
+<p class="tt since">${h(f.sinceLine)}</p>
+<p class="muted"><span${live ? ' data-tz-note' : ''}>${f.offsetKnown ? 'Times are local to the potato.' : 'Times are UTC.'}</span></p>
 </header>
+<h2>Matters of record</h2>
+<div class="matters">
+${matters}
+</div>
+<form class="ack" method="post" action="/file/${h(f.key)}/ack"><button type="submit">Acknowledge</button></form>
+<p class="ack-note">It does nothing except mark that the Hands have read it. The potato will know.</p>
+<h2>The record</h2>
+${f.unread ? `<p class="tt marker">${h(f.newMarker)}</p>` : ''}
 <div${live ? ' data-file-utc' : ''}>
 ${days}
 </div>
-<form class="ack" method="post" action="/file/${h(f.claim_code)}/ack"><button type="submit">Acknowledge</button></form>
-<p class="ack-note">It does nothing except mark that the Hands have read it. The potato will know.</p>
-<footer>Read-only. ${h(PRIVACY_LONG)}</footer>`);
+<footer class="tt file-foot">${h(f.footer)}</footer>`);
+}
+
+// After POST /file/<token>/ack: one line, nothing else.
+export function renderAcknowledged(line) {
+  return layout('Acknowledged', `<p class="tt acked">${h(line)}</p>`);
 }
 
 // GET /about — docs/STORY.md, already converted to HTML.
