@@ -182,7 +182,17 @@ static bool otaDownload(const char *url, const char *shaHex, size_t size) {
 
 // Call from the net task loop, often; it rate-limits itself.
 static void otaTick(bool online) {
-  if (!online || ota.busy || ota.ready) return;
+  if (!online || ota.busy) return;
+  if (ota.ready) {
+    // By design: a verified image already waits in the other slot and the
+    // boot partition points at it. A newer manifest is picked up by the
+    // next daily check after that reboot. Say so rather than go quiet.
+    if (ota.checkRequested) {
+      ota.checkRequested = false;
+      USBSerial.printf("ota: update %s pending reboot; check skipped\n", ota.version);
+    }
+    return;
+  }
   const uint32_t now = millis();
   if (!ota.checkRequested) {
     if (!ota.everChecked && now < OTA_FIRST_CHECK_MS) return;

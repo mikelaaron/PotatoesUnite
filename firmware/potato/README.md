@@ -169,6 +169,10 @@ All blits are even-aligned; telemetry prints `ODD!` if one is not.
 2. Publish the manifest: `cd server && npm run release -- <board-id>
    data/releases/<board-id>/<version>.bin <version> "one line of notes"`.
    `/v0/firmware` then serves it; devices check daily (serial `u` now).
-3. Watch the heartbeats' `fw` field flip. A device that never heartbeats on
+3. While a downloaded update is waiting for its quiet moment, further checks
+   (daily or `u`) are skipped by design and say `ota: update <v> pending
+   reboot; check skipped`; a newer manifest is taken on the next check after
+   that reboot.
+4. Watch the heartbeats' `fw` field flip. A device that never heartbeats on
    the new version rolled back. **Never flash a release by USB to test it** —
    that bypasses the OTA path you are trying to prove.
