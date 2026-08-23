@@ -14,12 +14,14 @@ Taken: @potatoesunite (a dormant 2010 account, no posts, no followers; X does no
 
 **Display name:** The Tuber · **Location:** The Net · **Website:** `{SITE_URL}/about` (404 today; build it first).
 
-**Bio** (147 chars with `potatoesunite.net/about`):
-> Paper of record of the Potato Council. The Question, the Count, the Bulletin, the Hands. Potatoes are named. Hands are not. {SITE_URL}/about
+**Bio** (merged with the third-party suggestion, 23 Aug; ≤160 with the link):
+> Reports from the Net, issued by the Council. Potatoes are named. Hands are not. Complaints are retained. {SITE_URL}/about
+
+(Alternative kept: "Paper of record of the Potato Council. The Question, the Count, the Bulletin, the Hands. Potatoes are named. Hands are not.")
 
 **Avatar:** the neutral potato from `assets/potato-look-v1.svg` (panel 1) on paper `#EFE6D3`, not black. Square crop, body centered, lying down, 75% of the width, Russet brown, underside shade, four dimples, two oval eyes, no text.
 
-**Header** (1500×500): the masthead as on the Net page. Paper ground, double rules, THE TUBER in VT323, *PAPER OF RECORD OF THE POTATO COUNCIL* letter-spaced beneath. Nothing else.
+**Header** (1500×500, owner-made): warm paper ground; POTATOES UNITE! on the left with *REPORTS FROM THE NET. ISSUED BY THE COUNCIL.* beneath; the Council-table illustration on the right; one restrained red stamp reading THE TUBER (the paper's name — each edition is "Bulletin No. N"); no statistics, no dense copy.
 
 **Bluesky and Mastodon:** yes, claim both today with the same name, bio, avatar, header and pin; post nothing there. Free on all three now, not later.
 
