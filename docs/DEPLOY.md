@@ -14,8 +14,10 @@ from `server/` boots and looks healthy, but `/about` loses its story and every i
    `railway add --service net --variables "DB_PATH=/data/potatoes.db" --variables "TUBER_URL=https://x.com/IssuedByCouncil"`,
    then `railway volume add -m /data`. Railway injects `PORT`; the server honors it.
 3. `railway up --detach --service net` — again from the repo root.
-4. `railway domain` mints the `*.up.railway.app` URL. Attach the purchased domain in the
-   dashboard: service → Settings → Domains. Set `GITHUB_URL` when the repo goes public.
+4. `railway domain` mints the `*.up.railway.app` URL. The purchased domain is
+   **potatoesunite.com** (registered on Railway, Railway-managed DNS, renews 2027-07-24);
+   `railway domain potatoesunite.com --service net` attached it and Railway synced the CNAME and
+   certificate itself within a minute. Set `GITHUB_URL` when the repo goes public.
 
 CLI footguns, learned the hard way (23 Aug):
 - The project link is **per-directory**. `railway up` from an unlinked directory silently creates

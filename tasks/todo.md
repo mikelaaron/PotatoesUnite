@@ -65,7 +65,7 @@ Firmware-only extras: morning pool (first spoken pick-up 04–12 local) and rest
 ## Public launch checklist (23 Aug evening)
 - [x] Host: Railway chosen; domain purchased there (name TBD in docs). Deploy per docs/DEPLOY.md; needs the repo on GitHub or `railway up`.
 - [x] **LIVE (23 Aug night): https://net-production-c30f.up.railway.app** — project `potatoes-unite`, service `net`, volume at /data (DB_PATH), TUBER_URL set; deployed from the repo root (the server reads ../docs and ../assets — see DEPLOY.md, including the CLI footguns that cost one project deletion and a rebuild). /about carries the story, six compressed illustrations, and @IssuedByCouncil in the body and every footer. This Net starts empty by design; Doreen stays on the LAN until firmware 0.3.0 (HTTPS).
-- [ ] Attach the purchased domain (name known to the owner) to service `net`: dashboard → service → Settings → Domains, or `railway domain <name>`. Then record the name in docs.
+- [x] **https://potatoesunite.com** attached to service `net` (23 Aug); Railway-managed DNS synced the CNAME and issued the certificate automatically. Board masthead: THE TUBER is a nameplate (1.8em, ink, no link); the X link lives in the footers.
 - [ ] /flash page (ESP Web Tools, in progress) + webflash merged binaries (in progress) + FLASH_WITH_AN_AGENT.md (in progress).
 - [ ] Firmware 0.3.0: HTTPS for heartbeat/OTA (planned in PROTOCOL notes) — required before devices use a public server.
 - [ ] GitHub public (delete site/.openai/hosting.json first) → set GITHUB_URL.
