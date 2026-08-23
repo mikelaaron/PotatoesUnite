@@ -14,7 +14,7 @@ SKETCH ?= potato
 CANDIDATES := $(shell arduino-cli board list 2>/dev/null | awk '/^\/dev\/cu\.(usbmodem|usbserial|wchusbserial|SLAB)/ {print $$1}')
 PORT   ?= $(if $(filter 1,$(words $(CANDIDATES))),$(CANDIDATES),)
 
-.PHONY: build upload monitor ports libs marble-sim come-here-sim clean
+.PHONY: build upload monitor ports libs marble-sim come-here-sim clean release
 
 # Arduino_GFX chunks QSPI transfers into ESP32QSPI_MAX_PIXELS_AT_ONCE-pixel
 # pieces, defaulting to 1024 — a 2KB staging memcpy plus a transaction setup per
@@ -122,3 +122,34 @@ paper-preview:
 
 paper-portrait:
 	python3 tools/make_portrait.py > paper/portrait.h
+
+# ----------------------------------------------------------- release ---
+# make release BOARD=potato|paper — builds the board's app .bin and copies it
+# to server/data/releases/<board-id>/<version>.bin (board ids: amoled18,
+# epaper154; version from <board>/version.h), printing size and sha256.
+# Then the server agent's `npm run release -- <id> <bin> <version> "notes"`
+# writes the manifest /v0/firmware serves. Never flash a release by USB to
+# test OTA; that is what OTA is for.
+RELEASE_DIR ?= $(CURDIR)/../server/data/releases
+
+release:
+	@test -n "$(BOARD)" || { echo "usage: make release BOARD=potato|paper"; exit 1; }
+	@set -e; \
+	case "$(BOARD)" in \
+	  potato) ID=amoled18; FQ="$(FQBN)"; FLAGS="$(EXTRA_FLAGS)"; SLOT=3145728;; \
+	  paper)  ID=epaper154; FQ="$(PAPER_FQBN)"; FLAGS="-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI)"; SLOT=2621440;; \
+	  *) echo "BOARD must be potato or paper"; exit 1;; \
+	esac; \
+	VER=$$(sed -n 's/.*#define FW_VERSION "\(.*\)".*/\1/p' $(BOARD)/version.h); \
+	[ -n "$$VER" ] || { echo "no FW_VERSION in $(BOARD)/version.h"; exit 1; }; \
+	BP=$(CURDIR)/build/$(BOARD); mkdir -p $$BP; \
+	arduino-cli compile --fqbn $$FQ --build-property "compiler.cpp.extra_flags=$$FLAGS" --build-path $$BP $(BOARD) > $$BP/compile.log 2>&1 || { tail -30 $$BP/compile.log; exit 1; }; \
+	grep "Sketch uses" $$BP/compile.log; \
+	OUT=$(RELEASE_DIR)/$$ID; mkdir -p $$OUT; cp $$BP/$(BOARD).ino.bin $$OUT/$$VER.bin; \
+	SIZE=$$(stat -f%z $$OUT/$$VER.bin); SHA=$$(shasum -a 256 $$OUT/$$VER.bin | cut -d' ' -f1); \
+	[ $$SIZE -le $$SLOT ] || { echo "TOO BIG: $$SIZE > slot $$SLOT"; exit 1; }; \
+	echo "release: $$OUT/$$VER.bin"; \
+	echo "board:   $$ID  version: $$VER"; \
+	echo "size:    $$SIZE bytes ($$((SIZE * 100 / SLOT))% of the $$SLOT-byte slot)"; \
+	echo "sha256:  $$SHA"; \
+	echo "next:    cd ../server && npm run release -- $$ID data/releases/$$ID/$$VER.bin $$VER \"notes\""

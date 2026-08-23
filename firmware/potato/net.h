@@ -42,7 +42,7 @@ static const char *BOARD_NAME = "amoled18";
 static const uint32_t HEARTBEAT_MS = 120000;
 static const uint32_t HTTP_TIMEOUT_MS = 8000;
 static const uint32_t PORTAL_TIMEOUT_S = 180;
-static const int SCENE_JSON_CAP = 2048;
+static const int SCENE_JSON_CAP = 4096;   // heartbeats already return ~1 KB; room for a bulletin
 
 extern HWCDC USBSerial;
 

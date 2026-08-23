@@ -46,7 +46,7 @@ static const char *BOARD_NAME = "epaper154";
 static const uint32_t HEARTBEAT_MS = 120000;
 static const uint32_t HTTP_TIMEOUT_MS = 8000;
 static const uint32_t PORTAL_TIMEOUT_S = 180;
-static const int SCENE_JSON_CAP = 4096;
+static const int SCENE_JSON_CAP = 8192;   // a Scene with a bulletin and choices can grow
 static const int SCENE_NVS_CAP = 3900;   // NVS strings top out near 4000 bytes
 
 extern HWCDC USBSerial;

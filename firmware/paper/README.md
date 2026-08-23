@@ -214,3 +214,17 @@ its own; the new image is marked valid after its first good heartbeat, else
 the bootloader rolls back. `ota.h` is an identical copy of the potato's.
 A `/v0/choice` is posted once per distinct (rev, option); repeating the same
 press count on the same Scene is not re-posted. NVS keys: `firmware/NVS.md`.
+
+## Releasing (OTA)
+
+1. Bump `version.h` (one line). Build a release bin:
+   `make -C firmware release BOARD=potato` (or `BOARD=paper`). It compiles
+   into `firmware/build/<board>/`, copies the app image to
+   `server/data/releases/<board-id>/<version>.bin` (`amoled18` / `epaper154`)
+   and prints its size, the slot headroom, and its sha256.
+2. Publish the manifest: `cd server && npm run release -- <board-id>
+   data/releases/<board-id>/<version>.bin <version> "one line of notes"`.
+   `/v0/firmware` then serves it; devices check daily (serial `u` now).
+3. Watch the heartbeats' `fw` field flip. A device that never heartbeats on
+   the new version rolled back. **Never flash a release by USB to test it** —
+   that bypasses the OTA path you are trying to prove.
