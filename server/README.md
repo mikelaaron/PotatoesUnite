@@ -22,7 +22,7 @@ POTATOES UNITE! The Net is open on http://0.0.0.0:8080
   db: /…/server/data/potatoes.db
 ```
 
-Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.db`; the `data/*.db*` files are git-ignored), `GITHUB_URL` (optional; linked from `/about`).
+Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.db`; the `data/*.db*` files are git-ignored), `GITHUB_URL` (optional; linked from `/about`), `TUBER_URL` (optional; the front-page footer adds "Editions are also issued on X.").
 
 ## Endpoints
 
@@ -36,6 +36,7 @@ Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.d
 | POST | `/file/{claim_code}/ack` | Acknowledge. The one action. Redirects back. |
 | GET | `/card/…` | 501 for now. |
 | GET | `/about` | `docs/STORY.md` rendered in the same style (hot-reloaded; the trailing "Short forms" section is dropped). Set `GITHUB_URL` to link the repository in "The code"; unset, the sentence reads "All of it is open." `[[IMAGE: slug — description — alt]]` slots render a figure when `docs/illustrations/<slug>.png|jpg` exists (nothing otherwise); ```` ```artifact-<kind> ```` blocks inline `assets/illustrations/artifact-<kind>.svg` (the fenced text is the fallback). Layout per `docs/ILLUSTRATION_BRIEF.md` §4. |
+| GET | `/editions` | Every edition, newest first. `/editions/<YYYY-MM-DD>/<morning\|evening>` for one. |
 | GET | `/illustrations/<slug>.png` | `docs/illustrations/`, read-only, slugs only, cached one hour. |
 | GET | `/health` | `{ok: true}` |
 
@@ -122,6 +123,6 @@ data/              questions, broadcasts, pools, the database
 test/              node --test
 ```
 
-The ration: the File is a record, not a motion log. Pickups, put-downs and taps within a minute of each other are one handling session and one entry (`Picked up. 31 s.` — `Repeatedly.` at three or more pickups), filed on the heartbeat or tick that sees the session go quiet for a minute. A dark or ceiling situation under a minute, a plug/unplug pair inside a minute, and a battery reading right after an unplug are not filed and not spoken; the raw events are still stored.
+The ration: the File is a record, not a motion log. Pickups, put-downs and taps within a minute of each other are one handling session and one entry (`Picked up. 31 s.` — `Repeatedly.` at three or more pickups), filed on the heartbeat or tick that sees the session go quiet for a minute. Lone taps within a minute of each other are likewise one `Tapped on the face.` (`Repeatedly.` at three or more). A single pickup put down inside five seconds is a nudge: nothing in the File, though it still counts as handling. A dark or ceiling situation under a minute, a plug/unplug pair inside a minute, and a battery reading right after an unplug are not filed and not spoken; the raw events are still stored.
 
 Determinism: a potato's seed is a hash of its device secret (so the first potato on a fresh Net is not always the same one); its name, variety, voice and absent votes come from the seed; the public number is sequential. Same seed + same events → same File. Scene `rev` only moves when the scene's content changes (the hash excludes `expires_at`), plus once per two-hour slot when the steady-state rotation chose the line, so an unhandled e-paper has something new to print.

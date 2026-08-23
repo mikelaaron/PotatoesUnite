@@ -2,8 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { HttpError } from './world.js';
-import { renderBoard, renderFile, renderMessage, renderAbout } from './pages.js';
-import { storyToHtml, mimeFor } from './markdown.js';
+import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions } from './pages.js';
+import { storyToHtml, mimeFor, findIllustration } from './markdown.js';
 
 const BODY_LIMIT = 64 * 1024;
 
@@ -29,7 +29,7 @@ const html = (res, status, body, extra = {}) => {
   res.end(res.headOnly ? undefined : body);
 };
 
-export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '', log = () => {} }) {
+export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '', tuberUrl = '', log = () => {} }) {
   // docs/illustrations, read-only, one hour of cache. Names are slugs only; nothing else is reachable.
   function illustration(res, name) {
     const m = name.match(/^([a-z0-9-]+)\.(png|jpg|jpeg|webp)$/);
@@ -52,8 +52,21 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
     if (m === 'POST' && p === '/v0/heartbeat') return json(res, 200, world.heartbeat(await readJson(req)));
     if (m === 'POST' && p === '/v0/choice') { const r = world.choice(await readJson(req)); return json(res, r.status, r.scene); }
 
-    if (m === 'GET' && p === '/') return html(res, 200, renderBoard(world.board()));
-    if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, illustrationsDir, artifactsDir })));
+    if (m === 'GET' && p === '/') {
+      const b = world.board();
+      const ill = b.incident ? findIllustration(illustrationsDir, b.incident) : null;
+      b.incidentSrc = ill ? ill.src : null;
+      return html(res, 200, renderBoard(b, { tuberUrl }));
+    }
+    if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, illustrationsDir, artifactsDir }), { tuberUrl }));
+    if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions(), { tuberUrl })); }
+    let em = p.match(/^\/editions\/(\d{4}-\d{2}-\d{2})\/(morning|evening)$/);
+    if (m === 'GET' && em) {
+      world.tick();
+      const e = world.bulletin(em[1], em[2]);
+      if (!e) return html(res, 404, renderMessage('NO SUCH EDITION', 'The Council did not print that one.'));
+      return html(res, 200, renderEditions([e], { single: true, tuberUrl }));
+    }
     if (m === 'GET' && p === '/health') return json(res, 200, { ok: true, t: world.now() });
 
     let fm = p.match(/^\/illustrations\/([^/]+)$/);

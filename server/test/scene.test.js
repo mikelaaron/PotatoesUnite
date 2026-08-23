@@ -133,6 +133,7 @@ test('the ration: thirty seconds of fumbling is one entry, not seven', () => {
     { t: T(0, 41), type: 'putdown' }, { t: T(0, 42), type: 'pickup' }, { t: T(0, 44), type: 'pickup' }, { t: T(0, 47), type: 'pickup' },
     { t: T(0, 48), type: 'charge_start' }, { t: T(0, 50), type: 'putdown' }, { t: T(2, 17), type: 'tap' },
   ], { battery: { pct: 63, charging: true, vbus: true } });
+  set(T(4, 30)); hb(w, secret, [], { battery: { pct: 63, charging: true, vbus: true } }); // the tap's own minute of quiet has passed
   const f = w.file(claim_code);
   const today = f.days.find((d) => d.header === 'TUE 25 AUG');
   const lines = today.entries.filter((e) => e.time >= '03:00').map((e) => `${e.time}  ${e.text}  ${e.note}`.trim());
@@ -171,4 +172,36 @@ test('the ration: a session is filed on the heartbeat that sees it close; a shor
   set(at(9, 30)); hb(w, secret, [{ t: at(9, 30), type: 'charge_start' }]);
   set(at(9, 32)); hb(w, secret, []);
   assert.ok(w.file(claim_code).days[0].entries.some((x) => x.kind === 'charge_start' && x.text === 'Plugged in.'));
+});
+
+test('the ration: lone taps within a minute are one entry; three or more say Repeatedly', () => {
+  const { w, set } = makeWorld({ start: at(2, 40) });
+  const secret = SECRET(16);
+  const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
+  const T = (m, s) => at(11, m) + s;
+  set(T(42, 0));
+  const s = hb(w, secret, [{ t: T(38, 0), type: 'tap' }, { t: T(41, 0), type: 'tap' }, { t: T(41, 20), type: 'tap' }, { t: T(41, 45), type: 'tap' }]);
+  assert.ok(w.pools.reactions.tap.includes(s.line), 'the first tap of a run speaks');
+  set(T(43, 0)); hb(w, secret, []);
+  const lines = w.file(claim_code).days[0].entries.filter((e) => e.kind === 'tap').map((e) => `${e.time}  ${e.text}  ${e.note}`.trim());
+  assert.deepEqual(lines, ['11:41  Tapped on the face.  Repeatedly.', '11:38  Tapped on the face.']);
+});
+
+test('the ration: a nudge — one pickup put down inside five seconds — files nothing but counts as handling', () => {
+  const { w, set } = makeWorld({ start: at(2, 40) });
+  const secret = SECRET(17);
+  const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
+  set(at(9, 0) + 5); hb(w, secret, [{ t: at(9, 0), type: 'pickup' }, { t: at(9, 0) + 2, type: 'putdown' }]);
+  set(at(9, 2)); hb(w, secret, []);
+  const f = w.file(claim_code);
+  assert.ok(!f.days[0].entries.some((e) => e.kind === 'pickup' || e.kind === 'putdown'), 'a nudge is not an event');
+  assert.ok(!f.days[0].entries.some((e) => e.text === ''), 'nothing hidden leaks into the File');
+  const p = w.byId('0001');
+  assert.equal(w.standingScore(p, at(9, 2)), 1, 'presence still reaches Standing');
+  assert.ok(w.sinceHandled(p, at(9, 2)) < 3 * 60, 'idle was reset by the nudge');
+  assert.equal(w.fileUnread(p), f.days.flatMap((d) => d.entries).length, 'the hidden nudge is not counted as unread');
+  // five seconds or more, or more than one pickup, is a session and is filed
+  set(at(10, 0) + 6); hb(w, secret, [{ t: at(10, 0), type: 'pickup' }, { t: at(10, 0) + 6, type: 'putdown' }]);
+  set(at(10, 2)); hb(w, secret, []);
+  assert.ok(w.file(claim_code).days[0].entries.some((e) => e.text === 'Picked up. 6 s.'));
 });

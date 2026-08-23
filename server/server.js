@@ -26,6 +26,7 @@ const server = http.createServer(createApp({
   illustrationsDir: path.join(docsDir, 'illustrations'),
   artifactsDir: path.join(here, '..', 'assets', 'illustrations'),
   githubUrl: process.env.GITHUB_URL || '',
+  tuberUrl: process.env.TUBER_URL || '',
 }));
 
 server.listen(PORT, HOST, () => {

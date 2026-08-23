@@ -8,7 +8,7 @@
   "ceiling_end": {"text": "Restored from the ceiling situation. {dur}.", "note_long": "Grievance filed.", "note": "Noted."},
   "shake": {"text": "Shaken.", "notes": ["Noted.", "Again.", "This is a pattern."]},
   "drop": {"text": "Dropped.", "note": "Incident reported to the Net."},
-  "tap": {"text": "Tapped on the face."},
+  "tap": {"text": "Tapped on the face.", "note_repeatedly": "Repeatedly."},
   "transit_start": {"text": "Transit."},
   "transit_end": {"text": "Settled. Transit {dur}.", "note": "This isn't the world."},
   "charge_start": {"text": "Plugged in.", "note": "Fed. In a sense."},

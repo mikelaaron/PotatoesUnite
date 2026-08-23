@@ -118,7 +118,7 @@ export class World {
       p.id, Math.round(t), kind, text, note || '', standing, Math.round(dur_s), withheld, this.now());
   }
 
-  fileUnread(p) { return this.store.get('SELECT COUNT(*) n FROM entries WHERE potato_id = ? AND t > ?', p.id, p.file_read_t || 0).n; }
+  fileUnread(p) { return this.store.get(`SELECT COUNT(*) n FROM entries WHERE potato_id = ? AND t > ? AND kind != 'nudge'`, p.id, p.file_read_t || 0).n; }
 
   standingScore(p, t, since = t - 14 * DAY) {
     return this.store.get('SELECT COALESCE(SUM(standing), 0) s FROM entries WHERE potato_id = ? AND t > ? AND t <= ?', p.id, since, t).s;
@@ -152,7 +152,7 @@ export class World {
     const t = this.now();
     const off = p.utc_offset_min || 0;
     const F = this.pools.file;
-    const rows = this.store.all('SELECT * FROM entries WHERE potato_id = ? ORDER BY t DESC, id DESC', p.id);
+    const rows = this.store.all(`SELECT * FROM entries WHERE potato_id = ? AND kind != 'nudge' ORDER BY t DESC, id DESC`, p.id);
     const days = [];
     for (const r of rows) {
       const key = C.localDayKey(r.t, off);
@@ -235,6 +235,7 @@ export class World {
   sinceHandled(p, t) {
     const st = p.st;
     if (st.session) return Math.max(0, t - st.session.last_t);
+    if (st.tapsess) return Math.max(0, t - st.tapsess.last_t);
     if (st.last_handled_t) return Math.max(0, t - st.last_handled_t);
     return Math.max(0, Math.min(t - p.created_t, (p.since_handled_s || 0) + (t - p.last_seen_t)));
   }
@@ -245,6 +246,7 @@ export class World {
   settle(p, now) {
     const st = p.st, F = this.pools.file;
     if (st.session && now - st.session.last_t > SESSION_GAP_S) this.closeSession(p);
+    if (st.tapsess && now - st.tapsess.last_t > SESSION_GAP_S) this.closeTaps(p);
     if (st.charge_pending && now - st.charge_pending.t > RATION_S) { this.fileCharge(p, st.charge_pending); st.charge_pending = null; }
     if (st.dark_since && !st.dark_filed && now - st.dark_since >= RATION_S) {
       this.addEntry(p, { t: st.dark_since, kind: 'dark_start', text: F.dark_start.text });
@@ -256,12 +258,33 @@ export class World {
     }
   }
 
+  // Lone taps within a minute of each other are one entry. "Repeatedly." at three or more.
+  closeTaps(p) {
+    const st = p.st, ts = st.tapsess, F = this.pools.file.tap;
+    st.tapsess = null;
+    if (!ts) return;
+    this.addEntry(p, { t: ts.start_t, kind: 'tap', text: F.text, note: ts.count >= 3 ? F.note_repeatedly : '', standing: ts.standing || 0 });
+    st.last_handled_t = Math.max(st.last_handled_t || 0, ts.last_t);
+    st.idle_mark = 0;
+    if (st.sprouted_t && !st.sprout_clear_t) st.sprout_clear_t = ts.last_t + DAY;
+  }
+
   // One entry per session: "Picked up. 24 s." — "Repeatedly." if it took three or more pickups.
+  // A single pickup put down within five seconds is a nudge, not an event: nothing in the File,
+  // but it still counts as handling (idle resets; presence reaches Standing through a hidden entry).
   closeSession(p) {
     const st = p.st, s = st.session, F = this.pools.file.pickup;
     st.session = null;
     if (!s) return;
     const dur = s.last_putdown_t ? Math.max(0, s.last_putdown_t - s.start_t) : 0;
+    const nudge = s.pickups === 1 && s.last_putdown_t && dur < 5;
+    if (nudge) {
+      if (s.standing) this.addEntry(p, { t: s.start_t, kind: 'nudge', text: '', standing: s.standing });
+      st.last_handled_t = Math.max(st.last_handled_t || 0, s.last_t);
+      st.idle_mark = 0;
+      if (st.sprouted_t && !st.sprout_clear_t) st.sprout_clear_t = s.last_t + DAY;
+      return;
+    }
     const h = C.hourOf(s.start_t, p.utc_offset_min || 0);
     let note = '';
     if (s.pickups >= 3) note = F.note_repeatedly;
@@ -347,6 +370,7 @@ export class World {
     const dur = Math.max(0, num(ev.dur_s));
     const day = C.dayKey(t);
     if (st.session && t - st.session.last_t > SESSION_GAP_S) this.closeSession(p);
+    if (st.tapsess && t - st.tapsess.last_t > SESSION_GAP_S) this.closeTaps(p);
     const handled = () => {
       st.last_handled_t = Math.max(st.last_handled_t || 0, t);
       st.idle_mark = 0;
@@ -368,6 +392,7 @@ export class World {
 
     switch (ev.type) {
       case 'pickup': {
+        if (st.tapsess) this.closeTaps(p);
         st.session = { start_t: t, last_t: t, pickups: 1, putdowns: 0, taps: 0, last_putdown_t: null, gap: t - (st.last_handled_t || p.created_t), standing };
         if (st.pickup_day !== day) {
           st.pickup_day = day;
@@ -377,7 +402,11 @@ export class World {
         return true;
       }
       case 'putdown': this.addEntry(p, { t, kind: 'putdown', text: F.putdown.text, standing }); handled(); return true;
-      case 'tap': this.addEntry(p, { t, kind: 'tap', text: F.tap.text, standing }); handled(); return true;
+      case 'tap': {
+        if (st.tapsess) { st.tapsess.count += 1; st.tapsess.last_t = t; st.tapsess.standing += standing; return false; }
+        st.tapsess = { start_t: t, last_t: t, count: 1, standing };
+        return true;
+      }
       case 'facedown_start': st.dark_since = t; st.dark_filed = false; handled(); return false;
       case 'facedown_end': {
         const d = dur || (st.dark_since ? t - st.dark_since : 0);
@@ -742,7 +771,7 @@ export class World {
     this.expireRequests(t);
     this.settleEvents(t);
     for (const p of this.active(t)) {
-      if (!p.st.session && !p.st.charge_pending && !(p.st.dark_since && !p.st.dark_filed) && !(p.st.inverted_since && !p.st.inverted_filed)) continue;
+      if (!p.st.session && !p.st.tapsess && !p.st.charge_pending && !(p.st.dark_since && !p.st.dark_filed) && !(p.st.inverted_since && !p.st.inverted_filed)) continue;
       this.settle(p, t);
       this.save(p);
     }
@@ -786,13 +815,24 @@ export class World {
     return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t, day: r.day } : null;
   }
 
+  // The archive: every edition, newest first; or one.
+  editions(limit = 500) {
+    return this.store.all('SELECT * FROM bulletins ORDER BY t DESC LIMIT ?', limit).map((r) => ({ no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t, day: r.day }));
+  }
+  // The next print after t: mornings at 00:00 UTC, evenings at 23:00 UTC.
+  nextPrint(t) {
+    const ds = C.dayStart(t);
+    for (const c of [ds + C.CLOSE_H * HOUR, ds + DAY]) if (c > t) return c;
+    return ds + DAY + C.CLOSE_H * HOUR;
+  }
+
   // Potato of the Day for a day: chosen among potatoes with an entry the day before. Null under five members.
   potdFor(day, ds, t) {
     if (this.active(t).length < 5) return null;
-    const cands = this.store.all('SELECT DISTINCT potato_id FROM entries WHERE t >= ? AND t < ? ORDER BY potato_id', ds - DAY, ds).map((r) => r.potato_id);
+    const cands = this.store.all(`SELECT DISTINCT potato_id FROM entries WHERE t >= ? AND t < ? AND kind != 'nudge' ORDER BY potato_id`, ds - DAY, ds).map((r) => r.potato_id);
     if (!cands.length) return null;
     const p = this.byId(cands[h32(day, 'potd') % cands.length]);
-    const e = this.store.get(`SELECT * FROM entries WHERE potato_id = ? AND t >= ? AND t < ? AND withheld = 0 ORDER BY standing ASC, t DESC LIMIT 1`, p.id, ds - DAY, ds);
+    const e = this.store.get(`SELECT * FROM entries WHERE potato_id = ? AND t >= ? AND t < ? AND withheld = 0 AND kind != 'nudge' ORDER BY standing ASC, t DESC LIMIT 1`, p.id, ds - DAY, ds);
     return { p, e };
   }
 
@@ -1162,9 +1202,15 @@ export class World {
     let potd = null;
     const pd = small ? null : this.potdFor(day, ds, t);
     if (pd) potd = { name: pd.p.name, id: pd.p.id, variety: this.variety(pd.p.variety).name, excerpt: pd.e ? `${pd.e.text}${pd.e.note ? `  ${pd.e.note}` : ''}` : '' };
+    const latest = this.latestBulletin(t);
+    const earlier = latest ? this.editions(4).filter((e) => e.t < latest.t).slice(0, 3) : [];
+    const joinedToday = members.filter((m) => m.created_t >= ds).length;
+    // The day's documented incident, as an image: the dark first, then a new member. Nothing under five members.
+    const incident = small ? null : today.dark6 > 0 ? 'neglect' : joinedToday > 0 ? 'first-contact' : null;
     return {
       t, day, no: this.bulletinNo(day), population, small, question,
-      bulletin: this.latestBulletin(t), silence: !!this.activeBroadcast('silence', t), silenceLine: N.silence,
+      bulletin: latest, earlier, lastPrint: latest ? latest.t : null, nextPrint: this.nextPrint(t), incident, joinedToday,
+      silence: !!this.activeBroadcast('silence', t), silenceLine: N.silence,
       aggregates: { left_home: today.left_home, dark6: today.dark6, shakes: today.shakes, drops: today.drops, transit: today.transit, dormant, curing: members.filter((m) => t - m.created_t < DAY).length },
       missing, potd,
     };

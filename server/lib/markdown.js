@@ -54,11 +54,24 @@ export function findIllustration(dir, slug) {
 // The neglect image carries the screen's own readout as HTML, and its caption is the File line.
 const INSERTS = { neglect: { insert: 'DARK.', caption: '16:30 PLACED IN THE DARK.' } };
 
-function figureHtml(slug, alt, ill) {
+// council and buying-frenzy run full width; the rest float, alternating right then left, and the prose wraps their shape.
+const FULL_WIDTH = new Set(['council', 'buying-frenzy']);
+
+function figureHtml(slug, alt, ill, state) {
   const sz = ill.size || { w: 1440, h: 960 };
   const extra = INSERTS[slug];
-  return `<figure class="ill ill-${slug}"><img src="${ill.src}" width="${sz.w}" height="${sz.h}" alt="${escapeHtml(alt)}" loading="lazy">${extra ? `<span class="insert">${escapeHtml(extra.insert)}</span>` : ''}<figcaption>${escapeHtml(extra ? extra.caption : alt)}</figcaption></figure>`;
+  let cls = `ill ill-${slug}`, style = '';
+  if (FULL_WIDTH.has(slug)) cls += ' ill-full';
+  else {
+    const side = state.floats % 2 === 0 ? 'right' : 'left';
+    state.floats += 1;
+    cls += ` ill-float ill-${side}`;
+    style = ` style="shape-outside: url(${ill.src}); shape-image-threshold: .2; shape-margin: 1.25rem;"`;
+  }
+  return `<figure class="${cls}"${style}><img src="${ill.src}" width="${sz.w}" height="${sz.h}" alt="${escapeHtml(alt)}" loading="lazy">${extra ? `<span class="insert">${escapeHtml(extra.insert)}</span>` : ''}</figure>`;
 }
+
+const slugify = (s) => String(s).toLowerCase().replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 function artifactHtml(kind, text, artifactsDir) {
   const file = artifactsDir && /^[a-z0-9-]+$/.test(kind) ? path.join(artifactsDir, `artifact-${kind}.svg`) : null;
@@ -72,6 +85,7 @@ export function renderMarkdown(md, { illustrationsDir = null, artifactsDir = nul
   const lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
   const out = [];
   let para = [], list = null, fence = null;
+  const state = { floats: 0 };
   const flushPara = () => {
     if (!para.length) return;
     const html = para.map((l, i) => {
@@ -98,11 +112,11 @@ export function renderMarkdown(md, { illustrationsDir = null, artifactsDir = nul
     if ((m = line.match(/^\[\[IMAGE:\s*([a-z0-9-]+)\s+—\s+(.*?)\s+—\s+(.*?)\s*\]\]$/))) {
       flushPara(); flushList();
       const ill = findIllustration(illustrationsDir, m[1]);
-      if (ill) out.push(figureHtml(m[1], m[3], ill));
+      if (ill) out.push(figureHtml(m[1], m[3], ill, state));
       continue; // no image yet: nothing on the page
     }
     if (!line.trim()) { flushPara(); flushList(); continue; }
-    if ((m = line.match(/^(#{1,3})\s+(.*)$/))) { flushPara(); flushList(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); continue; }
+    if ((m = line.match(/^(#{1,3})\s+(.*)$/))) { flushPara(); flushList(); out.push(`<h${m[1].length} id="${slugify(m[2])}">${inline(m[2])}</h${m[1].length}>`); continue; }
     if (/^(-{3,}|\*{3,})\s*$/.test(line)) { flushPara(); flushList(); out.push('<hr>'); continue; }
     if ((m = line.match(/^\s*[-*]\s+(.*)$/))) { flushPara(); if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; } list.items.push(m[1]); continue; }
     if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { flushPara(); if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; } list.items.push(m[1]); continue; }
