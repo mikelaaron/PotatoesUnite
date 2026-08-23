@@ -140,7 +140,7 @@ test('the markdown subset', () => {
 test('Part D copy: the port sentence, the two teletext lines, Issued by The Tuber', () => {
   const d = new Data({ dataDir: DATA_DIR, assetsDir: ASSETS_DIR, docsDir: DOCS_DIR });
   const html = storyToHtml(d.story, { illustrationsDir: ILL_DIR, artifactsDir: ART_DIR });
-  assert.match(html, /Tested on exactly these two devices\./, 'the honest note, in its current wording');
+  assert.match(html, /These are the only models tested so far; others will need a firmware port for their display and pin layout\./, 'the honest note, in its current wording');
   assert.match(html, /<figure class="ill ill-they-united[^]*?<p class="tt">THE TUBER TELLS YOU WHAT POTATO SOCIETY DID\.<\/p>\n<p class="tt">THE FILE TELLS YOU WHAT YOUR POTATO THINKS HAPPENED BETWEEN THE TWO OF YOU\.<\/p>/);
   const { w } = makeWorld();
   assert.match(renderBoard(w.board()), /<\/ul><div class="small">Issued by The Tuber\.<\/div>/);
