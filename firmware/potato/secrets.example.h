@@ -4,4 +4,4 @@
 // server URL; the Mac's LAN IP is `ipconfig getifaddr en0`.
 #define WIFI_SSID  "your-network"
 #define WIFI_PASS  "your-password"
-#define SERVER_URL "http://10.0.0.245:8080"
+#define SERVER_URL "http://192.168.1.10:8080"   // your Mac's LAN IP; the server prints it on startup
