@@ -47,3 +47,27 @@ File filed seven entries in thirty seconds, including "Restored from the dark.
 minor lines a shared budget with a random skip, let only major events bypass
 it, and debounce physical states (dark, power) before they count. The File
 records sessions, not movements. Rules are in `docs/POTATO_VOICE.md` §15.
+
+## A reaction per movement is a motion log, not a character
+
+**2026-08-22.** The first real handling session logged seven lines in thirty
+seconds — every lift, every wiggle. The owner: "too many quips, too often."
+The fix (voice doc §15) was not shorter lines but a ration: a *session* (first
+pick-up to 60 s of stillness) earns one line at the start; minor lines share a
+cooldown and a seeded ~60% roll; major lines bypass it. The seed makes the
+roll consistent per potato so "six in ten" is a voice, not noise.
+
+**How to apply:** rate a character by encounters, not sensor edges. Cluster
+raw events into a session first, decide once per session, and gate the rest.
+Silence is a feature; if it seems quiet, it's working.
+
+## A threshold that reads an instantaneous sensor fires on contact bounce
+
+**2026-08-22.** A `battery_low` "Thirty percent" line fired while plugged in:
+the USB cable lost contact for 25 s in the owner's hand — `charge_end` →
+`battery_low` → `charge_start` — and the threshold read the raw VBUS bit. The
+2-sample (2 s) debounce already on the bit was not enough. Charging is a
+*state*, not a sample: a plug/unplug now counts only after 60 s continuously
+in the new VBUS state, and battery thresholds only fire once VBUS has been
+stably absent that long. Same shape as the creature's "condition held for N,
+not condition became true" lesson, one layer up.

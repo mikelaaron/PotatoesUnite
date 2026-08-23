@@ -116,3 +116,8 @@ Clarifications from building `server/` against the contract above. Nothing here 
 - **`temp_c` is omitted** (no sensor on `amoled18`).
 - **`/v0/choice` 409** is treated like 200: the returned Scene is rendered.
 - **Server URL.** Default `http://potatoes.local:8080`; `.local` is resolved by mDNS query from the device, so the server host should advertise itself (or the Hands set an IP URL in the portal).
+
+*Firmware ration (§15), 2026-08-22.*
+
+- **`facedown_start`/`facedown_end` are sent only for episodes of 60 s or more.** A flip in the hand (face-down under a minute) produces neither. The device already applies the voice-doc ration; the server still coalesces whatever arrives.
+- **`charge_start`/`charge_end` are sent only after 60 s continuously in the new VBUS state**, so a cable that loses contact briefly in the hand is not an event. `battery_low` fires only while VBUS has been stably absent that long. `pickup`/`putdown`/`tap`/`shake`/etc. are still sent as they happen; the server is expected to coalesce a burst into one session.

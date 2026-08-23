@@ -66,14 +66,30 @@ register/heartbeat/choice with a fixed Question and logs every body.
 
 Breathing, blinking, glances, lean with gravity, slosh; reactions with lines
 from the voice doc for pick-up, put-down, the dark (with 10 min / 1 h / 3 h
-escalation and the counted duration on restore), the ceiling situation
-(20 min escalation), shake, drop (blank second first), tap, night touch,
-left-alone thresholds (4 h … 7 d) and the return, transit, plugged/unplugged/
-full, battery 30/20/10/5 %, Wi-Fi lost/restored, dormancy on wake. Night
-sleep: five idle minutes between 23:00 and 06:00 close the eyes, dim the body
-and blank the line. Face-down sleeps the panel; on battery it sleeps after
-150 s idle (from the creature). All of it works with no server; the last
-scene is cached.
+escalation and the counted duration on restore), the ceiling situation,
+shake, drop (blank second first), tap, night touch, left-alone thresholds
+(4 h … 7 d) and the return, transit, plugged/unplugged/full, battery
+30/20/10/5 %, Wi-Fi lost/restored, dormancy on wake. Night sleep: five idle
+minutes between 23:00 and 06:00 close the eyes, dim the body and blank the
+line. Face-down sleeps the panel; on battery it sleeps after 150 s idle (from
+the creature). All of it works with no server; the last scene is cached.
+
+**The ration (voice doc §15) governs how often she speaks. Silence is the
+default; a line is an event.** A *handling session* begins at the first
+pick-up and ends after 60 s of stillness, and earns at most one line, at the
+start. Pick-up speaks only as a fresh encounter (10 min+ since the last
+session ended); put-down only after a 30 s+ session and one time in three.
+Minor lines — pick-up, put-down, tap, plug, unplug — share a 3-minute
+cooldown and fire about six times in ten, chosen by a seeded RNG so a given
+potato is consistent. Major lines bypass the budget: shake (5-min refractory),
+drop (always), the dark past 10 min, the ceiling past 5 min, the battery
+thresholds. The dark is confirmed only after 5 s face-down *and still*, and is
+spoken — and reported to the server — only once the episode passes 60 s; a
+flip in the hand leaves no line and no `facedown_start/end`. Plug/unplug and
+the battery thresholds require 60 s continuously in the new VBUS state, so a
+cable that loses contact in the hand is not an event. Physical events
+(`pickup`, `putdown`, `tap`, …) are still sent as they happen — the server
+coalesces them; only the *lines* are rationed.
 
 ## Identity and state (NVS namespace `potato`)
 

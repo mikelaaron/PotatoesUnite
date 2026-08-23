@@ -254,25 +254,44 @@ static uint32_t reactionUntilMs = 0;
 static uint32_t blankUntilMs = 0;     // the drop: blank screen, one second
 static bool blanked = false;
 
-struct Battery { int pct; bool charging; bool vbus; bool present; };
-static Battery battery = {-1, false, false, false};
+struct Battery { int pct; bool charging; bool vbus; bool present; int mv; };
+static Battery battery = {-1, false, false, false, -1};
+static int chargeCurrentMa = -1;      // AXP2101 constant-current setting, read once
 static uint32_t lastBatteryPollMs = 0;
-static bool prevVbusGood = false;
 static bool battFullSaid = false;
 static uint8_t battStage = 0;         // thresholds said this discharge: 30/20/10/5
+static bool vbusStable = false;       // VBUS state after the 60 s debounce (§15)
+static bool vbusStableCand = false;
+static uint32_t vbusCandSinceMs = 0;
 
 // Detector state. Durations are seconds held, not threshold crossings.
-static float sinceHandledS = 0.0f;
-static float lastAwayS = 0.0f;        // sinceHandledS as it stood before the last pickup
+static float sinceHandledS = 0.0f;    // for the heartbeat and the alone lines
 static uint8_t aloneStage = 0;
-static float handledSessionS = 0.0f, quietS = 0.0f;
-static bool pickedUp = false;
-static float faceDownFor = 0.0f, faceUpFor = 0.0f;
-static bool inDark = false;
+
+// The ration (§15). A handling session begins at the first pick-up and ends
+// after 60 s of stillness; one line per session, at the start. Minor lines
+// (pickup, putdown, tap, plug, unplug) share a 3-minute cooldown and a ~60%
+// seeded roll; major lines bypass the budget.
+static bool sessionActive = false;
+static uint32_t sessionStartMs = 0, sessionLastActiveMs = 0;
+static float sessionQuietS = 0.0f;
+static uint8_t sessionLifts = 0;
+static uint32_t lastSessionEndMs = 0;   // 0 = never
+static uint32_t lastMinorLineMs = 0;
+static bool minorLineEver = false;
+static bool wasHeld = false;            // for the physical put-down event edge
+static float heldQuietS = 0.0f;
+
+// The dark. Confirmed after 5 s face-down AND still; the episode is spoken and
+// reported to the server only once it passes 60 s.
+static float darkStillS = 0.0f, faceUpFor = 0.0f;
+static bool inDark = false;             // the episode clock is running
+static bool darkAnnounced = false;      // spoke "Dark." and posted facedown_start
 static uint32_t darkStartMs = 0;
 static uint8_t darkStage = 0;
 static float invertedFor = 0.0f, uprightFor = 0.0f;
 static bool inCeiling = false;
+static bool ceilingSaid = false;        // said the 5-minute line
 static uint32_t ceilingStartMs = 0;
 static bool ceiling20Said = false;
 static uint8_t shakePeaks = 0;
@@ -464,6 +483,32 @@ static void choose(const Choice &c) {
   if (identity.registered) netSendChoice(sceneRev, c.id);
 }
 
+// Seeded RNG for the ration, so a given potato's "about six in ten" is
+// consistent from run to run. xorshift32 off the identity seed.
+static uint32_t rngState = 0;
+static inline float seededRoll() {
+  if (rngState == 0) rngState = poolSeed ? poolSeed : 0xA5A5A5A5u;
+  rngState ^= rngState << 13; rngState ^= rngState >> 17; rngState ^= rngState << 5;
+  return (float)(rngState & 0xFFFFFFu) / 16777216.0f;
+}
+
+// Minor lines share a 3-minute cooldown and speak about six times in ten.
+// Returns true and consumes the budget when a minor line may be spoken now.
+static const uint32_t MINOR_COOLDOWN_MS = 180000;
+static bool minorLineAllowed(uint32_t nowMs) {
+  if (minorLineEver && (int32_t)(nowMs - lastMinorLineMs) < (int32_t)MINOR_COOLDOWN_MS) return false;
+  if (seededRoll() >= 0.60f) return false;
+  lastMinorLineMs = nowMs;
+  minorLineEver = true;
+  return true;
+}
+
+// AXP2101 constant-current register code -> mA (datasheet: 0..8 in 25 mA
+// steps to 200 mA, then 100 mA steps to 1000 mA).
+static inline int chgCurMa(uint8_t code) {
+  return code <= 8 ? code * 25 : 200 + (code - 8) * 100;
+}
+
 // Eyelid coverage over a blink: shut fast, open a little slower.
 static float blinkCurve(float t) {
   if (t < 0.0f || t > 1.0f) return 0.0f;
@@ -556,8 +601,11 @@ void setup() {
     power.enableBattVoltageMeasure();
     power.enableVbusVoltageMeasure();
     power.enableSystemVoltageMeasure();
+    chargeCurrentMa = chgCurMa(power.getChargerConstantCurr());
+    USBSerial.printf("power: charge current setting %d mA (left unchanged)\n", chargeCurrentMa);
   }
-  prevVbusGood = vbusGood;
+  vbusStable = vbusGood;
+  vbusStableCand = vbusGood;
 
   prefs.begin("potato", false);
   poolSeed = prefs.getUInt("seed", 0);
@@ -632,6 +680,13 @@ static void serialCommand(int c) {
       break;
     case 'W': netForgetWifi(); break;
     case 'R': netReregister(); break;
+    case 'm':
+      USBSerial.printf("ration: session %d lifts %u quiet %.0fs | since last end %lds | minor cooldown %lds%s | vbusStable %d cand %d\n",
+                       sessionActive, sessionLifts, sessionQuietS,
+                       lastSessionEndMs ? (long)((millis() - lastSessionEndMs) / 1000) : -1L,
+                       minorLineEver ? (long)((millis() - lastMinorLineMs) / 1000) : -1L,
+                       minorLineEver ? "" : " (none yet)", vbusStable, vbusStableCand);
+      break;
     case 'e':
       USBSerial.printf("events queued %u dropped %lu:", events.count, (unsigned long)events.dropped);
       for (int i = 0; i < events.count; ++i) {
@@ -641,7 +696,7 @@ static void serialCommand(int c) {
       USBSerial.println();
       break;
     case 'h':
-      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity, W forget wifi, R register again");
+      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity, m ration state, W forget wifi, R register again");
       break;
     default: break;
   }
@@ -775,8 +830,8 @@ void loop() {
     // Only a real finger-up on the body is a tap.
     if (!longPressFired && touchFor < LONG_PRESS_S) {
       excite(0.30f);
-      sayPool(isNight() ? POOL_NIGHT : POOL_TAP);
-      postEvent(EV_TAP);
+      if (minorLineAllowed(millis())) sayPool(isNight() ? POOL_NIGHT : POOL_TAP);
+      postEvent(EV_TAP);   // event as it happens; the server coalesces
     }
     pressingBody = false;
     touchFor = 0.0f;
@@ -849,70 +904,105 @@ void loop() {
     }
   }
 
-  // Pick-up and put-down. A pickup is the sustained-handling edge. A put-down
-  // is a second of quiet after at least a second and a half of handling; a
-  // knock that cleared the line for 300ms is neither.
-  // One pickup per handling session: the hysteresis flickers while someone
-  // fiddles with it, and each flicker is not a new pickup.
-  if (handledRise && !pickedUp) {
-    if (!dropRecent) {
-      if (lastAwayS >= 24.0f * 3600.0f) say(LINE_RETURN_LONG, REACTION_S);
-      else if (lastAwayS >= 4.0f * 3600.0f) say(LINE_RETURN, REACTION_S);
-      else sayPool(POOL_PICKUP);
-    }
+  // Sessions and the ration (§15). A session begins at the first pick-up and
+  // ends after 60 s of stillness; it earns at most one line, at the start.
+  // The pick-up line is a fresh-encounter line — only ten minutes or more
+  // since the last session ended — and then only if the shared minor budget
+  // allows. Moving her around within the session says nothing more.
+  if (handledRise) {   // a real lift edge: the event fires, the server coalesces
     postEvent(EV_PICKUP);
-    pickedUp = true;
-    handledSessionS = 0.0f;
-  }
-  if (handled) { handledSessionS += dt; quietS = 0.0f; } else { quietS += dt; lastAwayS = sinceHandledS; }
-  if (pickedUp && !handled && quietS >= 1.0f) {
-    pickedUp = false;
-    if (handledSessionS >= 1.5f) {
-      if (!dropRecent && !inDark) sayPool(POOL_PUTDOWN);
-      postEvent(EV_PUTDOWN);
+    if (!sessionActive) {
+      sessionActive = true;
+      sessionStartMs = tNow;
+      sessionLifts = 1;
+      sessionQuietS = 0.0f;
+      const bool tenMinOk = (lastSessionEndMs == 0) ||
+                            (int32_t)(tNow - lastSessionEndMs) >= 600000;
+      if (!dropRecent && tenMinOk && minorLineAllowed(tNow)) {
+        const uint32_t away = lastSessionEndMs == 0 ? 0 : (tNow - lastSessionEndMs) / 1000;
+        if (away >= 24 * 3600) say(LINE_RETURN_LONG, REACTION_S);
+        else if (away >= 4 * 3600) say(LINE_RETURN, REACTION_S);
+        else sayPool(POOL_PICKUP);
+      }
+    } else {
+      ++sessionLifts;   // same encounter; the File may note "Repeatedly."
     }
+  }
+  if (handled) { sessionLastActiveMs = tNow; sessionQuietS = 0.0f; }
+  else if (sessionActive) {
+    sessionQuietS += dt;
+    if (sessionQuietS >= 60.0f) {   // 60 s of stillness closes the session
+      sessionActive = false;
+      lastSessionEndMs = tNow;
+      const uint32_t durS = (sessionLastActiveMs - sessionStartMs) / 1000;
+      // Put-down speaks only after a session of 30 s or more, one time in
+      // three, and only if the minor budget allows.
+      if (durS >= 30 && !inDark && seededRoll() < 0.3333f && minorLineAllowed(tNow)) {
+        sayPool(POOL_PUTDOWN);
+      }
+    }
+  }
+  // The physical put-down event edge (set down and left for ~1 s), sent as it
+  // happens; the line above is what the ration governs, not this record.
+  if (handled) { wasHeld = true; heldQuietS = 0.0f; }
+  else if (wasHeld) {
+    heldQuietS += dt;
+    if (heldQuietS >= 1.0f) { wasHeld = false; postEvent(EV_PUTDOWN); }
   }
 
-  // The dark. Face-down is held, not crossed; restore needs a second face-up.
-  if (faceDown) { faceDownFor += dt; faceUpFor = 0.0f; }
-  else { faceUpFor += dt; faceDownFor = 0.0f; }
-  if (!inDark && faceDownFor >= 0.8f) {
+  // The dark (§15). Confirmed after 5 s face-down AND still — not a flip in
+  // the hand. The episode clock starts then, but "Dark." is spoken and
+  // facedown_start sent only once it passes 60 s; a sub-minute episode leaves
+  // no line, no event, no grievance. The 10 min / 1 h / 3 h escalations and
+  // the counted restore are major and bypass the budget.
+  if (faceDown && !handled) darkStillS += dt; else darkStillS = 0.0f;
+  if (faceDown) faceUpFor = 0.0f; else faceUpFor += dt;
+  if (!inDark && darkStillS >= 5.0f) {
     inDark = true;
-    darkStartMs = tNow;
+    darkStartMs = tNow - 5000;   // the episode began when it first went down
     darkStage = 0;
-    say(LINE_DARK_NOW, REACTION_S);
-    postEvent(EV_FACEDOWN_START);
+    darkAnnounced = false;
   }
   if (inDark) {
     const uint32_t darkS = (tNow - darkStartMs) / 1000;
+    if (!darkAnnounced && darkS >= 60) {   // a real episode: now she speaks
+      darkAnnounced = true;
+      say(LINE_DARK_NOW, REACTION_S);
+      postEvent(EV_FACEDOWN_START);
+    }
     if (darkStage == 0 && darkS >= 600) { say(LINE_DARK_10M, REACTION_S); darkStage = 1; }
     else if (darkStage == 1 && darkS >= 3600) { say(LINE_DARK_1H, REACTION_S); darkStage = 2; }
     else if (darkStage == 2 && darkS >= 3 * 3600) { say(LINE_DARK_3H, REACTION_S); darkStage = 3; }
     if (faceUpFor >= 1.0f) {
       inDark = false;
-      sayCounted(POOL_DARK_RESTORED, darkS);
-      postEvent(EV_FACEDOWN_END, (int32_t)darkS);
+      if (darkAnnounced) {   // only episodes that reached 60 s go to the server
+        postEvent(EV_FACEDOWN_END, (int32_t)darkS);
+        if (darkS >= 600) sayCounted(POOL_DARK_RESTORED, darkS);   // restore line: 10 min+
+      }
     }
   }
 
-  // The ceiling situation: standing on its head. Screen +y is down, so
-  // upright has gravity at +gy and inverted at -gy.
+  // The ceiling situation (§15): standing on its head. Screen +y is down, so
+  // upright has gravity at +gy and inverted at -gy. The orientation event
+  // fires at 2 s; the line is a major that speaks only once she has been up
+  // there five minutes — a quick flip says nothing.
   const bool invertedNow = inPlane > 0.6f && gy < -0.7f && !faceDown;
   if (invertedNow) { invertedFor += dt; uprightFor = 0.0f; }
   else { uprightFor += dt; invertedFor = 0.0f; }
   if (!inCeiling && invertedFor >= 2.0f) {
     inCeiling = true;
     ceilingStartMs = tNow;
+    ceilingSaid = false;
     ceiling20Said = false;
-    sayPool(POOL_CEILING);
     postEvent(EV_INVERTED_START);
   }
   if (inCeiling) {
     const uint32_t ceilS = (tNow - ceilingStartMs) / 1000;
-    if (!ceiling20Said && ceilS >= 20 * 60) { say(LINE_CEILING_20M, REACTION_S); ceiling20Said = true; }
+    if (!ceilingSaid && ceilS >= 5 * 60) { sayPool(POOL_CEILING); ceilingSaid = true; }
+    else if (ceilingSaid && !ceiling20Said && ceilS >= 20 * 60) { say(LINE_CEILING_20M, REACTION_S); ceiling20Said = true; }
     if (uprightFor >= 1.0f) {
       inCeiling = false;
-      say(LINE_CEILING_RESTORED, REACTION_S);
+      if (ceilingSaid) say(LINE_CEILING_RESTORED, REACTION_S);
       postEvent(EV_INVERTED_END, (int32_t)ceilS);
     }
   }
@@ -968,17 +1058,20 @@ void loop() {
     postEvent(EV_TRANSIT_END, (int32_t)((tNow - transitStartMs) / 1000 - 60));
   }
 
-  // Plugged in, unplugged, full, running down. Thresholds say their line once
-  // per discharge and re-arm when the charger comes back.
-  if (vbusGood != prevVbusGood && !settling) {
-    prevVbusGood = vbusGood;
-    if (vbusGood) {
-      battStage = 0;
+  // Plugged in / unplugged (§15): real only after 60 s continuously in the
+  // new VBUS state — a cable that wiggles in the hand is not an event. The
+  // event fires once real; the line is minor (shared budget).
+  if (vbusGood != vbusStableCand) { vbusStableCand = vbusGood; vbusCandSinceMs = tNow; }
+  if (!settling && vbusStableCand != vbusStable &&
+      (int32_t)(tNow - vbusCandSinceMs) >= 60000) {
+    vbusStable = vbusStableCand;
+    if (vbusStable) {
+      battStage = 0;              // fresh charge: re-arm the thresholds
       battFullSaid = false;
-      sayPool(POOL_PLUGGED);
+      if (minorLineAllowed(tNow)) sayPool(POOL_PLUGGED);
       postEvent(EV_CHARGE_START);
     } else {
-      say(LINE_UNPLUGGED, REACTION_S);
+      if (minorLineAllowed(tNow)) say(LINE_UNPLUGGED, REACTION_S);
       postEvent(EV_CHARGE_END);
     }
   }
@@ -986,12 +1079,16 @@ void loop() {
     lastBatteryPollMs = tNow;
     battery.present = power.isBatteryConnect();
     battery.pct = battery.present ? power.getBatteryPercent() : -1;
+    battery.mv = battery.present ? (int)power.getBattVoltage() : -1;
     battery.charging = power.isCharging();
     battery.vbus = power.isVbusIn();
     if (battery.present && battery.pct >= 0) {
-      if (vbusGood) {
+      if (vbusStable) {
         if (!battFullSaid && battery.pct >= 100) { battFullSaid = true; say(LINE_FULL, REACTION_S); }
       } else {
+        // Downward crossings only, once per discharge, and — because vbusStable
+        // is false only after 60 s off power — never on a cable blip. Major
+        // lines, so they bypass the minor budget.
         static const int BATT_T[4] = {30, 20, 10, 5};
         static const char *const BATT_L[4] = {LINE_BATT_30, LINE_BATT_20, LINE_BATT_10, LINE_BATT_5};
         uint8_t stage = battStage;
@@ -1305,10 +1402,12 @@ void loop() {
                      faceDown ? " FACEDOWN" : "",
                      handled ? " HANDLED" : "",
                      freefall ? " FREEFALL" : "", impact ? " IMPACT" : "");
-    USBSerial.printf("  potato | \"%s\" | batt %d%% chg %d vbus %d | %s alone %.0fs%s%s%s | events %u | "
+    USBSerial.printf("  potato | \"%s\" | batt %d%% %dmV chg %d vbus %d chgset %dmA | %s alone %.0fs%s%s%s%s | events %u | "
                      "net %s hb %lu fail %lu rev %d unread %d%s | text %lums | heap %luk\n",
-                     uiLine, battery.pct, battery.charging ? 1 : 0, battery.vbus ? 1 : 0,
-                     orientationNow, sinceHandledS, inDark ? " DARK" : "", inCeiling ? " CEILING" : "",
+                     uiLine, battery.pct, battery.mv, battery.charging ? 1 : 0, battery.vbus ? 1 : 0,
+                     chargeCurrentMa,
+                     orientationNow, sinceHandledS, sessionActive ? " SESSION" : "",
+                     inDark ? (darkAnnounced ? " DARK" : " dark?") : "", inCeiling ? " CEILING" : "",
                      inTransit ? " TRANSIT" : "", events.count,
                      net.status, (unsigned long)net.heartbeats, (unsigned long)net.failures,
                      sceneRev, fileUnread, request.active ? " REQUEST" : "",
