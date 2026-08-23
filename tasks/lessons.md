@@ -71,3 +71,66 @@ the USB cable lost contact for 25 s in the owner's hand — `charge_end` →
 in the new VBUS state, and battery thresholds only fire once VBUS has been
 stably absent that long. Same shape as the creature's "condition held for N,
 not condition became true" lesson, one layer up.
+
+## A board with a power latch dies the moment the key is released
+
+**2026-08-23.** The ESP32-S3-ePaper-1.54G has no power switch: the PWR key
+holds a P-FET's gate while pressed, and GP17 (`BAT_Control`) has to take over
+before the finger lifts or the board browns out — but only on battery. On USB
+the rail comes from VBUS through a diode, so a firmware that forgets the latch
+looks perfect on the bench and is dead on the desk. The schematic is the
+source of truth (the vendor examples drive GP17 high in a "board_power_bsp"
+constructor and never explain why).
+
+**How to apply:** drive the latch first in `setup()`, before serial, before
+the display, and hold it (`gpio_hold_en`) so a soft reset does not dip it.
+Test a "works on USB" build on the battery before calling it done. When a
+vendor board has an unexplained "power" GPIO in every example, read the
+schematic before writing a line.
+
+## The four-colour panel is a 15 s full refresh and nothing else
+
+**2026-08-23.** The 1.54" G panel (black/white/red/yellow) has no partial
+refresh and no fast mode worth using: every change is a ~15–20 s flash
+sequence, the panel must be reset to wake from deep sleep, and BUSY is LOW
+while busy (the vendor's comment says the opposite; its code waits for HIGH).
+GxEPD2 has no driver for it; the vendor's bit-banged driver ports to hardware
+SPI in forty lines. The frame is two bits per pixel, four per byte, MSB first.
+
+**How to apply:** treat a refresh as an event, not a frame. Render to a
+buffer, hash it, and refresh only when the hash changes, rate-limited; keep
+the blocking BUSY wait in its own task so keys and the Net keep running; give
+the keys a prompt refresh anyway, because a cursor you cannot see is not a
+cursor. Edit the layout on the host (`make paper-preview`), not on the panel.
+
+## Opening an S3's USB port resets it, even "passively"
+
+**2026-08-23.** Doreen's port name changed after a USB re-plug
+(`usbmodem1101` → `usbmodem201301`), so a port-watcher that excluded only the
+old name reported her as the new board. A six-second *listen* with DTR and
+RTS "off" to check whose firmware was talking rebooted her: the banner began
+`rst:0x15 (USB_UART_CHIP_RESET)`. On macOS the host raises DTR/RTS when the
+TTY opens, and pyserial clears them afterwards — DTR first — which is exactly
+the S3 reset sequence. The creature-repo note that `dtr=off,rts=off` "catches
+the boot banner" was describing this reset, not avoiding it.
+
+**How to apply:** a board you must not disturb is a board whose port you
+never open, for any reason. Identify ESP32-S3 boards from the USB descriptors
+instead: the USB serial number is the MAC, and the port name comes from the
+locationID (`firmware/tools/usb_mac.sh`). Never key a watcher on a port
+*name*; key it on the MAC.
+
+## A reset mid-I2C-transaction leaves a slave holding SDA; probe failures are the symptom, not the cause
+
+**2026-08-23.** One boot in ten came up with "XCA9554 / CST820 / AXP2101 not
+found" and ran blind all day — no touch, no battery — until a re-plug. It was
+never the chips: a USB re-enumeration resets the S3 while a slave is mid-byte,
+the slave keeps driving SDA low waiting for clocks that never come, and every
+probe afterwards fails the same way. The bus-recovery sequence (clock SCL
+until SDA releases, then STOP) logged `SDA was held low — clocked 3, now
+released` on its first real boot, and everything was found on attempt 1.
+
+**How to apply:** when several independent I2C devices vanish together, check
+the bus, not the devices. Recover before `Wire.begin`, retry probes a few
+times, and keep re-probing from the loop so a bad boot cannot stay bad. And
+with two boards on USB, never let a Makefile guess the port.

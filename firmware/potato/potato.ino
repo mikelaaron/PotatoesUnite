@@ -591,44 +591,124 @@ static void excite(float amount) {
 
 // ------------------------------------------------------------------ setup ---
 
+// I2C bus recovery. A reset that lands mid-transaction (USB re-enumeration
+// after a flash, a re-plug) can leave a slave holding SDA low, and every
+// probe afterwards fails: one boot in ten came up with no expander, no
+// touch and no PMU. Clock SCL until the slave releases SDA, then STOP.
+static void i2cBusRecover() {
+  pinMode(IIC_SDA, INPUT_PULLUP);
+  pinMode(IIC_SCL, OUTPUT);
+  digitalWrite(IIC_SCL, HIGH);
+  delayMicroseconds(5);
+  if (digitalRead(IIC_SDA) == HIGH) {
+    USBSerial.println("i2c: bus clear");
+  } else {
+    int clocks = 0;
+    while (digitalRead(IIC_SDA) == LOW && clocks < 9) {
+      digitalWrite(IIC_SCL, LOW);
+      delayMicroseconds(5);
+      digitalWrite(IIC_SCL, HIGH);
+      delayMicroseconds(5);
+      ++clocks;
+    }
+    // STOP: SDA low -> high while SCL is high.
+    pinMode(IIC_SDA, OUTPUT);
+    digitalWrite(IIC_SDA, LOW);
+    delayMicroseconds(5);
+    digitalWrite(IIC_SCL, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(IIC_SDA, HIGH);
+    delayMicroseconds(5);
+    pinMode(IIC_SDA, INPUT_PULLUP);
+    USBSerial.printf("i2c: SDA was held low — clocked %d, now %s\n", clocks,
+                     digitalRead(IIC_SDA) == HIGH ? "released" : "STILL LOW");
+  }
+  pinMode(IIC_SCL, INPUT_PULLUP);   // hand the pins to Wire
+}
+
+// PMU bring-up. Called at boot and again from the loop if the PMU was not
+// found, so a flaky boot heals instead of staying blind all day.
+static bool pmuSetup(const char *when) {
+  if (!power.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL)) return false;
+  powerReady = true;
+  if (!readVbusGood(&vbusGood)) vbusGood = USBSerial.isPlugged();
+  vbusCandidate = vbusGood;
+  USBSerial.printf("AXP2101 ready (%s): external power %s\n", when, vbusGood ? "present" : "absent");
+  power.enableBattDetection();
+  power.enableBattVoltageMeasure();
+  power.enableVbusVoltageMeasure();
+  power.enableSystemVoltageMeasure();
+  // The cell is a 3.7 V / 400 mAh / 1.48 Wh Li-ion pouch. 150 mA is 0.375C
+  // (under 0.5C); do not raise this without a different cell. Target 4.20 V.
+  power.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_150MA);
+  chargeCurrentMa = chgCurMa(power.getChargerConstantCurr());
+  if (power.getChargeTargetVoltage() != XPOWERS_AXP2101_CHG_VOL_4V2) {
+    power.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+    USBSerial.println("power: charge target voltage was not 4.20 V — set to 4.20 V");
+  }
+  static const char *const CHG_VOL[] = {"?", "4.00", "4.10", "4.20", "4.35", "4.40"};
+  const uint8_t vol = power.getChargeTargetVoltage();
+  const int pre = (int)power.getPrechargeCurr();          // 25 mA steps
+  const int term = (int)power.getChargerTerminationCurr(); // 25 mA steps
+  USBSerial.printf("power: charge current set to %d mA; target %s V; precharge %d mA, "
+                   "termination %d mA (defaults, reported only)\n",
+                   chargeCurrentMa, vol < 6 ? CHG_VOL[vol] : "?", pre * 25, term * 25);
+  return true;
+}
+
+static bool touchSetup(const char *when) {
+  uint8_t chipId = 0xFF;
+  if (!probeTouch(&chipId)) return false;
+  touchReady = true;
+  USBSerial.printf("touch ready at 0x%02x (%s): chip id 0x%02x\n", CST820_ADDR, when, chipId);
+  return true;
+}
+
+static uint32_t lastReprobeMs = 0;
+
 void setup() {
   USBSerial.begin(115200);
   USBSerial.setTxTimeoutMs(0);
 
+  i2cBusRecover();
   Wire.begin(IIC_SDA, IIC_SCL);
 
   // Reset pulse for display and touch. Not required to light the panel, but it
-  // makes cold starts deterministic.
-  if (expander.begin(IO_EXPANDER_ADDR)) {
+  // makes cold starts deterministic. Three tries, 50 ms apart, like the rest.
+  bool expanderOk = false;
+  for (int attempt = 1; attempt <= 3 && !expanderOk; ++attempt) {
+    expanderOk = expander.begin(IO_EXPANDER_ADDR);
+    if (expanderOk) USBSerial.printf("XCA9554 ready at 0x20 (attempt %d)\n", attempt);
+    else delay(50);
+  }
+  if (expanderOk) {
     for (uint8_t p = 0; p < 3; ++p) expander.pinMode(p, OUTPUT);
     for (uint8_t p = 0; p < 3; ++p) expander.digitalWrite(p, LOW);
     delay(20);
     for (uint8_t p = 0; p < 3; ++p) expander.digitalWrite(p, HIGH);
     delay(20);
   } else {
-    USBSerial.println("XCA9554 not found at 0x20 — continuing without reset pulse");
+    USBSerial.println("XCA9554 not found at 0x20 after 3 attempts — continuing without reset pulse");
   }
 
-  uint8_t touchChipId = 0xFF;
-  touchReady = probeTouch(&touchChipId);
-  if (touchReady) {
-    USBSerial.printf("touch ready at 0x%02x: chip id 0x%02x\n",
-                     CST820_ADDR, touchChipId);
-  } else {
-    USBSerial.println("CST820 touch not found at 0x15 — continuing without touch");
+  for (int attempt = 1; attempt <= 3 && !touchReady; ++attempt) {
+    char when[16];
+    snprintf(when, sizeof(when), "attempt %d", attempt);
+    if (!touchSetup(when)) delay(50);
   }
+  if (!touchReady) USBSerial.println("CST820 touch not found at 0x15 after 3 attempts — will re-probe every 60 s");
 
-  powerReady = power.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
-  if (powerReady) {
-    if (!readVbusGood(&vbusGood)) vbusGood = USBSerial.isPlugged();
-    vbusCandidate = vbusGood;
-    USBSerial.printf("AXP2101 ready: external power %s\n", vbusGood ? "present" : "absent");
-  } else {
+  for (int attempt = 1; attempt <= 3 && !powerReady; ++attempt) {
+    char when[16];
+    snprintf(when, sizeof(when), "attempt %d", attempt);
+    if (!pmuSetup(when)) delay(50);
+  }
+  if (!powerReady) {
     // HWCDC sees a computer host without depending on DTR/RTS. It does not see
     // a charge-only adapter, so it is only a fallback when the PMU is missing.
     vbusGood = USBSerial.isPlugged();
     vbusCandidate = vbusGood;
-    USBSerial.printf("AXP2101 not found — USB-host fallback says %s\n",
+    USBSerial.printf("AXP2101 not found after 3 attempts — USB-host fallback says %s; will re-probe every 60 s\n",
                      vbusGood ? "connected" : "disconnected");
   }
 
@@ -662,27 +742,6 @@ void setup() {
                       SensorQMI8658::LPF_MODE_0);
   qmi.enableGyroscope();
 
-  if (powerReady) {
-    power.enableBattDetection();
-    power.enableBattVoltageMeasure();
-    power.enableVbusVoltageMeasure();
-    power.enableSystemVoltageMeasure();
-    // The cell is a 3.7 V / 400 mAh / 1.48 Wh Li-ion pouch. 150 mA is 0.375C
-    // (under 0.5C); do not raise this without a different cell. Target 4.20 V.
-    power.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_150MA);
-    chargeCurrentMa = chgCurMa(power.getChargerConstantCurr());
-    if (power.getChargeTargetVoltage() != XPOWERS_AXP2101_CHG_VOL_4V2) {
-      power.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
-      USBSerial.println("power: charge target voltage was not 4.20 V — set to 4.20 V");
-    }
-    static const char *const CHG_VOL[] = {"?", "4.00", "4.10", "4.20", "4.35", "4.40"};
-    const uint8_t vol = power.getChargeTargetVoltage();
-    const int pre = (int)power.getPrechargeCurr();          // 25 mA steps
-    const int term = (int)power.getChargerTerminationCurr(); // 25 mA steps
-    USBSerial.printf("power: charge current set to %d mA; target %s V; precharge %d mA, "
-                     "termination %d mA (defaults, reported only)\n",
-                     chargeCurrentMa, vol < 6 ? CHG_VOL[vol] : "?", pre * 25, term * 25);
-  }
   vbusStable = vbusGood;
   vbusStableCand = vbusGood;
 
@@ -925,6 +984,18 @@ void loop() {
   }
   if (!touching) pressingBody = false;
   prevPressingBody = pressingBody;
+
+  // A flaky boot heals itself: anything not found at boot is re-probed every
+  // 60 s. The PMU re-run repeats its full setup (measurements, 150 mA).
+  if ((!powerReady || !touchReady) && tNow - lastReprobeMs >= 60000) {
+    lastReprobeMs = tNow;
+    if (!powerReady && pmuSetup("re-probe")) { vbusStable = vbusGood; vbusStableCand = vbusGood; }
+    if (!touchReady) touchSetup("re-probe");
+    if (!powerReady || !touchReady) {
+      USBSerial.printf("re-probe: PMU %s, touch %s — again in 60 s\n",
+                       powerReady ? "ok" : "missing", touchReady ? "ok" : "missing");
+    }
+  }
 
   // The PMU answers "external VBUS is good" even for charge-only adapters.
   // Require two consecutive changed samples so one I2C miss cannot switch the

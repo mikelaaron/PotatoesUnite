@@ -115,7 +115,9 @@ static size_t buildHeartbeatJson(const char *secretHex, int revSeen, const Heart
   doc["secret"] = secretHex;
   doc["rev_seen"] = revSeen;
   JsonObject b = doc["battery"].to<JsonObject>();
-  b["pct"] = snap.pct;
+  // The field is always present; pct is null when the battery is unknown
+  // (no PMU). The server stores null and makes no judgement on it.
+  if (snap.pct < 0) b["pct"] = nullptr; else b["pct"] = snap.pct;
   b["charging"] = snap.charging;
   b["vbus"] = snap.vbus;
   doc["orientation"] = snap.orientation;

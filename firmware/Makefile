@@ -2,7 +2,13 @@ FQBN   ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=16M,PartitionSch
 SKETCH ?= potato
 # Match usbmodem/usbserial only. A bare /dev/cu.* match picks up
 # cu.Bluetooth-Incoming-Port and fails the upload with a confusing error.
-PORT   ?= $(shell arduino-cli board list 2>/dev/null | awk '/^\/dev\/cu\.(usbmodem|usbserial|wchusbserial|SLAB)/ {print $$1; exit}')
+# Auto-detect only when exactly one candidate is plugged in. With two boards
+# on USB (the potato and the e-paper press) the first match is whichever
+# enumerated first, which is how you flash the wrong device. Then pass PORT=.
+# Map a board to its port with: ioreg -p IOUSB -l -w0 (USB Serial Number ->
+# locationID; 0x20130000 -> /dev/cu.usbmodem201301).
+CANDIDATES := $(shell arduino-cli board list 2>/dev/null | awk '/^\/dev\/cu\.(usbmodem|usbserial|wchusbserial|SLAB)/ {print $$1}')
+PORT   ?= $(if $(filter 1,$(words $(CANDIDATES))),$(CANDIDATES),)
 
 .PHONY: build upload monitor ports libs marble-sim come-here-sim clean
 
@@ -20,7 +26,7 @@ build:
 	arduino-cli compile --fqbn $(FQBN) --build-property "compiler.cpp.extra_flags=$(EXTRA_FLAGS)" $(SKETCH)
 
 upload: build
-	@test -n "$(PORT)" || { echo "No serial port found. Plug the board in, or pass PORT=/dev/cu.usbmodemXXXX"; exit 1; }
+	@test -n "$(PORT)" || { echo "No single serial port to pick ($(words $(CANDIDATES)) candidates: $(CANDIDATES)). Pass PORT=/dev/cu.usbmodemXXXX explicitly."; exit 1; }
 	arduino-cli upload -p $(PORT) --fqbn $(FQBN) $(SKETCH)
 
 # The ESP32-S3 has no USB-serial chip — the USB CDC is the chip itself. DTR and
@@ -30,7 +36,7 @@ upload: build
 MONITOR_CFG ?= baudrate=115200,dtr=off,rts=off
 
 monitor:
-	@test -n "$(PORT)" || { echo "No serial port found."; exit 1; }
+	@test -n "$(PORT)" || { echo "No single serial port to pick ($(words $(CANDIDATES)) candidates: $(CANDIDATES)). Pass PORT= explicitly."; exit 1; }
 	arduino-cli monitor -p $(PORT) -c $(MONITOR_CFG)
 
 # Old behaviour, in case a future board actually needs the lines asserted.
@@ -65,3 +71,48 @@ libs:
 
 clean:
 	rm -rf build/
+
+# ------------------------------------------------------------- paper ---
+# The e-paper press (firmware/paper): Waveshare ESP32-S3-ePaper-1.54G,
+# ESP32-S3-PICO-1-N8R8 — 8 MB flash, OPI PSRAM, USB CDC (the vendor's IDE
+# settings). Two boards share this Mac, so paper-upload/monitor refuse to
+# guess a port: pass PORT=/dev/cu.usbmodemXXXX on the command line, and the
+# upload first reads the chip's MAC and refuses the AMOLED potato's.
+PAPER_FQBN ?= esp32:esp32:esp32s3:PSRAM=opi,CDCOnBoot=cdc,FlashSize=8M,PartitionScheme=default_8MB
+PAPER_ROTATE ?= 0
+DOREEN_MAC ?= 28:84:85:90:b4:58
+
+.PHONY: paper-build paper-upload paper-monitor paper-mac paper-preview paper-portrait
+
+paper-build:
+	arduino-cli compile --fqbn $(PAPER_FQBN) --build-property "compiler.cpp.extra_flags=-DEPD_ROTATE_180=$(PAPER_ROTATE)" paper
+
+# Explicit PORT only: `make paper-upload PORT=/dev/cu.usbmodem2101`. The MAC
+# comes from the USB descriptors (tools/usb_mac.sh), never by opening the
+# port: opening an S3's USB CDC on macOS resets it, and Doreen must not be
+# reset. Port names change across re-plugs; MACs do not.
+paper-port-check:
+	@[ "$(origin PORT)" = "command line" ] || { echo "paper-upload/monitor need an explicit PORT=/dev/cu.usbmodemXXXX on the command line (never the AMOLED's)"; exit 1; }
+	@MAC=$$(tools/usb_mac.sh $(PORT) | tr 'A-F' 'a-f'); \
+	[ -n "$$MAC" ] || { echo "no Espressif USB device behind $(PORT)"; exit 1; }; \
+	echo "port $(PORT) is MAC $$MAC"; \
+	[ "$$MAC" != "$(DOREEN_MAC)" ] || { echo "REFUSING: $(PORT) is Doreen (the AMOLED potato)"; exit 1; }
+
+# The MAC behind PORT, from USB descriptors (does not touch the port).
+paper-mac:
+	@tools/usb_mac.sh $(PORT)
+
+paper-upload: paper-build paper-port-check
+	arduino-cli upload -p $(PORT) --fqbn $(PAPER_FQBN) paper
+
+paper-monitor: paper-port-check
+	arduino-cli monitor -p $(PORT) -c $(MONITOR_CFG)
+
+# Render the page on the host (no hardware): writes /tmp/paper-*.ppm/.png.
+paper-preview:
+	$(CXX) -std=c++11 -Wall -Wextra -I paper tools/paper_preview.cpp -o /tmp/paper_preview
+	/tmp/paper_preview /tmp/paper
+	for s in morning evening incident question nonet; do python3 tools/ppm2png.py /tmp/paper-$$s.ppm; done
+
+paper-portrait:
+	python3 tools/make_portrait.py > paper/portrait.h

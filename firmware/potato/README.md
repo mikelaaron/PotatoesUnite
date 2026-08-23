@@ -4,6 +4,13 @@ Firmware for the Waveshare ESP32-S3-Touch-AMOLED-1.8 **V2** (CO5300 + CST820,
 QMI8658, AXP2101). Forked from `~/Developer/ESP32-S3/firmware/creature`; the
 rasterizer, IMU handling, PMU and power code are the creature's.
 
+I2C bring-up: before `Wire.begin` the firmware runs a bus-recovery sequence
+(if SDA is held low by a slave that was mid-transaction at reset, SCL is
+clocked up to nine times, then a STOP); the expander, touch and PMU are then
+probed up to three times 50 ms apart, and anything still missing is re-probed
+every 60 s from the loop (the PMU re-run repeats its full setup). While the
+PMU is missing the heartbeat carries `"battery": {"pct": null, …}`.
+
 Battery: a 3.7 V / 400 mAh / 1.48 Wh Li-ion cell. At boot the firmware sets
 the AXP2101 constant charge current to **150 mA** (0.375C, under 0.5C) and
 the charge target voltage to **4.20 V**, and prints both plus the precharge
@@ -20,7 +27,8 @@ server from a task on core 0 while the face runs on core 1.
 
 ```
 make -C firmware build      # arduino-cli, FQBN pinned in firmware/Makefile
-make -C firmware upload     # PORT auto-detected (usbmodem); or PORT=/dev/cu.usbmodem2101
+make -C firmware upload     # PORT auto-detected only if exactly one board is plugged in
+make -C firmware upload PORT=/dev/cu.usbmodem201301   # with two boards on USB, always explicit
 make -C firmware monitor    # dtr=off,rts=off — never chain onto upload
 ```
 
@@ -31,6 +39,12 @@ Arduino user library dir: Waveshare's fork of `GFX_Library_for_Arduino`
 `Adafruit_BusIO`, `XPowersLib`, plus from the Library Manager: `WiFiManager`
 (tzapu, 2.0.17), `ArduinoJson` (7.4.3). The three `FreeSans*.h` fonts are
 copied from Adafruit GFX (BSD) into this directory.
+
+With two boards on USB (Doreen and the e-paper press) `make upload` refuses to
+guess. Map a board to its port with `ioreg -p IOUSB -l -w0`: find its
+`USB Serial Number` (Doreen is `28:84:85:90:B4:58`) and the `locationID` in
+the same block; `0x20130000` is `/dev/cu.usbmodem201301`, `0x02100000` is
+`/dev/cu.usbmodem2101`. Ports move when cables do — check before every flash.
 
 The S3's USB CDC is the chip itself: DTR/RTS feed its reset sequence, so a
 monitor that asserts them parks the chip and prints nothing. For scripted
