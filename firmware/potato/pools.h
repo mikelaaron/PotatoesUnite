@@ -7,12 +7,16 @@
 // Reaction lines. Every string here is verbatim from docs/POTATO_VOICE.md
 // (§3, §11, §12). Do not improve them; reread §1 of the voice doc first.
 //
-// A pool is picked by this potato's seed plus a small recent-history index,
-// so the same potato keeps the same kind of voice and never says the same
-// line twice running. Single lines have no pool.
+// A pool plays out in full, in an order the potato's seed sets, before any
+// line comes back (§3). The cursor is persisted from the sketch, so a
+// reboot does not reopen with the same seed-picked line. Single lines have
+// no pool.
 
 enum PoolId : uint8_t {
   POOL_PICKUP = 0,
+  POOL_PICKUP_RARE,   // never walked; the seed picks one line for keeps
+  POOL_MORNING,
+  POOL_RESTLESS,
   POOL_PUTDOWN,
   POOL_DARK_RESTORED,
   POOL_CEILING,
@@ -31,8 +35,38 @@ static const char *const LINES_PICKUP[] = {
     "Yes?",
     "Where are we going.",
     "I was in the middle of something.",
-    "Careful. I'm not insured.",
     "Noted.",
+    "I was settled.",
+    "There was no notice.",
+    "Very well.",
+    "I had a position.",
+    "This wasn't scheduled.",
+    "The world was adequate.",
+    "The Hands have intervened.",
+    "One moment.",
+};
+
+// The seed gives each potato one of these as its own signature, said every
+// tenth eligible pick-up and no oftener. The ration is what makes it land.
+static const char *const LINES_PICKUP_RARE[] = {
+    "Careful. I'm not insured.",
+    "I assume there is paperwork.",
+    "This is how incidents begin.",
+    "Management again.",
+};
+
+// First pick-up of the day (needs the clock; without it, the core pool).
+static const char *const LINES_MORNING[] = {
+    "Morning.",
+    "A new day. Apparently.",
+    "The Hands are operational.",
+};
+
+// The fourth spoken session in one day, and on.
+static const char *const LINES_RESTLESS[] = {
+    "Again.",
+    "You are restless today.",
+    "Another intervention.",
 };
 
 static const char *const LINES_PUTDOWN[] = {
@@ -40,6 +74,11 @@ static const char *const LINES_PUTDOWN[] = {
     "This is not where I was.",
     "Acceptable.",
     "Closer to outside. Interesting.",
+    "This will do.",
+    "I preferred the other place.",
+    "The world has changed.",
+    "I'll note the view.",
+    "Accepted provisionally.",
 };
 
 // The first entry takes the counted duration, e.g.
@@ -74,6 +113,11 @@ static const char *const LINES_TAP[] = {
     "Yes.",
     "Don't.",
     "What do you need.",
+    "I noticed.",
+    "Once is enough.",
+    "Contact noted.",
+    "I was already awake.",
+    "The Hands are testing something.",
 };
 
 // The first entry takes the local hour from the clock ("It's 11 PM.") and
@@ -156,6 +200,9 @@ struct Pool { const char *const *lines; uint8_t n; };
 
 static const Pool POOLS[POOL_COUNT] = {
     POOL_OF(LINES_PICKUP),
+    POOL_OF(LINES_PICKUP_RARE),
+    POOL_OF(LINES_MORNING),
+    POOL_OF(LINES_RESTLESS),
     POOL_OF(LINES_PUTDOWN),
     POOL_OF(LINES_DARK_RESTORED),
     POOL_OF(LINES_CEILING),
@@ -169,23 +216,62 @@ static const Pool POOLS[POOL_COUNT] = {
     POOL_OF(LINES_DORMANT_WAKE),
 };
 
-static uint32_t poolSeed = 0;            // from NVS; the server's seed once registered
-static uint8_t poolHist[POOL_COUNT];     // how often each pool has fired since boot
-static int8_t poolLast[POOL_COUNT] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+#define POOL_MAX_N 16
 
-// The seed picks this potato's habitual opening for each pool; the history
-// index walks on from there, and a line is never repeated back to back.
+static uint32_t poolSeed = 0;             // from NVS; the server's seed once registered
+static uint16_t poolPicks[POOL_COUNT];    // lifetime picks per pool; persisted by the sketch
+static uint16_t pickupCount = 0;          // eligible pick-ups ever; persisted by the sketch
+static bool poolStateDirty = false;       // the sketch saves when set
+
+static uint32_t poolMix(uint32_t a, uint32_t b) {
+  uint32_t h = poolSeed ^ (0x9E3779B9u * (a + 1u)) ^ (0xC2B2AE35u * (b + 1u));
+  h ^= h >> 16; h *= 0x85EBCA6Bu; h ^= h >> 13; h *= 0xC2B2AE35u; h ^= h >> 16;
+  return h;
+}
+
+// One cycle of a pool is 0..n-1 in a seeded order, new order each cycle.
+static void poolOrderRaw(PoolId id, uint16_t cycle, uint8_t n, uint8_t *order) {
+  for (uint8_t i = 0; i < n; ++i) order[i] = i;
+  for (uint8_t i = (uint8_t)(n - 1); i > 0; --i) {
+    const uint8_t j = (uint8_t)(poolMix(((uint32_t)id << 8) | i, cycle) % (uint32_t)(i + 1));
+    const uint8_t t = order[i]; order[i] = order[j]; order[j] = t;
+  }
+}
+
+// A new cycle never opens with the line the old one closed on. The guard
+// only ever swaps slots 0 and 1, so a cycle's closing line is always its
+// raw order's last — the check needs no recursion.
+static void poolOrder(PoolId id, uint16_t cycle, uint8_t n, uint8_t *order) {
+  poolOrderRaw(id, cycle, n, order);
+  if (cycle > 0 && n > 2) {
+    uint8_t prev[POOL_MAX_N];
+    poolOrderRaw(id, (uint16_t)(cycle - 1), n, prev);
+    if (order[0] == prev[n - 1]) { const uint8_t t = order[0]; order[0] = order[1]; order[1] = t; }
+  }
+}
+
+// Walk the pool as a bag: the whole pool before any line returns, never the
+// same line twice running, and the cursor picks up where the last boot left
+// off. Two-line pools strictly alternate, the seed picking the opener.
 static const char *pickLine(PoolId id) {
   const Pool &p = POOLS[id];
   if (p.n == 1) return p.lines[0];
-  uint32_t h = poolSeed ^ (0x9E3779B9u * ((uint32_t)id + 1u));
-  h ^= h >> 16; h *= 0x85EBCA6Bu; h ^= h >> 13;
-  int idx = (int)((h + poolHist[id]) % p.n);
-  if (idx == poolLast[id]) idx = (idx + 1) % p.n;
-  poolLast[id] = (int8_t)idx;
-  ++poolHist[id];
-  return p.lines[idx];
+  const uint16_t k = poolPicks[id]++;
+  poolStateDirty = true;
+  if (p.n == 2) return p.lines[(poolMix(id, 0) + k) % 2u];
+  uint8_t order[POOL_MAX_N];
+  poolOrder(id, (uint16_t)(k / p.n), p.n, order);
+  return p.lines[order[k % p.n]];
 }
+
+// §3: every tenth eligible pick-up is this potato's own rare line — the
+// seed picks which one, for keeps. The sketch counts the pick-ups.
+static const uint8_t RARE_EVERY_N = 10;
+static const char *rareSignatureLine() {
+  return LINES_PICKUP_RARE[poolMix(0x5157, 0xE1) %
+                           (uint32_t)(sizeof(LINES_PICKUP_RARE) / sizeof(LINES_PICKUP_RARE[0]))];
+}
+static uint8_t rareSignaturePhase() { return (uint8_t)(poolMix(0x9A5E, 0xE2) % RARE_EVERY_N); }
 
 // "11 PM": hour only, 12-hour, no minutes.
 static void hour12Words(int hour24, char *out, size_t cap) {

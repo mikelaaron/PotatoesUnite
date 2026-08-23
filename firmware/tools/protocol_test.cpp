@@ -109,15 +109,40 @@ int main() {
   durationWords(2 * 86400 + 3 * 3600, w, sizeof(w)); CHECK_STR(w, "Two days, three hours");
   durationWords(3600, w, sizeof(w));               CHECK_STR(w, "One hour");
 
-  // Pools: seed-stable opening, never the same line twice running.
-  poolSeed = 123456789;
-  const char *a = pickLine(POOL_PICKUP);
-  const char *b = pickLine(POOL_PICKUP);
-  CHECK(a != b);
-  poolSeed = 123456789;
-  memset(poolHist, 0, sizeof(poolHist));
-  for (int i = 0; i < POOL_COUNT; ++i) poolLast[i] = -1;
-  CHECK(pickLine(POOL_PICKUP) == a);
+  // Pools walk as bags: the whole pool before any line returns, never the
+  // same line twice running, deterministic per seed and cursor.
+  {
+    poolSeed = 123456789;
+    memset(poolPicks, 0, sizeof(poolPicks));
+    const Pool &pp = POOLS[POOL_PICKUP];
+    const char *prev = NULL;
+    for (int cyc = 0; cyc < 3; ++cyc) {
+      bool seen[POOL_MAX_N] = {false};
+      for (int i = 0; i < pp.n; ++i) {
+        const char *l = pickLine(POOL_PICKUP);
+        CHECK(l != prev);   // across cycle boundaries too
+        prev = l;
+        for (int k = 0; k < pp.n; ++k) if (l == pp.lines[k]) seen[k] = true;
+      }
+      for (int k = 0; k < pp.n; ++k) CHECK(seen[k]);   // one full pass, no gaps
+    }
+    // Same seed, same cursor: the same walk.
+    const char *first;
+    poolSeed = 123456789; memset(poolPicks, 0, sizeof(poolPicks));
+    first = pickLine(POOL_PICKUP);
+    poolSeed = 123456789; memset(poolPicks, 0, sizeof(poolPicks));
+    CHECK(pickLine(POOL_PICKUP) == first);
+    // The signature rare line is stable per seed and inside the pool.
+    const char *sig = rareSignatureLine();
+    CHECK(sig == rareSignatureLine());
+    CHECK(rareSignaturePhase() < RARE_EVERY_N);
+    // Two-line pools strictly alternate.
+    memset(poolPicks, 0, sizeof(poolPicks));
+    const char *t1 = pickLine(POOL_TRANSIT);
+    const char *t2 = pickLine(POOL_TRANSIT);
+    const char *t3 = pickLine(POOL_TRANSIT);
+    CHECK(t1 != t2 && t1 == t3);
+  }
 
   // Every device line is at most 60 characters at its worst-case fill
   // (docs/COPY_REVIEW.md §1). Templates are filled with the longest value

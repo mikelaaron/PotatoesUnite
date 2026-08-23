@@ -273,12 +273,15 @@ static uint8_t aloneStage = 0;
 // (pickup, putdown, tap, plug, unplug) share a 3-minute cooldown and a ~60%
 // seeded roll; major lines bypass the budget.
 static bool sessionActive = false;
+static bool sessionSpoke = false;       // §15: one line per session; put-down is the fallback
 static uint32_t sessionStartMs = 0, sessionLastActiveMs = 0;
 static float sessionQuietS = 0.0f;
 static uint8_t sessionLifts = 0;
 static uint32_t lastSessionEndMs = 0;   // 0 = never
 static uint32_t lastMinorLineMs = 0;
 static bool minorLineEver = false;
+static uint16_t speakDayKey = 0;        // local day of the last spoken pick-up; persisted
+static uint8_t daySpeakCount = 0;       // spoken pick-up sessions that day; persisted
 static bool wasHeld = false;            // for the physical put-down event edge
 static float heldQuietS = 0.0f;
 
@@ -367,6 +370,15 @@ static bool isNight() {
   const int h = localHour();
   return h >= 0 && (h >= 23 || h < 6);
 }
+// A small local day key for "first pick-up of the day". -1 until the Net
+// has given us a clock.
+static int localDayKey() {
+  const time_t now = time(nullptr);
+  if (now < 1700000000) return -1;
+  struct tm lt;
+  localtime_r(&now, &lt);
+  return (lt.tm_year - 100) * 366 + lt.tm_yday;
+}
 
 static bool asleepNow = false;   // night sleep or the scene says asleep/dormant
 
@@ -390,6 +402,26 @@ static void sayNight() {
   hour12Words(h, hw, sizeof(hw));
   snprintf(buf, sizeof(buf), "%.*s%s%s", (int)(at - l), l, hw, at + 2);
   say(buf, REACTION_S);
+}
+
+// The pick-up slot (§3): the day's first spoken pick-up in morning hours is
+// morning; the fourth spoken session in one day is restless; every tenth
+// eligible pick-up is this potato's own rare line; the rest walk the core
+// pool. Without a clock, only the rare line and the core pool.
+static void sayPickup() {
+  const int day = localDayKey();
+  if (day >= 0) {
+    if ((uint16_t)day != speakDayKey) { speakDayKey = (uint16_t)day; daySpeakCount = 0; }
+    ++daySpeakCount;
+    poolStateDirty = true;
+    const int h = localHour();
+    if (daySpeakCount == 1 && h >= 4 && h < 12) { sayPool(POOL_MORNING); return; }
+    if (daySpeakCount >= 4) { sayPool(POOL_RESTLESS); return; }
+  }
+  ++pickupCount;
+  poolStateDirty = true;
+  if (pickupCount % RARE_EVERY_N == rareSignaturePhase()) { say(rareSignatureLine(), REACTION_S); return; }
+  sayPool(POOL_PICKUP);
 }
 
 static void upperInto(char *dst, size_t cap, const char *src) {
@@ -589,6 +621,34 @@ static bool minorLineAllowed(uint32_t nowMs) {
   return true;
 }
 
+// The pool cursors survive reboots in NVS: without this, every boot (an
+// upload, a dormancy) reopened with the same seed-picked line. A few bytes,
+// written only when a line is spoken — a handful of times a day.
+struct PoolNvs {
+  uint16_t picks[POOL_COUNT];
+  uint16_t pickups;
+  uint16_t day;
+  uint8_t spoken;
+};
+static void poolStateLoad() {
+  PoolNvs s;
+  if (prefs.getBytes("pools", &s, sizeof(s)) == sizeof(s)) {
+    memcpy(poolPicks, s.picks, sizeof(poolPicks));
+    pickupCount = s.pickups;
+    speakDayKey = s.day;
+    daySpeakCount = s.spoken;
+  }
+}
+static void poolStateSave() {
+  PoolNvs s;
+  memcpy(s.picks, poolPicks, sizeof(s.picks));
+  s.pickups = pickupCount;
+  s.day = speakDayKey;
+  s.spoken = daySpeakCount;
+  prefs.putBytes("pools", &s, sizeof(s));
+  poolStateDirty = false;
+}
+
 // AXP2101 constant-current register code -> mA (datasheet: 0..8 in 25 mA
 // steps to 200 mA, then 100 mA steps to 1000 mA).
 static inline int chgCurMa(uint8_t code) {
@@ -774,6 +834,7 @@ void setup() {
   } else {
     USBSerial.printf("seed: %08lx (NVS)\n", (unsigned long)poolSeed);
   }
+  poolStateLoad();   // the bags pick up where the last boot left off
 
   netBegin(prefs, &events);
   if (identity.seed) poolSeed = identity.seed;   // the server's seed wins
@@ -801,7 +862,7 @@ static void serialCommand(int c) {
   switch (c) {
     case 't': sayPool(POOL_TAP); postEvent(EV_TAP); break;
     case 'n': sayNight(); break;
-    case 'p': sayPool(POOL_PICKUP); postEvent(EV_PICKUP); break;
+    case 'p': sayPickup(); postEvent(EV_PICKUP); break;
     case 'd':
       blankUntilMs = millis() + 1000; blanked = false; alarmedUntilMs = millis() + 5000;
       sayPool(POOL_DROP); postEvent(EV_DROP);
@@ -1093,6 +1154,7 @@ void loop() {
     postEvent(EV_PICKUP);
     if (!sessionActive) {
       sessionActive = true;
+      sessionSpoke = false;
       sessionStartMs = tNow;
       sessionLifts = 1;
       sessionQuietS = 0.0f;
@@ -1102,7 +1164,8 @@ void loop() {
         const uint32_t away = lastSessionEndMs == 0 ? 0 : (tNow - lastSessionEndMs) / 1000;
         if (away >= 24 * 3600) say(LINE_RETURN_LONG, REACTION_S);
         else if (away >= 4 * 3600) say(LINE_RETURN, REACTION_S);
-        else sayPool(POOL_PICKUP);
+        else sayPickup();
+        sessionSpoke = true;
       }
     } else {
       ++sessionLifts;   // same encounter; the File may note "Repeatedly."
@@ -1115,9 +1178,10 @@ void loop() {
       sessionActive = false;
       lastSessionEndMs = tNow;
       const uint32_t durS = (sessionLastActiveMs - sessionStartMs) / 1000;
-      // Put-down speaks only after a session of 30 s or more, one time in
-      // three, and only if the minor budget allows.
-      if (durS >= 30 && !inDark && seededRoll() < 0.3333f && minorLineAllowed(tNow)) {
+      // Put-down is the fallback, not a second line (§15): only after a
+      // session of 30 s or more that began in silence, one time in three,
+      // and only if the minor budget allows.
+      if (durS >= 30 && !inDark && !sessionSpoke && seededRoll() < 0.3333f && minorLineAllowed(tNow)) {
         sayPool(POOL_PUTDOWN);
       }
     }
@@ -1564,6 +1628,10 @@ void loop() {
   }
 
   // ------------------------------------------------------------ telemetry ---
+
+  // A line was spoken since the last save: persist the pool cursors, so the
+  // next boot does not reopen with the same line.
+  if (poolStateDirty) poolStateSave();
 
   ++frames;
   const uint32_t nowMs = millis();
