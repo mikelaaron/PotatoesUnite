@@ -141,3 +141,16 @@ released` on its first real boot, and everything was found on attempt 1.
 the bus, not the devices. Recover before `Wire.begin`, retry probes a few
 times, and keep re-probing from the loop so a bad boot cannot stay bad. And
 with two boards on USB, never let a Makefile guess the port.
+
+## The potato goes on every screen
+
+**2026-08-23.** I gave the e-paper board a newspaper layout because it has no
+touch and no motion sensor, and the brief had a line about the e-paper being
+"the press." Mike's verdict, holding it: "I want a potato on the screen — not
+a newspaper." He was also right that a cursor moved one step per 15-second
+refresh is unusable. The screen is the product's face; a constraint on a board
+is a reason to draw the potato differently, not to replace it.
+
+**How to apply:** every device shows the potato, one line, and choices. Design
+input for the medium (press-count voting with LED feedback, one refresh) rather
+than designing a different product for it.

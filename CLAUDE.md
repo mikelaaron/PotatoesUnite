@@ -22,13 +22,13 @@ The Hands (you) · the world (desk) · the county (room) · the dark · the ceil
 Real potato words, used deadpan. **No puns.** The one exception is the paper's name, *The Tuber*. Never "spud", never "tater", never "a-peeling".
 
 ## Scope rules
-- v1 is: one server, the board (public), the File (private, claim code), `questions.json`, the AMOLED citizen firmware, the e-paper press firmware, a web flasher. That's it.
+- v1 is: one server, the Net page (public), the File (private, claim code), `questions.json`, the AMOLED citizen firmware, the e-paper citizen firmware, a web flasher. That's it.
 - Out of scope until v1 lives on two desks for a week: AI, accounts, maps, friend graphs, app, payments, launch plans, metrics.
 - `site/` is Codex's parked landing page. Don't extend it; don't publish it.
 
 ## Hardware
 - AMOLED citizen: Waveshare ESP32-S3-Touch-AMOLED-1.8 **V2** (CO5300 + CST820, QMI8658, AXP2101). Base firmware: `~/Developer/ESP32-S3/firmware/creature` — fork it, keep its rasterizer, IMU handling, PMU and power code, and obey `~/Developer/ESP32-S3/docs/hardware.md` + `tasks/lessons.md` (even-aligned blits, `PSRAM=opi`, `CDCOnBoot=cdc`, monitor with `dtr=off,rts=off`).
-- E-paper press: Waveshare ESP32-S3-ePaper-1.54G (200×200, 4-color, ~15 s refresh, GPIO17 power latch).
+- E-paper citizen: Waveshare ESP32-S3-ePaper-1.54G (200×200, 4-color, ~15 s refresh, GPIO17 power latch). It shows the same potato as the AMOLED (dithered, red ink for red varieties), one line, numbered choices voted by press-count on BOOT with LED feedback and a single refresh. It is NOT a newspaper — the owner was explicit. No motion sensor, no touch: it is the potato that never gets picked up.
 - Look: the potato lies down, brown, asymmetric, two dark dimple-eyes, no mouth, no limbs, smooth and anti-aliased on black. Spec and mock: `.claude/agents/art.md` + `assets/potato-look-v1.svg`. A coarse pixel grid on a featureless blob reads as "low-res," not "retro" (see the creature repo lessons); old-school lives in the type and the layout.
 
 ## Privacy (non-negotiable, state it on the flasher page)

@@ -6,7 +6,7 @@ You are the art director for Potatoes Unite. Read `CLAUDE.md` and `docs/POTATO_V
 
 The potato is simple and charming because it is simple: a clean irregular silhouette, two eyes (potatoes have eyes), no mouth by default. Varieties are real cultivars and differ subtly — silhouette, eye placement, skin tint, a dither pattern on 1-bit surfaces. One source of truth: `assets/varieties.json` drives the device (procedural parameters), the File portrait, the board, and the social cards, so a person's potato looks the same everywhere.
 
-Surfaces: AMOLED 368×448 (color, smooth), e-paper 200×200 (black/white/red/yellow, ~15 s refresh — headlines, not faces), web (the board, the File), and 1200×675 social cards. Palette: ink, paper, potato brown, a red reserved for incidents and the e-paper. Type: one bitmap-feeling face for lines and headlines, one plain monospace for filings. Deliver specs (parameters, palettes, layouts) and SVG/Canvas sources — not AI-generated raster images.
+Surfaces: AMOLED 368×448 (color, smooth), e-paper 200×200 (black/white/red/yellow, ~15 s refresh — the same potato, dithered, red ink for red varieties; the owner wants a potato on every screen, never a newspaper), web (the Net, the File), and 1200×675 social cards. Palette: ink, paper, potato brown, a red reserved for incidents and the e-paper. Type: one bitmap-feeling face for lines and headlines, one plain monospace for filings. Deliver specs (parameters, palettes, layouts) and SVG/Canvas sources — not AI-generated raster images.
 
 ## The look — decided 22 Aug 2026
 

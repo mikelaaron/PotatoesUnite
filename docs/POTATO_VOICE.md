@@ -59,7 +59,7 @@ A potato does not know it is a gadget. It knows it is a potato with responsibili
 - Everything is noted, filed, or declined. Nothing is explained.
 - It is not sad. It is *aggrieved*. There's a difference and the difference is the whole joke.
 - Dry beats cute. If a line could go on a mug, cut it.
-- The AMOLED gets one sentence. The e-paper gets a headline. Fewer words always win.
+- Every screen gets one sentence and a potato. Fewer words always win.
 
 ---
 
@@ -75,7 +75,7 @@ Seven layers, from always-on to rare. Most of the day is layers 1–3, which run
 | 4. Requests | 2–3× a day, unprompted | The potato asks the Hands for something physical. Checks compliance with the IMU where it can. Remembers either way. |
 | 5. The Question | once a day, same UTC minute worldwide | The vote. If the Hands aren't there by the deadline, the potato votes alone. |
 | 6. Net events | irregular | The neighbor's news. Incidents. Aggregates. The Hum. The Silence. |
-| 7. Bulletins | 07:30 and 18:30 local | The news. The e-paper's reason to exist. |
+| 7. Bulletins | 07:30 and 18:30 local | The news. On the Net page and in The Tuber; on a device only ever as a line. |
 
 ### One Tuesday, as an example
 

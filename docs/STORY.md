@@ -37,7 +37,7 @@ The Council has noted this. It notes most things.
 
 ## How it works, for the Hands
 
-1. A supported board. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED (a citizen with a face) or the 1.54-inch e-paper (a citizen that prints the paper).
+1. A supported board. At present two, both Waveshare ESP32-S3: the 1.8-inch AMOLED or the 1.54-inch e-paper. Both show a potato. One of them takes fifteen seconds to change its mind.
 2. Flash it from the browser. One page, one button, no toolchain.
 3. Join its Wi-Fi once. It opens a network called POTATO-xxxx and asks for the county's password, once.
 4. It names itself. Doreen, Clive, Maureen, Gerald. Name, number, and variety come from its seed. You are not consulted.
@@ -58,7 +58,7 @@ It senses which way up it is, handling (picked up, put down, shaken, dropped, ca
 
 ## The code
 
-All of it is open: {GITHUB_URL}. Inside: the server (one process, no dependencies), two firmwares (the AMOLED citizen and the e-paper citizen that prints the paper), the protocol, and the voice document every line must pass. A board with a screen and a radio that is not on the list? The protocol is a few small requests. Ports are welcome. Puns are not.
+All of it is open: {GITHUB_URL}. Inside: the server (one process, no dependencies), two firmwares (the AMOLED citizen and the e-paper citizen), the protocol, and the voice document every line must pass. A board with a screen and a radio that is not on the list? The protocol is a few small requests. Ports are welcome. Puns are not.
 
 ---
 
