@@ -29,7 +29,7 @@ Real potato words, used deadpan. **No puns.** The one exception is the paper's n
 ## Hardware
 - AMOLED citizen: Waveshare ESP32-S3-Touch-AMOLED-1.8 **V2** (CO5300 + CST820, QMI8658, AXP2101). Base firmware: `~/Developer/ESP32-S3/firmware/creature` — fork it, keep its rasterizer, IMU handling, PMU and power code, and obey `~/Developer/ESP32-S3/docs/hardware.md` + `tasks/lessons.md` (even-aligned blits, `PSRAM=opi`, `CDCOnBoot=cdc`, monitor with `dtr=off,rts=off`).
 - E-paper press: Waveshare ESP32-S3-ePaper-1.54G (200×200, 4-color, ~15 s refresh, GPIO17 power latch).
-- Look: on the AMOLED, smooth and precise is the flex — a coarse pixel grid on a featureless blob reads as "low-res," not "retro" (see lessons). Old-school lives in the type and the layout; the potato itself is a clean silhouette with eyes.
+- Look: the potato lies down, brown, asymmetric, two dark dimple-eyes, no mouth, no limbs, smooth and anti-aliased on black. Spec and mock: `.claude/agents/art.md` + `assets/potato-look-v1.svg`. A coarse pixel grid on a featureless blob reads as "low-res," not "retro" (see the creature repo lessons); old-school lives in the type and the layout.
 
 ## Privacy (non-negotiable, state it on the flasher page)
 No location ever leaves a device. No raw audio, only a loudness bucket. Nothing below five potatoes is shown publicly. Potato names/numbers are pseudonyms; only the Hands know which is theirs.
