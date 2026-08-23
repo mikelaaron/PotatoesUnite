@@ -24,6 +24,10 @@ export const EVENT_TYPES = new Set([
   'request_done', 'request_expired',
 ]);
 const HANDLING = new Set(['pickup', 'putdown', 'facedown_start', 'facedown_end', 'inverted_start', 'inverted_end', 'shake', 'drop', 'tap', 'transit_start', 'transit_end']);
+// The ration (voice doc §15): a handling session is one entry; anything under a minute is not a record.
+const SESSION_GAP_S = 60;
+const RATION_S = 60;
+const SESSION_TYPES = new Set(['pickup', 'putdown', 'tap']);
 const IDLE_STEPS = [[4 * HOUR, '4h'], [8 * HOUR, '8h'], [DAY, '24h'], [2 * DAY, '48h'], [3 * DAY, '72h'], [7 * DAY, '7d']];
 const CLAIM_L = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const CLAIM_A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -180,8 +184,8 @@ export class World {
 
   // ------------------------------------------------------------------ heartbeat
   heartbeat(body = {}) {
+    this.tick(); // before loading the potato: the tick may settle and save its state
     const p = this.requirePotato(body.secret);
-    this.tick();
     const t = this.now();
     const prevSeen = p.last_seen_t;
     const b = body.battery && typeof body.battery === 'object' ? body.battery : {};
@@ -213,15 +217,65 @@ export class World {
         'INSERT OR IGNORE INTO events(potato_id, t, type, dur_s, pct, request_id, received_t) VALUES (?, ?, ?, ?, ?, ?, ?)',
         p.id, ev.t, ev.type, ev.dur_s == null ? null : Math.round(num(ev.dur_s)), ev.pct == null ? null : Math.round(num(ev.pct)),
         ev.request_id == null ? null : String(ev.request_id), t);
-      if (r.changes) { this.applyEvent(p, ev); applied.push(ev); }
+      if (r.changes && this.applyEvent(p, ev)) applied.push(ev);
     }
+    this.settle(p, t);
     this.noteReaction(p, applied, t);
     if (p.orientation !== 'down' && p.st.dark_since && !events.some((e) => e.type === 'facedown_end')) p.st.dark_since = null;
     if (p.orientation !== 'inverted' && p.st.inverted_since && !events.some((e) => e.type === 'inverted_end')) p.st.inverted_since = null;
-    this.applyIdle(p, since, t);
+    this.applyIdle(p, this.sinceHandled(p, t), t);
     this.maybeIssueRequest(p, t);
     this.save(p);
     return this.scene(p, t);
+  }
+
+  // Seconds since the Hands last finished with it: the end of the last handling session, not the last raw event.
+  // During a session it is small. Before the server has seen any handling, trust the device's counter.
+  sinceHandled(p, t) {
+    const st = p.st;
+    if (st.session) return Math.max(0, t - st.session.last_t);
+    if (st.last_handled_t) return Math.max(0, t - st.last_handled_t);
+    return Math.max(0, Math.min(t - p.created_t, (p.since_handled_s || 0) + (t - p.last_seen_t)));
+  }
+
+  sessionDur(s) { return s < 60 ? `${Math.round(s)} s` : durShort(s); }
+
+  // Things the ration holds back until a minute has passed: open sessions, pending charge events, the dark.
+  settle(p, now) {
+    const st = p.st, F = this.pools.file;
+    if (st.session && now - st.session.last_t > SESSION_GAP_S) this.closeSession(p);
+    if (st.charge_pending && now - st.charge_pending.t > RATION_S) { this.fileCharge(p, st.charge_pending); st.charge_pending = null; }
+    if (st.dark_since && !st.dark_filed && now - st.dark_since >= RATION_S) {
+      this.addEntry(p, { t: st.dark_since, kind: 'dark_start', text: F.dark_start.text });
+      st.dark_filed = true;
+    }
+    if (st.inverted_since && !st.inverted_filed && now - st.inverted_since >= RATION_S) {
+      this.addEntry(p, { t: st.inverted_since, kind: 'ceiling_start', text: F.ceiling_start.text });
+      st.inverted_filed = true;
+    }
+  }
+
+  // One entry per session: "Picked up. 24 s." — "Repeatedly." if it took three or more pickups.
+  closeSession(p) {
+    const st = p.st, s = st.session, F = this.pools.file.pickup;
+    st.session = null;
+    if (!s) return;
+    const dur = s.last_putdown_t ? Math.max(0, s.last_putdown_t - s.start_t) : 0;
+    const h = C.hourOf(s.start_t, p.utc_offset_min || 0);
+    let note = '';
+    if (s.pickups >= 3) note = F.note_repeatedly;
+    else if (s.gap >= 8 * HOUR) note = fill(F.note_after_long, { dur: durShort(s.gap) });
+    else if (h >= 5 && h < 12) note = F.note_morning;
+    else if (h >= 23 || h < 5) note = F.note_night;
+    this.addEntry(p, { t: s.start_t, kind: 'pickup', text: dur > 0 ? fill(F.text_dur, { dur: this.sessionDur(dur) }) : F.text, note, standing: s.standing || 0, dur_s: dur });
+    st.last_handled_t = Math.max(st.last_handled_t || 0, s.last_t);
+    st.idle_mark = 0;
+    if (st.sprouted_t && !st.sprout_clear_t) st.sprout_clear_t = s.last_t + DAY;
+  }
+
+  fileCharge(p, pend) {
+    const F = this.pools.file[pend.type];
+    this.addEntry(p, { t: pend.t, kind: pend.type, text: F.text, note: F.note });
   }
 
   // Events in this heartbeat outrank steady state. The most severe one speaks; the rest are filed.
@@ -287,9 +341,10 @@ export class World {
   }
 
   applyEvent(p, ev) {
-    const t = ev.t, st = p.st, F = this.pools.file, off = p.utc_offset_min || 0;
+    const t = ev.t, st = p.st, F = this.pools.file;
     const dur = Math.max(0, num(ev.dur_s));
     const day = C.dayKey(t);
+    if (st.session && t - st.session.last_t > SESSION_GAP_S) this.closeSession(p);
     const handled = () => {
       st.last_handled_t = Math.max(st.last_handled_t || 0, t);
       st.idle_mark = 0;
@@ -298,40 +353,56 @@ export class World {
     let standing = 0;
     if (HANDLING.has(ev.type) && st.presence_day !== day) { st.presence_day = day; standing += 1; }
 
+    // Handling sessions: pickups, putdowns and taps within a minute of each other are one thing.
+    if (SESSION_TYPES.has(ev.type) && st.session) {
+      const s = st.session;
+      s.last_t = Math.max(s.last_t, t);
+      if (ev.type === 'pickup') s.pickups += 1;
+      if (ev.type === 'putdown') { s.putdowns += 1; s.last_putdown_t = t; }
+      if (ev.type === 'tap') s.taps += 1;
+      s.standing += standing;
+      return false; // folded into the session; not a fresh reaction
+    }
+
     switch (ev.type) {
       case 'pickup': {
-        const gap = t - (st.last_handled_t || p.created_t);
-        const h = C.hourOf(t, off);
-        let note = '';
-        if (gap >= 8 * HOUR) note = fill(F.pickup.note_after_long, { dur: durShort(gap) });
-        else if (h >= 5 && h < 12) note = F.pickup.note_morning;
-        else if (h >= 23 || h < 5) note = F.pickup.note_night;
-        this.addEntry(p, { t, kind: 'pickup', text: F.pickup.text, note, standing });
+        st.session = { start_t: t, last_t: t, pickups: 1, putdowns: 0, taps: 0, last_putdown_t: null, gap: t - (st.last_handled_t || p.created_t), standing };
         if (st.pickup_day !== day) {
           st.pickup_day = day;
           st.first_pickup_t = t;
           this.neighborEntry(p, t, 'neighbor_pickup');
         }
-        handled(); break;
+        return true;
       }
-      case 'putdown': this.addEntry(p, { t, kind: 'putdown', text: F.putdown.text, standing }); handled(); break;
-      case 'facedown_start': st.dark_since = t; this.addEntry(p, { t, kind: 'dark_start', text: F.dark_start.text, standing }); handled(); break;
+      case 'putdown': this.addEntry(p, { t, kind: 'putdown', text: F.putdown.text, standing }); handled(); return true;
+      case 'tap': this.addEntry(p, { t, kind: 'tap', text: F.tap.text, standing }); handled(); return true;
+      case 'facedown_start': st.dark_since = t; st.dark_filed = false; handled(); return false;
       case 'facedown_end': {
         const d = dur || (st.dark_since ? t - st.dark_since : 0);
-        st.dark_since = null; st.dark_restored_t = t; st.dark_restored_dur = d;
+        const since = st.dark_since;
+        st.dark_since = null;
+        if (d < RATION_S) { st.dark_filed = false; return false; } // not a record
+        if (!st.dark_filed) this.addEntry(p, { t: since ?? t - d, kind: 'dark_start', text: F.dark_start.text });
+        st.dark_filed = false;
+        st.dark_restored_t = t; st.dark_restored_dur = d;
         st.dark_count = (st.dark_count || 0) + 1;
         const note = d >= HOUR ? F.dark_end.note_long : d >= 10 * MIN ? F.dark_end.note : '';
         this.addEntry(p, { t, kind: 'dark_end', text: fill(F.dark_end.text, { dur: durShort(d) }), note, standing: standing - Math.min(4, d / HOUR), dur_s: d });
         if (d >= HOUR) this.neighborEntry(p, t, 'neighbor_dark', { dur: durShort(d), dur_s: d });
-        handled(); break;
+        handled(); return true;
       }
-      case 'inverted_start': st.inverted_since = t; this.addEntry(p, { t, kind: 'ceiling_start', text: F.ceiling_start.text, standing }); handled(); break;
+      case 'inverted_start': st.inverted_since = t; st.inverted_filed = false; handled(); return false;
       case 'inverted_end': {
         const d = dur || (st.inverted_since ? t - st.inverted_since : 0);
-        st.inverted_since = null; st.ceiling_restored_t = t;
+        const since = st.inverted_since;
+        st.inverted_since = null;
+        if (d < RATION_S) { st.inverted_filed = false; return false; }
+        if (!st.inverted_filed) this.addEntry(p, { t: since ?? t - d, kind: 'ceiling_start', text: F.ceiling_start.text });
+        st.inverted_filed = false;
+        st.ceiling_restored_t = t;
         const note = d >= 20 * MIN ? F.ceiling_end.note_long : d >= 5 * MIN ? F.ceiling_end.note : '';
         this.addEntry(p, { t, kind: 'ceiling_end', text: fill(F.ceiling_end.text, { dur: durShort(d) }), note, standing: standing - Math.min(3, d / (20 * MIN)), dur_s: d });
-        handled(); break;
+        handled(); return true;
       }
       case 'shake': {
         if (st.shake_day !== day) { st.shake_day = day; st.shake_count = 0; }
@@ -339,29 +410,41 @@ export class World {
         const note = F.shake.notes[Math.min(st.shake_count - 1, F.shake.notes.length - 1)];
         this.addEntry(p, { t, kind: 'shake', text: F.shake.text, note, standing: standing - 1 });
         this.neighborEntry(p, t, 'neighbor_shake');
-        handled(); break;
+        handled(); return true;
       }
       case 'drop': {
         this.addEntry(p, { t, kind: 'drop', text: F.drop.text, note: F.drop.note, standing: standing - 2 });
         this.store.setMeta('last_drop_t', t);
         this.neighborEntry(p, t, 'neighbor_drop');
-        handled(); break;
+        handled(); return true;
       }
-      case 'tap': this.addEntry(p, { t, kind: 'tap', text: F.tap.text, standing }); handled(); break;
-      case 'transit_start': st.transit_since = t; this.addEntry(p, { t, kind: 'transit_start', text: F.transit_start.text, standing }); handled(); break;
+      case 'transit_start': st.transit_since = t; this.addEntry(p, { t, kind: 'transit_start', text: F.transit_start.text, standing }); handled(); return true;
       case 'transit_end': {
         const d = dur || (st.transit_since ? t - st.transit_since : 0);
         st.transit_since = null;
         this.addEntry(p, { t, kind: 'transit_end', text: fill(F.transit_end.text, { dur: durShort(d) }), note: F.transit_end.note, standing, dur_s: d });
-        handled(); break;
+        handled(); return true;
       }
-      case 'charge_start': st.charge_since = t; this.addEntry(p, { t, kind: 'charge_start', text: F.charge_start.text, note: F.charge_start.note }); break;
-      case 'charge_end': st.charge_since = null; this.addEntry(p, { t, kind: 'charge_end', text: F.charge_end.text, note: F.charge_end.note }); break;
+      case 'charge_start': case 'charge_end': {
+        // Plug, unplug, plug again inside a minute is fumbling, not news. Hold each for a minute; an opposite cancels both.
+        if (ev.type === 'charge_end') st.last_charge_end_t = t;
+        st.charge_since = ev.type === 'charge_start' ? t : null;
+        const pend = st.charge_pending;
+        if (pend && pend.type !== ev.type && t - pend.t <= RATION_S) {
+          st.charge_pending = null;
+          if (st.reaction && st.reaction.type.startsWith('charge_')) st.reaction = null;
+          return false;
+        }
+        if (pend) this.fileCharge(p, pend);
+        st.charge_pending = { type: ev.type, t };
+        return true;
+      }
       case 'battery_low': {
+        if (st.last_charge_end_t && t - st.last_charge_end_t <= RATION_S) return false; // the reading right after an unplug
         const pctv = Math.round(num(ev.pct, 0));
         st.last_low_pct = pctv; st.last_low_t = t;
         this.addEntry(p, { t, kind: 'battery_low', text: fill(F.battery_low.text, { pct: pctv }), note: F.battery_low.note });
-        break;
+        return true;
       }
       case 'dormant_resume': {
         const t0 = t - dur;
@@ -370,23 +453,23 @@ export class World {
         this.addEntry(p, { t: t0, kind: 'dormant', text: fill(F.dormant.text, { pct: pctv }), note: present ? F.dormant.note_present : F.dormant.note_away, standing: present ? -1 : -1.5 });
         this.addEntry(p, { t, kind: 'dormant_resume', text: fill(F.dormant_resume.text, { dur: durShort(dur) }), note: dur >= 3 * DAY ? F.dormant_resume.note_long : F.dormant_resume.note, dur_s: dur });
         st.last_low_pct = null;
-        break;
+        return true;
       }
       case 'wifi_restore': {
         const n = Math.floor(dur / (12 * HOUR));
         this.addEntry(p, { t, kind: 'wifi_restore', text: fill(F.wifi_restore.text, { dur: durShort(dur) }), note: n > 0 ? fill(F.wifi_restore.note, { n }) : '', dur_s: dur });
-        break;
+        return true;
       }
       case 'loud': {
         const horns = h32(p.seed, 'horns') % 7 === 0; // rare; seed-dependent
         st.loud_count = (st.loud_count || 0) + 1;
         if (horns) st.horns_count = (st.horns_count || 0) + 1;
         this.addEntry(p, { t, kind: 'loud', text: F.loud.text, note: horns ? F.loud.note_rare : '' });
-        break;
+        return true;
       }
-      case 'request_done': this.resolveRequest(p, ev.request_id, 'done', t); break;
-      case 'request_expired': this.resolveRequest(p, ev.request_id, 'expired', t); break;
-      default: break;
+      case 'request_done': this.resolveRequest(p, ev.request_id, 'done', t); return false;
+      case 'request_expired': this.resolveRequest(p, ev.request_id, 'expired', t); return false;
+      default: return false;
     }
   }
 
@@ -422,7 +505,7 @@ export class World {
     if (this.activeBroadcast('silence', t)) return;
     if (this.openRequest(p, t)) return;
     if (p.orientation === 'down') return; // it can't see the screen
-    if (p.st.sprouted_t || (p.since_handled_s || 0) >= DAY) return; // nobody is there to ask
+    if (p.st.sprouted_t || this.sinceHandled(p, t) >= DAY) return; // nobody is there to ask
     const st = p.st, day = C.dayKey(t), ds = C.dayStart(t);
     if (!st.req || st.req.day !== day) st.req = { day, slots: [] };
     const quota = 2 + (h32(p.seed, day, 'rq') % 2); // two or three a day
@@ -574,8 +657,8 @@ export class World {
   }
 
   choice({ secret, scene_rev, choice_id } = {}) {
-    const p = this.requirePotato(secret);
     this.tick();
+    const p = this.requirePotato(secret);
     const t = this.now();
     const N = this.pools.net.count;
     choice_id = String(choice_id ?? '');
@@ -648,6 +731,11 @@ export class World {
     this.store.setMeta('last_tick_day', today);
     this.ensureNeighbors(t);
     this.expireRequests(t);
+    for (const p of this.active(t)) {
+      if (!p.st.session && !p.st.charge_pending && !(p.st.dark_since && !p.st.dark_filed) && !(p.st.inverted_since && !p.st.inverted_filed)) continue;
+      this.settle(p, t);
+      this.save(p);
+    }
   }
 
   // ------------------------------------------------------------------ aggregates
@@ -782,7 +870,7 @@ export class World {
     const lineBc = this.activeBroadcast('line', t);
     const open = this.questionOpen(t);
     const vote = open ? this.store.get('SELECT * FROM votes WHERE day = ? AND potato_id = ?', day, p.id) : null;
-    const since = Math.max(0, (p.since_handled_s || 0) + (t - p.last_seen_t));
+    const since = this.sinceHandled(p, t);
     const req = this.openRequest(p, t);
     const reqDef = req ? this.requestDef(req.kind) : null;
     const lastOut = st.last_request_outcome;
@@ -797,12 +885,12 @@ export class World {
     else if (lineBc) { line = lineBc.line || ''; expires.push(lineBc.to_t); }
     else if (t >= humT && t < humT + 3 * MIN && this.humPick(p.seed, day)) { line = N.hum; expires.push(t + 4); }
     else if (lastOut && t - lastOut.t < 5 * MIN && lastOut.line) { line = lastOut.line; expression = lastOut.outcome === 'done' ? 'pleased' : 'aggrieved'; expires.push(lastOut.t + 5 * MIN); }
-    else if (p.orientation === 'down' && st.dark_since) {
+    else if (p.orientation === 'down' && st.dark_since && t - st.dark_since >= RATION_S) {
       const d = t - st.dark_since;
       const step = d >= 3 * HOUR ? ['3h', null] : d >= HOUR ? ['1h', 3 * HOUR] : d >= 10 * MIN ? ['10min', HOUR] : ['immediate', 10 * MIN];
       line = sp(R.dark[step[0]], 'dark', step[0]); expression = 'aggrieved';
       if (step[1]) expires.push(st.dark_since + step[1]);
-    } else if (p.orientation === 'inverted' && st.inverted_since) {
+    } else if (p.orientation === 'inverted' && st.inverted_since && t - st.inverted_since >= RATION_S) {
       const d = t - st.inverted_since;
       line = d >= 20 * MIN ? sp(R.ceiling['20min'], 'ceil20') : sp(R.ceiling.immediate, 'ceil', st.dark_count || 0);
       expression = 'aggrieved';

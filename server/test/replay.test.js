@@ -12,8 +12,8 @@ test('a replayed Tuesday prints the File the voice doc describes', () => {
   assert.match(reg.claim_code, /^[A-Z]{3}-[A-Z0-9]{3}$/);
 
   set(at(7, 10)); hb(w, secret, [{ t: at(7, 10), type: 'pickup' }]);
-  set(at(9, 0)); hb(w, secret, [{ t: at(9, 0), type: 'putdown' }]);
-  set(at(12, 40)); hb(w, secret, [], { since_handled_s: 4 * 3600 });
+  set(at(8, 40)); hb(w, secret, [{ t: at(8, 40), type: 'putdown' }]); // a lone put-down, 90 min after the session
+  set(at(12, 40)); hb(w, secret, []); // four hours since the last handling, by the server's clock
   set(at(13, 30));
   const open = hb(w, secret, []);
   assert.equal(open.choices.length, 3, 'the Question is open with three buttons');

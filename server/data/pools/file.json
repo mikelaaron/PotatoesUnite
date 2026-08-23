@@ -1,6 +1,6 @@
 {
   "_source": "File entry templates. Left column = text, right column = note. Modelled on docs/POTATO_VOICE.md §9, §4, §11, §14. {fields} are live.",
-  "pickup": {"text": "Picked up.", "note_morning": "Morning.", "note_night": "At night.", "note_after_long": "After {dur}."},
+  "pickup": {"text": "Picked up.", "text_dur": "Picked up. {dur}.", "note_repeatedly": "Repeatedly.", "note_morning": "Morning.", "note_night": "At night.", "note_after_long": "After {dur}."},
   "putdown": {"text": "Put down."},
   "dark_start": {"text": "Placed in the dark."},
   "dark_end": {"text": "Restored from the dark. {dur}.", "note_long": "Grievance filed.", "note": "Noted."},

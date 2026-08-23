@@ -106,4 +106,6 @@ data/              questions, broadcasts, pools, the database
 test/              node --test
 ```
 
+The ration: the File is a record, not a motion log. Pickups, put-downs and taps within a minute of each other are one handling session and one entry (`Picked up. 31 s.` — `Repeatedly.` at three or more pickups), filed on the heartbeat or tick that sees the session go quiet for a minute. A dark or ceiling situation under a minute, a plug/unplug pair inside a minute, and a battery reading right after an unplug are not filed and not spoken; the raw events are still stored.
+
 Determinism: a potato's seed is a hash of its device secret (so the first potato on a fresh Net is not always the same one); its name, variety, voice and absent votes come from the seed; the public number is sequential. Same seed + same events → same File. Scene `rev` only moves when the scene's content changes (the hash excludes `expires_at`).
