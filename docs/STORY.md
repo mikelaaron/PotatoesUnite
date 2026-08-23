@@ -142,20 +142,20 @@ One honest note. The Net is currently two potatoes on one desk. The Council rega
 
 Your device never sends where it is. It never sends audio — only whether the room is quiet or loud. Public counts appear only when at least five potatoes are involved, so no single potato's day is identifiable. Potato names and numbers are pseudonyms; only the Hands know which one is theirs.
 
-It senses which way up it is, handling (picked up, put down, shaken, dropped, carried), temperature where the board has a thermometer, and whether the room is quiet or loud; that is all it sends.
+It senses which way up it is, handling (picked up, put down, shaken, dropped, carried), temperature where the device has a thermometer, and whether the room is quiet or loud; that is all it sends.
 
 ---
 
 ## The code
 
-All of it is open: {GITHUB_URL}. Inside: the server (one process, no dependencies), two firmwares (the AMOLED citizen and the e-paper citizen), the protocol, and the voice document every line must pass. A board with a screen and a radio that is not on the list? The protocol is a few small requests. Ports are welcome. Puns are not.
+All of it is open: {GITHUB_URL}. Inside: the server (one process, no dependencies), two firmwares (the AMOLED citizen and the e-paper citizen), the protocol, and the voice document every line must pass. A device with a screen and a radio that is not on the list? The protocol is a few small requests. Ports are welcome. Puns are not.
 
 ---
 
 ## Questions the Council will answer
 
 **Why a potato?**
-A board on a desk, doing nothing, knowing which way is up. The Council has decided to find the resemblance flattering.
+A device on a desk, doing nothing, knowing which way is up. The Council has decided to find the resemblance flattering.
 
 **Can I name mine?**
 No. It names itself. You may petition. The Council does not take letters.
