@@ -4,6 +4,12 @@ Firmware for the Waveshare ESP32-S3-Touch-AMOLED-1.8 **V2** (CO5300 + CST820,
 QMI8658, AXP2101). Forked from `~/Developer/ESP32-S3/firmware/creature`; the
 rasterizer, IMU handling, PMU and power code are the creature's.
 
+Battery: a 3.7 V / 400 mAh / 1.48 Wh Li-ion cell. At boot the firmware sets
+the AXP2101 constant charge current to **150 mA** (0.375C, under 0.5C) and
+the charge target voltage to **4.20 V**, and prints both plus the precharge
+and termination currents (left at the PMU defaults). Do not raise the charge
+current without a different cell.
+
 What it does: draws a potato (see `potato_shape.h`, reference
 `assets/potato-look-v1.svg`), reacts to handling with lines from
 `docs/POTATO_VOICE.md` (`pools.h`, verbatim), shows the Net's scene line and

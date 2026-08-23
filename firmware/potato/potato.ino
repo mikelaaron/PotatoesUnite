@@ -667,8 +667,21 @@ void setup() {
     power.enableBattVoltageMeasure();
     power.enableVbusVoltageMeasure();
     power.enableSystemVoltageMeasure();
+    // The cell is a 3.7 V / 400 mAh / 1.48 Wh Li-ion pouch. 150 mA is 0.375C
+    // (under 0.5C); do not raise this without a different cell. Target 4.20 V.
+    power.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_150MA);
     chargeCurrentMa = chgCurMa(power.getChargerConstantCurr());
-    USBSerial.printf("power: charge current setting %d mA (left unchanged)\n", chargeCurrentMa);
+    if (power.getChargeTargetVoltage() != XPOWERS_AXP2101_CHG_VOL_4V2) {
+      power.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+      USBSerial.println("power: charge target voltage was not 4.20 V — set to 4.20 V");
+    }
+    static const char *const CHG_VOL[] = {"?", "4.00", "4.10", "4.20", "4.35", "4.40"};
+    const uint8_t vol = power.getChargeTargetVoltage();
+    const int pre = (int)power.getPrechargeCurr();          // 25 mA steps
+    const int term = (int)power.getChargerTerminationCurr(); // 25 mA steps
+    USBSerial.printf("power: charge current set to %d mA; target %s V; precharge %d mA, "
+                     "termination %d mA (defaults, reported only)\n",
+                     chargeCurrentMa, vol < 6 ? CHG_VOL[vol] : "?", pre * 25, term * 25);
   }
   vbusStable = vbusGood;
   vbusStableCand = vbusGood;
