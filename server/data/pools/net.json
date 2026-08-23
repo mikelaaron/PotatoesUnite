@@ -60,7 +60,10 @@
       "The Question closed. I chose. It's in the File."
     ],
     "polls_close": "Polls close at {close_time}.",
-    "early": "The Question opens at {open_time}."
+    "early": "The Question opens at {open_time}.",
+    "recount": [
+      "The Council does not do recounts."
+    ]
   },
   "file_unread": {
     "1d": "The File has entries.",

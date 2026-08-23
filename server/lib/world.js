@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { Store } from './db.js';
 import { Data } from './data.js';
 import { NAMES } from './names.js';
+import { hasTouch } from './boards.js';
 import * as C from './clock.js';
 import { h32, seedFromSecret, pick, shuffle } from './rng.js';
 import { fill, numberWords, durShort, durWords, hourWords, fitLine, requestShort, pct, sayLabel, fewerThanFive, capitalize } from './text.js';
@@ -196,6 +197,7 @@ export class World {
       unread, sinceLine: unread === 0 ? H.nothing_since : unread === 1 ? H.entry_since : fill(H.entries_since, { n: unread }),
       matters, days, offsetKnown: p.utc_offset_min != null, withheldText: F.withheld, emptyText: F.empty,
       newMarker: H.new_marker, footer: H.footer, mattersEmpty: H.matters_empty, readT: p.file_read_t || 0,
+      ballot: this.fileBallot(p, t), touch: hasTouch(p.board),
     };
   }
 
@@ -757,10 +759,8 @@ export class World {
     return { kind: tally.winners.includes(v.choice_id) ? 'majority' : 'minority', ...fields };
   }
 
-  choice({ secret, scene_rev, choice_id } = {}) {
-    this.tick();
-    const p = this.requirePotato(secret);
-    const t = this.now();
+  // One vote per Question or event. A re-post of the same choice is idempotent; a different one is a recount, and the Council does not do those.
+  castVote(p, choice_id, t) {
     const N = this.pools.net.count;
     choice_id = String(choice_id ?? '');
     const req = this.openRequest(p, t);
@@ -768,7 +768,7 @@ export class World {
     if (def && def.choices && def.choices.some((c) => c.id === choice_id)) {
       this.resolveRequest(p, req.id, 'done', t);
       this.save(p);
-      return { status: 200, scene: this.scene(p, t) };
+      return { status: 200 };
     }
     const day = C.dayKey(t);
     const row = this.questionRow(day);
@@ -777,21 +777,64 @@ export class World {
     const ev = this.activeEvent(t);
     const evChoice = ev ? ev.choices.find((c) => c.id === choice_id) : null;
     if (evChoice && !(questionLive && q.options.some((o) => o.id === choice_id))) {
+      const prior = this.eventVote(p, ev);
+      if (prior) return prior.choice_id === evChoice.id ? { status: 200 } : { status: 409, line: pick(N.recount, p.seed, ev.id) };
       this.recordEventVote(p, ev, evChoice, t);
-      return { status: 200, scene: this.scene(p, t) };
+      return { status: 200 };
     }
     if (!q || !q.options.length || t < C.openAt(t) || this.activeBroadcast('silence', t)) {
-      return { status: 409, scene: this.scene(p, t, { line: fill(N.early, { open_time: `${C.hm(C.openAt(t))} UTC` }), choices: [] }) };
+      return { status: 409, line: fill(N.early, { open_time: `${C.hm(C.openAt(t))} UTC` }) };
     }
-    if (row.closed || t >= C.closeAt(t)) {
-      return { status: 409, scene: this.scene(p, t, { line: pick(N.late, p.seed, day), choices: [] }) };
-    }
+    if (row.closed || t >= C.closeAt(t)) return { status: 409, line: pick(N.late, p.seed, day) };
     const opt = q.options.find((o) => o.id === choice_id);
-    if (!opt) throw new HttpError(400, { error: 'unknown choice_id', choices: q.options.map((o) => o.id) });
-    // Re-posting the same choice is not a new vote: t (which times the acknowledgement) only moves when the choice changes.
-    this.store.run('INSERT INTO votes(day, potato_id, choice_id, by_hands, t) VALUES (?, ?, ?, 1, ?) ON CONFLICT(day, potato_id) DO UPDATE SET by_hands = 1, t = CASE WHEN votes.choice_id = excluded.choice_id AND votes.by_hands = 1 THEN votes.t ELSE excluded.t END, choice_id = excluded.choice_id', day, p.id, opt.id, t);
+    if (!opt) return { status: 400, error: { error: 'unknown choice_id', choices: q.options.map((o) => o.id) } };
+    const prior = this.store.get('SELECT * FROM votes WHERE day = ? AND potato_id = ?', day, p.id);
+    if (prior) return prior.choice_id === opt.id ? { status: 200 } : { status: 409, line: pick(N.recount, p.seed, day) };
+    this.store.run('INSERT INTO votes(day, potato_id, choice_id, by_hands, t) VALUES (?, ?, ?, 1, ?)', day, p.id, opt.id, t);
+    return { status: 200 };
+  }
+
+  choice({ secret, scene_rev, choice_id } = {}) {
+    this.tick();
+    const p = this.requirePotato(secret);
+    const t = this.now();
+    const r = this.castVote(p, choice_id, t);
+    if (r.status === 400) throw new HttpError(400, r.error);
     if (Number.isFinite(Number(scene_rev)) && Number(scene_rev) !== p.scene_rev) this.log(`choice from ${p.id} against rev ${scene_rev} (current ${p.scene_rev}); accepted`);
-    return { status: 200, scene: this.scene(p, t) };
+    return { status: r.status, scene: this.scene(p, t, r.line ? { line: r.line, choices: [] } : null) };
+  }
+
+  // The File's ballot: live for boards without touch, read-only otherwise. Null when nothing is on the buttons.
+  fileBallot(p, t) {
+    const day = C.dayKey(t);
+    const row = this.questionRow(day);
+    const q = row && row.question_id ? this.data.question(row.question_id) : null;
+    const open = this.questionOpen(t);
+    const H = this.pools.file.header;
+    const touch = hasTouch(p.board);
+    if (open) {
+      const vote = this.store.get('SELECT * FROM votes WHERE day = ? AND potato_id = ?', day, p.id);
+      return { kind: 'question', text: q.text, options: q.options.map((o) => ({ id: o.id, label: o.label })), voted: vote ? vote.choice_id : null, closes_at: C.closeAt(t), touch, canVote: !touch && !vote,
+        aside: touch ? H.cast_on_potato : fill(H.cannot_tap, { name: p.name }) };
+    }
+    const ev = this.activeEvent(t);
+    if (ev) {
+      const vote = this.eventVote(p, ev);
+      return { kind: 'event', text: ev.line || '', options: ev.choices.map((c) => ({ id: c.id, label: c.label })), voted: vote ? vote.choice_id : null, closes_at: ev.to_t, touch, canVote: !touch && !vote,
+        aside: touch ? H.cast_on_potato : fill(H.cannot_tap, { name: p.name }) };
+    }
+    return null;
+  }
+
+  // POST /file/<token>/vote — the Hands of a potato that cannot be tapped.
+  voteFromFile(key, choice_id) {
+    this.tick();
+    const p = this.resolveFile(key);
+    if (!p) return null;
+    if (hasTouch(p.board)) return { status: 403, line: this.pools.file.header.cast_on_potato };
+    const t = this.now();
+    const r = this.castVote(p, choice_id, t);
+    return { status: r.status, line: r.status === 200 ? fill(this.pools.file.header.informed, { NAME: p.name.toUpperCase() }) : r.line || '' };
   }
 
   // ------------------------------------------------------------------ neighbors
@@ -1223,7 +1266,6 @@ export class World {
       }
     }
 
-    if (open && vote && choices.length === 0) choices = q.options.map((o) => ({ id: o.id, label: o.short || o.label }));
     if (!expression) {
       if (st.sprouted_t) expression = 'sprouted';
       else if (p.battery_pct != null && p.battery_pct <= 5 && !p.vbus) expression = 'dormant';

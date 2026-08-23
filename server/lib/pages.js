@@ -38,6 +38,10 @@ p { margin: .4rem 0; }
 .opt.win { background: #1C1A16; color: #F3EBD6; }
 .stamp { position: absolute; top: .7rem; right: .9rem; transform: rotate(-8deg); color: #B4281E; border: 2px solid #B4281E; padding: .05em .5em; font-size: 1.05em; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
 .ballot .note { color: #5E5647; font-size: .9em; margin: .9rem 0 0; }
+.ballot form.options { margin: 0; }
+.ballot button.opt { font-family: var(--serif); font-size: 1em; background: #F3EBD6; color: #1C1A16; border: 1.5px solid #1C1A16; padding: .5rem .6rem; text-transform: none; letter-spacing: 0; cursor: pointer; }
+.ballot button.opt:hover { background: #1C1A16; color: #F3EBD6; opacity: 1; }
+.informed { color: #B4281E; letter-spacing: .12em; margin: .8rem 0 0; }
 .ballot .tally { list-style: none; padding: 0; margin: .2rem 0 0; }
 .ballot .tally li { margin: .35rem 0; }
 .ballot .tally .lab { display: flex; justify-content: space-between; gap: 1rem; }
@@ -335,6 +339,7 @@ ${f.neighborAside ? `<p class="aside">${h(f.neighborAside)}</p>` : ''}
 <p class="tt since">${h(f.sinceLine)}</p>
 <p class="muted"><span${live ? ' data-tz-note' : ''}>${f.offsetKnown ? 'Times are local to the potato.' : 'Times are UTC.'}</span></p>
 </header>
+${fileBallotHtml(f)}
 <h2>Matters of record</h2>
 <div class="matters">
 ${matters}
@@ -347,6 +352,23 @@ ${f.unread ? `<p class="tt marker">${h(f.newMarker)}</p>` : ''}
 ${days}
 </div>
 <footer class="tt file-foot">${h(f.footer)}</footer>`);
+}
+
+// The File's ballot card. Working buttons only for a board that cannot be tapped; otherwise read-only.
+function fileBallotHtml(f) {
+  const b = f.ballot;
+  if (!b) return '';
+  const stamp = b.voted ? 'COUNT IN' : 'POLL OPEN';
+  let options;
+  if (b.canVote) {
+    options = `<form class="options vote" method="post" action="/file/${h(f.key)}/vote">${b.options.map((o) => `<button type="submit" class="opt" name="choice_id" value="${h(o.id)}">${h(o.label)}</button>`).join('')}</form>`;
+  } else {
+    options = `<div class="options">${b.options.map((o) => `<div class="opt${b.voted === o.id ? ' win' : ''}">${h(o.label)}</div>`).join('')}</div>`;
+  }
+  const informed = f.informed ? `<p class="tt informed">${h(f.informed)}</p>` : '';
+  const when = b.kind === 'question' ? `<p class="note">Polls close at ${utc(b.closes_at, ' data-local-end')}<span class="local-slot"></span>.</p>` : '';
+  return `<section class="ballot"><span class="stamp">${h(stamp)}</span><h2>${b.kind === 'question' ? 'The Question' : 'The Council asks'}</h2><p class="q">${h(b.text)}</p>${options}${informed}${when}</section>
+<p class="aside">${h(b.aside)}</p>`;
 }
 
 // After POST /file/<token>/ack: one line, nothing else.

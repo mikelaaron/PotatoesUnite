@@ -1,8 +1,8 @@
 {
-  "version": "0.2.1",
-  "file": "0.2.1.bin",
-  "sha256": "89c0672c599e2af7bb1577b262aabb94d24309e78da25631d3e179ed8026401e",
-  "size": 1342592,
-  "notes": "Scene message cap raised.",
-  "published": "2026-08-23T16:45:39Z"
+  "version": "0.2.2",
+  "file": "0.2.2.bin",
+  "sha256": "fc28d385872c145da330bb548e072773e785de5836e473f093661327bc289bed",
+  "size": 1342624,
+  "notes": "fw in every heartbeat",
+  "published": "2026-08-23T16:56:49Z"
 }

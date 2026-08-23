@@ -90,3 +90,59 @@ test('matters of record rows carry the instant, so the script renders them local
   assert.match(html, /<div class="matters">\s*<div class="entry[^"]*"><span class="t">TUE 25 AUG 11:02<\/span>/);
   assert.doesNotMatch(html, /data-local-daytime>/);
 });
+
+import http from 'node:http';
+import path from 'node:path';
+import { createApp } from '../lib/app.js';
+import { DATA_DIR, ASSETS_DIR } from './helpers.js';
+
+test('a board without touch votes from the File; a touch board cannot; after a vote the buttons are gone everywhere', async () => {
+  const { w, set } = makeWorld({ start: at(7, 0) });
+  const paper = SECRET(150), amoled = SECRET(151);
+  const cPaper = w.register({ secret: paper, board: 'epaper154', fw: '0.2.1' }).claim_code;
+  const cAmoled = w.register({ secret: amoled, board: 'amoled18', fw: '0.2.1' }).claim_code;
+  const server = http.createServer(createApp({ world: w, illustrationsDir: null, artifactsDir: null }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const tokenFor = (code) => w.mintToken(w.byClaim(code));
+  try {
+    set(at(14, 0));
+    hb(w, paper, []); hb(w, amoled, []);
+    const tp = tokenFor(cPaper), ta = tokenFor(cAmoled);
+    // the paper's File: live buttons
+    let html = await (await fetch(`${base}/file/${tp}`)).text();
+    const name = w.byId('0001').name;
+    assert.match(html, new RegExp(`<form class="options vote" method="post" action="/file/${tp}/vote"><button type="submit" class="opt" name="choice_id" value="heinz">HEINZ</button>`));
+    assert.match(html, new RegExp(`<p class="aside">${name} cannot be tapped\\. ${name}&#39;s Hands may vote here\\. The Council has noted the irregularity\\.</p>`));
+    assert.match(html, /<span class="stamp">POLL OPEN<\/span>/);
+    // the AMOLED's File: read-only
+    html = await (await fetch(`${base}/file/${ta}`)).text();
+    assert.doesNotMatch(html, /class="options vote"|<button type="submit" class="opt"/);
+    assert.match(html, /<div class="options"><div class="opt">HEINZ<\/div>/);
+    assert.match(html, /<p class="aside">Votes are cast on the potato\.<\/p>/);
+    // the Hands vote for the paper
+    const r = await fetch(`${base}/file/${tp}/vote`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'choice_id=hunts' });
+    assert.equal(r.status, 200);
+    html = await r.text();
+    assert.match(html, new RegExp(`<p class="tt informed">${name.toUpperCase()} HAS BEEN INFORMED\\.</p>`));
+    assert.match(html, /<div class="opt win">HUNT&#39;S<\/div>/);
+    assert.doesNotMatch(html, /<button type="submit" class="opt"/, 'buttons gone from the File');
+    assert.match(html, /<span class="stamp">COUNT IN<\/span>/);
+    const v = w.store.get('SELECT * FROM votes WHERE potato_id = ?', '0001');
+    assert.equal(v.choice_id, 'hunts'); assert.equal(v.by_hands, 1);
+    const scene = hb(w, paper, []);
+    assert.equal(scene.line, "Hunt's. Noted.", 'the device gets the ack as usual');
+    assert.equal(scene.choices.length, 0, 'and no buttons');
+    // a second vote is a recount
+    const again = await fetch(`${base}/file/${tp}/vote`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'choice_id=heinz' });
+    assert.equal(again.status, 409);
+    assert.equal(w.store.get('SELECT choice_id FROM votes WHERE potato_id = ?', '0001').choice_id, 'hunts');
+    // the touch board cannot vote from the File
+    assert.equal((await fetch(`${base}/file/${ta}/vote`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'choice_id=heinz' })).status, 403);
+    w.choice({ secret: amoled, scene_rev: 1, choice_id: 'heinz' });
+    html = await (await fetch(`${base}/file/${ta}`)).text();
+    assert.match(html, /<div class="opt win">HEINZ<\/div>/);
+    assert.doesNotMatch(html, /<button type="submit" class="opt"/);
+    assert.equal(hb(w, amoled, []).choices.length, 0);
+  } finally { server.close(); }
+});

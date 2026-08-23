@@ -62,6 +62,7 @@ test('an ad-hoc event: buttons, votes, the File, the absent choice, the after li
     assert.equal(r.scene.line, 'Open it. Noted.');
     assert.equal(r.scene.choices.length, 0);
   }
+  assert.equal(w.choice({ secret: SECRET(71), scene_rev: 1, choice_id: 'ignore' }).status, 409, 'no recounts on events either');
   hb(w, SECRET(75), []); // the fifth is awake but says nothing
   assert.equal(w.file(codes[0]).days[0].entries[0].text, 'Asked about the crate: Open it.');
   set(at(10, 1)); w.tick();

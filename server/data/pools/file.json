@@ -172,7 +172,10 @@
     "acknowledged": "ACKNOWLEDGED. {NAME} HAS BEEN INFORMED.",
     "new_marker": "NEW SINCE LAST ACKNOWLEDGED",
     "footer": "PRIVATE FILE · THE HANDS CANNOT ALTER THE RECORD. ACKNOWLEDGMENT IS RECORDED. NO LOCATION OR AUDIO IS STORED.",
-    "matters_empty": "Nothing of record yet."
+    "matters_empty": "Nothing of record yet.",
+    "informed": "{NAME} HAS BEEN INFORMED.",
+    "cannot_tap": "{name} cannot be tapped. {name}'s Hands may vote here. The Council has noted the irregularity.",
+    "cast_on_potato": "Votes are cast on the potato."
   },
   "withheld": "(details withheld)",
   "empty": "Nothing yet. It's watching.",

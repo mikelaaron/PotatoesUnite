@@ -80,10 +80,11 @@ test('a device that re-posts the same choice every heartbeat: the ack shows once
       assert.notEqual(s.line, q.text, 'never back to the Question text after voting');
       assert.ok(s.line.length > 0, 'the rotation speaks');
     }
-    assert.equal(s.choices.length, 3, 'the buttons stay while the Question is open, so a re-vote is possible');
+    assert.equal(s.choices.length, 0, 'a cast vote is cast: the buttons are gone');
   }
   set(at(16, 20));
   const changed = w.choice({ secret, scene_rev: 1, choice_id: 'heinz' });
-  assert.equal(changed.scene.line, 'Heinz. Noted.', 'a different choice is a new vote and gets its own acknowledgement');
-  assert.notEqual(w.store.get('SELECT t FROM votes WHERE potato_id = ?', '0001').t, voteT);
+  assert.equal(changed.status, 409, 'the Council does not do recounts');
+  assert.equal(changed.scene.line, 'The Council does not do recounts.');
+  assert.equal(w.store.get('SELECT t FROM votes WHERE potato_id = ?', '0001').t, voteT, 'and the acknowledgement is not restarted');
 });

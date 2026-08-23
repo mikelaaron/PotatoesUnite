@@ -142,8 +142,22 @@ export function createApp({ world, illustrationsDir, artifactsDir, githubUrl = '
       f.key = fm[1];
       return html(res, 200, renderFile(f));
     }
+    fm = p.match(/^\/file\/([a-f0-9]{48})\/vote$/);
+    if (m === 'POST' && fm) {
+      const ip = (req.socket && req.socket.remoteAddress) || '?';
+      if (!claimLimit(ip)) return html(res, 429, renderMessage('NOT NOW', TOO_MANY), { 'retry-after': '60' });
+      const body = await readForm(req);
+      const r = world.voteFromFile(fm[1], body.choice_id);
+      if (!r) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
+      const f = world.file(fm[1]);
+      f.key = fm[1];
+      if (r.status === 200) f.informed = r.line;
+      return html(res, r.status === 200 ? 200 : r.status, renderFile(f));
+    }
     fm = p.match(/^\/file\/([a-f0-9]{48})\/ack$/);
     if (m === 'POST' && fm) {
+      const ip = (req.socket && req.socket.remoteAddress) || '?';
+      if (!claimLimit(ip)) return html(res, 429, renderMessage('NOT NOW', TOO_MANY), { 'retry-after': '60' });
       const line = world.ack(fm[1]);
       if (!line) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
       return html(res, 200, renderAcknowledged(line));
