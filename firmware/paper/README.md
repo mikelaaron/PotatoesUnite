@@ -232,3 +232,12 @@ press count on the same Scene is not re-posted. NVS keys: `firmware/NVS.md`.
 4. Watch the heartbeats' `fw` field flip. A device that never heartbeats on
    the new version rolled back. **Never flash a release by USB to test it** —
    that bypasses the OTA path you are trying to prove.
+
+## Flashing a new board
+
+A stranger's board is flashed from the /flash page (ESP Web Tools, browser
+serial, writes `webflash-<version>.bin` at 0x0) or by their coding agent
+following `docs/FLASH_WITH_AN_AGENT.md` — deterministic esptool steps, the
+two supported boards, and the things never to do (`erase_flash` destroys a
+potato's identity). Build the artifacts with `make -C firmware webflash
+BOARD=potato|paper`; public builds must set `PUBLIC_SERVER_URL=`.

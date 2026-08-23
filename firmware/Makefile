@@ -14,7 +14,7 @@ SKETCH ?= potato
 CANDIDATES := $(shell arduino-cli board list 2>/dev/null | awk '/^\/dev\/cu\.(usbmodem|usbserial|wchusbserial|SLAB)/ {print $$1}')
 PORT   ?= $(if $(filter 1,$(words $(CANDIDATES))),$(CANDIDATES),)
 
-.PHONY: build upload monitor ports libs marble-sim come-here-sim clean release
+.PHONY: build upload monitor ports libs marble-sim come-here-sim clean release webflash
 
 # Arduino_GFX chunks QSPI transfers into ESP32QSPI_MAX_PIXELS_AT_ONCE-pixel
 # pieces, defaulting to 1024 — a 2KB staging memcpy plus a transaction setup per
@@ -153,3 +153,42 @@ release:
 	echo "size:    $$SIZE bytes ($$((SIZE * 100 / SLOT))% of the $$SLOT-byte slot)"; \
 	echo "sha256:  $$SHA"; \
 	echo "next:    cd ../server && npm run release -- $$ID data/releases/$$ID/$$VER.bin $$VER \"notes\""
+
+# ---------------------------------------------------------- webflash ---
+# make webflash BOARD=potato|paper — one merged image a browser (ESP Web
+# Tools) writes at offset 0x0: bootloader @0x0 (the S3's bootloader_addr),
+# partition table @0x8000, boot_app0 @0xe000, app @0x10000 — the same four
+# artifacts arduino-cli uploads, at the same offsets. Flash mode/freq/size
+# ride inside the image headers ("keep"). Output lands next to the OTA
+# releases plus an ESP Web Tools manifest fragment (webflash.json).
+#
+# Release builds for the PUBLIC flasher must bake in the public Net URL:
+#   make webflash BOARD=potato PUBLIC_SERVER_URL=https://net.example.org
+# Without it the device defaults to http://potatoes.local:8080 (LAN dev).
+ESPTOOL ?= $(shell ls $(HOME)/Library/Arduino15/packages/esp32/tools/esptool_py/*/esptool 2>/dev/null | head -1)
+SERVER_FLAG = $(if $(PUBLIC_SERVER_URL),-DSERVER_URL_DEFAULT=\"$(PUBLIC_SERVER_URL)\",)
+
+webflash:
+	@test -n "$(BOARD)" || { echo "usage: make webflash BOARD=potato|paper [PUBLIC_SERVER_URL=...]"; exit 1; }
+	@test -n "$(ESPTOOL)" || { echo "esptool not found under Arduino15"; exit 1; }
+	@set -e; \
+	case "$(BOARD)" in \
+	  potato) ID=amoled18; NAME="Potatoes Unite - potato (amoled18)"; FQ="$(FQBN)"; FLAGS="$(EXTRA_FLAGS) $(SERVER_FLAG)";; \
+	  paper)  ID=epaper154; NAME="Potatoes Unite - paper (epaper154)"; FQ="$(PAPER_FQBN)"; FLAGS="-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI) $(SERVER_FLAG)";; \
+	  *) echo "BOARD must be potato or paper"; exit 1;; \
+	esac; \
+	VER=$$(sed -n 's/.*#define FW_VERSION "\(.*\)".*/\1/p' $(BOARD)/version.h); \
+	BP=$(CURDIR)/build/$(BOARD); mkdir -p $$BP; \
+	arduino-cli compile --fqbn $$FQ --build-property "compiler.cpp.extra_flags=$$FLAGS" --build-path $$BP $(BOARD) > $$BP/compile.log 2>&1 || { tail -30 $$BP/compile.log; exit 1; }; \
+	grep "Sketch uses" $$BP/compile.log; \
+	[ -n "$(PUBLIC_SERVER_URL)" ] && echo "baked-in server: $(PUBLIC_SERVER_URL)" || echo "server default: http://potatoes.local:8080 (dev; set PUBLIC_SERVER_URL for the public flasher)"; \
+	OUT=$(RELEASE_DIR)/$$ID; mkdir -p $$OUT; \
+	"$(ESPTOOL)" --chip esp32s3 merge-bin -o $$OUT/webflash-$$VER.bin \
+	  --flash-mode keep --flash-freq keep --flash-size keep \
+	  0x0 $$BP/$(BOARD).ino.bootloader.bin 0x8000 $$BP/$(BOARD).ino.partitions.bin \
+	  0xe000 $$BP/boot_app0.bin 0x10000 $$BP/$(BOARD).ino.bin > /dev/null; \
+	printf '{\n  "name": "%s",\n  "version": "%s",\n  "new_install_prompt_erase": false,\n  "builds": [\n    {\n      "chipFamily": "ESP32-S3",\n      "parts": [{ "path": "webflash-%s.bin", "offset": 0 }]\n    }\n  ]\n}\n' "$$NAME" "$$VER" "$$VER" > $$OUT/webflash.json; \
+	echo "webflash: $$OUT/webflash-$$VER.bin"; \
+	echo "manifest: $$OUT/webflash.json"; \
+	echo "size:     $$(stat -f%z $$OUT/webflash-$$VER.bin) bytes"; \
+	echo "sha256:   $$(shasum -a 256 $$OUT/webflash-$$VER.bin | cut -d' ' -f1)"
