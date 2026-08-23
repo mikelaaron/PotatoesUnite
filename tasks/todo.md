@@ -52,3 +52,11 @@ About page: no captions; transparent cut-out images float with text wrapping the
 - [x] Server: /v0/firmware manifest + /releases + `npm run release`.
 - [x] File v2 (the case against management) and claim-code → long-token exchange with rate limit.
 - [x] Rosemary's stale line: server hold fixed; voted potatoes rotate lines; the device-side cause was most likely the 4 KB scene cap (raised to 8 KB in 0.2.1).
+
+## Public launch checklist (23 Aug evening)
+- [ ] Host: Fly.io/Railway/VPS — NOT Vercel (stateful server). Deploy files ready: server/Dockerfile, server/fly.toml, docs/DEPLOY.md. Owner picks host + buys domain.
+- [ ] /flash page (ESP Web Tools, in progress) + webflash merged binaries (in progress) + FLASH_WITH_AN_AGENT.md (in progress).
+- [ ] Firmware 0.3.0: HTTPS for heartbeat/OTA (planned in PROTOCOL notes) — required before devices use a public server.
+- [ ] GitHub public (delete site/.openai/hosting.json first) → set GITHUB_URL.
+- [ ] @thetuberpress secured (owner, in progress) → set TUBER_URL; banner in progress.
+- [ ] pngquant the six illustrations before public.
