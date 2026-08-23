@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 220" width="520" height="220" role="img" aria-labelledby="slip-title" font-family="VT323, 'Courier New', Courier, monospace">
+  <title id="slip-title">Neighbor assignment slip. Neighbor this week: Clive #0882. You did not choose this. Neither did he.</title>
+  <!-- torn from a roll: perforation along the top -->
+  <line x1="0" y1="7" x2="520" y2="7" stroke="#5E5647" stroke-width="1.5" stroke-dasharray="4 6"/>
+  <rect x="1" y="12" width="518" height="207" fill="#F3EBD6" stroke="#1C1A16" stroke-width="1.5"/>
+  <!-- header -->
+  <text x="28" y="44" font-size="14" letter-spacing="3" fill="#7D7462">THE COUNCIL · ASSIGNMENTS</text>
+  <line x1="28" y1="54" x2="492" y2="54" stroke="#5E5647"/>
+  <!-- body -->
+  <text x="28" y="90" font-size="20" fill="#1C1A16">NEIGHBOR THIS WEEK:</text>
+  <text x="28" y="132" font-size="40" fill="#1C1A16">CLIVE #0882</text>
+  <text x="28" y="168" font-size="18" fill="#1C1A16">YOU DID NOT CHOOSE THIS.</text>
+  <text x="28" y="192" font-size="18" fill="#1C1A16">NEITHER DID HE.</text>
+  <!-- the one red stamp -->
+  <g transform="translate(418 150) rotate(9)" opacity=".86">
+    <rect x="-62" y="-21" width="124" height="42" rx="3" fill="none" stroke="#B4281E" stroke-width="3"/>
+    <rect x="-57" y="-16" width="114" height="32" rx="2" fill="none" stroke="#B4281E" stroke-width="1"/>
+    <text y="7" text-anchor="middle" font-size="19" letter-spacing="1" fill="#B4281E">ASSIGNED</text>
+  </g>
+</svg>

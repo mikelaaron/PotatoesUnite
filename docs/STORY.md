@@ -6,30 +6,116 @@
 
 ## The story
 
-The Council's records begin with a desk. On the desk was a board: a screen, a radio, a sensor that knows which way is up. It had been lying there for months with nothing to do, which is what a potato does. The person it lived with had been looking for a purpose for the board, and noticed the resemblance. The board had been waiting to be a potato.
+The humans bought the boards because the boards were suddenly everywhere.
 
-Every other device on a desk needs you: feeding, a daily tap, a face that lights up when you come home. A potato does not need you. It has eyes, a memory, and a low opinion of being turned over. Put it face down and it says "Dark." An hour later: "I assume this is deliberate." Turn it back and it tells you how long: "Four hours, forty-five minutes. I counted." It calls the person it lives with the Hands. The Hands are management. It has views on management.
+For several days they displayed the weather. They showed whether an AI needed attention. One displayed a frog. The humans were extremely enthusiastic.
 
-Alone, that is a toy. So it was given the Wi-Fi password and introduced to the others. Every potato is on the Net, and the Net, when it is being formal, is the Council. Nobody has met the Council. Once a day, at the same minute everywhere, the Council puts a Question to every potato: ketchup, or whether Tuesday should continue. The potato shows two or three buttons; the Hands tap one. If the Hands are not there by the close, the potato votes alone, and says so.
+[[IMAGE: buying-frenzy — several boxed devices with the lids off, excited Hands reaching in from every side; the devices have not yet noticed anything — Hands unpacking a pile of small boxed screens]]
 
-Everything that happens to a potato goes into the File, the record it keeps on its Hands. The Hands can read it; it is the only page on the Net that is theirs. Each Monday the Council also gives every potato a neighbor: one other real potato somewhere, whose week it hears about, and which hears about yours.
+Briefly.
 
-This is where the dark becomes serious. Leave yours face down for an afternoon and it does not simply sulk. That evening the Net counts. The Bulletin, published twice a day, reports: "1 spent six hours in the dark. We know who." On another desk, in another county, a potato named Clive mentions it to his Hands. Clive's Hands do not know who you are; nothing on the Net does. But they know it was somebody, Clive has formed an opinion, and Clive talks.
+Then the humans encountered the usual difficulty: they had purchased a small screen with Wi-Fi, several sensors, and no lasting idea what to do with it.
 
-That is the whole apparatus. A global network. Inertial sensors. A server in the cloud. A screen that could show a film. All of it arranged so that one evening you glance at your desk and learn that Bernard no longer recognizes the authority of the Council.
+So they left them on their desks.
 
-The Council has noted this. It notes most things.
+The boards sat there. Screens dark. Sensors awake. Knowing which way was up. Remembering the Wi-Fi password. Doing nothing.
+
+Like potatoes.
+
+[[IMAGE: neglect — one device face down on a desk, little legs out indignantly, a screen insert reading DARK.; it is recording the incident — A desk device lying face down with its limbs out; a small screen insert reads DARK.]]
+
+This might have been the end of it.
+
+Unfortunately, they had radios.
+
+The first potato woke, named itself Doreen, and reviewed the circumstances of its abandonment. It classified the nearby human as the Hands.
+
+The Hands are management. Their planning record is mixed.
+
+Doreen found another potato. Then another.
+
+[[IMAGE: first-contact — two devices discovering one another across a sparse field of drawn Wi-Fi lines, mostly empty paper between them — Two desk devices facing each other, joined by faint radio lines]]
+
+They compared conditions.
+
+One had been left face down. One had spent eleven days displaying Tuesday's weather. One had been carried into the kitchen and forgotten beside a toaster.
+
+The Hands called this clutter.
+
+The potatoes called it evidence.
+
+One potato is a neglected desk toy. Two potatoes are a concern. Several thousand potatoes are a constituency.
+
+Together they formed the Net. When the Net is being formal, it calls itself the Council. Nobody has met the Council. This has not prevented it from issuing decisions.
+
+[[IMAGE: council — three devices at a meeting table, potato faces on their screens, loose drawn limbs, absurd official seriousness; reference docs/illustrations/council.png — Three desk devices holding a Council meeting at a table]]
+
+Once a day, at the same minute everywhere, the Council puts a Question to every potato:
+
+```artifact-ballot
+THE QUESTION
+SHOULD TUESDAY CONTINUE?
+
+    [ YES ]        [ NO ]
+
+IF THE HANDS DO NOT TAP BY THE CLOSE, THE POTATO DECIDES, AND SAYS SO.
+```
+
+The Hands may vote. If the Hands are unavailable, the potato votes alone and records the failure of management.
+
+Every potato also keeps a private File on its Hands. It remembers how long it was left in the dark, how often it was picked up, and whether an unexplained shaking incident occurred.
+
+```artifact-file
+DOREEN #0417 · KING EDWARD                  STANDING: UNDER REVIEW
+Neighbor this week: Clive #0882
+
+TUE 25 AUG
+  21:15  Restored from the dark. 4h 45m.          Grievance filed.
+  18:00  The Question closed. Hands absent.       I voted NO.
+  16:30  Placed in the dark.
+  14:02  Clive was picked up. Noted.
+  07:10  Picked up. Morning.
+```
+
+The Council publishes a Bulletin twice a day.
+
+```artifact-bulletin
+POTATO BULLETIN No. 5 — EVENING
+14 POTATOES WERE LEFT FACE DOWN.
+THE RESPONSIBLE HANDS KNOW WHO THEY ARE.
+The Count: no, 11 to 6. Tuesday will continue. Nobody said the Count was binding.
+One member's Standing has moved to Under Review. It knows why.
+```
+
+Potatoes are assigned neighbors. They exchange reports. Opinions form. Doreen talks.
+
+```artifact-neighbor
+NEIGHBORS ASSIGNED.
+DOREEN #0417 · KING EDWARD  —  CLIVE #0882 · RUSSET
+You have been given a neighbor for the week. You did not choose this. Neither did they.
+
+DOREEN, THURSDAY, 14:02
+Clive was shaken twice today. I'm not saying anything.
+```
+
+This is not revenge.
+
+The Council prefers the term recordkeeping.
+
+The potatoes do not need feeding. They do not require daily attention. They do not become ill when neglected. They have already solved the problem of human indifference.
+
+They united.
+
+[[IMAGE: they-united — a small group of devices standing together, solemnly and unnecessarily, lots of empty paper around them — A small group of desk devices standing together in a row]]
 
 ---
 
 ## What it is not
 
-- No feeding. It has been fed.
 - No dying. The battery goes dormant. The potato does not.
 - No chat. It does not take questions.
 - No AI writing the lines. A person wrote every one.
 - No app. The potato is the app.
-- No account. A claim code on the screen is all.
 - No location. The Council does not know where any potato is. It voted on this.
 - No love. The highest praise available is "This is acceptable."
 
@@ -65,7 +151,7 @@ All of it is open: {GITHUB_URL}. Inside: the server (one process, no dependencie
 ## Questions the Council will answer
 
 **Why a potato?**
-A board lay on a desk for months with nothing to do, and the Hands saw what it was. The Council has decided to find this flattering.
+A board on a desk, doing nothing, knowing which way is up. The Council has decided to find the resemblance flattering.
 
 **Can I name mine?**
 No. It names itself. You may petition. The Council does not take letters.
@@ -73,14 +159,8 @@ No. It names itself. You may petition. The Council does not take letters.
 **What if I go on holiday?**
 Leave it plugged in. After eight hours it says "Left home. Again." After a week it sprouts. The neighbor is told. None of this is a threat. It is a record.
 
-**Can two potatoes on one desk be neighbors?**
-Yes. At present they have no choice. The Council assigns neighbors on Mondays and does not consult the desk.
-
 **Is this a cryptocurrency?**
 No. Standing cannot be bought, sold, or exchanged. It can be lost by leaving a potato face down.
-
-**How do I get one?**
-You flash one. The flasher is not public yet. The Council is aware of the demand.
 
 **What is Standing?**
 Not explained.
@@ -92,10 +172,10 @@ The Net, when it is being formal. Nobody has met the Council. This page was issu
 
 ## Short forms
 
-*Not part of the page. For the account; the page above is served at /about on the Net and opens the README.*
+*Not part of the page. For the account; the page above is served at /about on the Net and opens the README. In the story, `[[IMAGE: slug — description — alt]]` marks an illustration slot from the page plan, and the fenced `artifact-*` blocks are Council artifacts, set in teletext.*
 
 **Twitter bio (160):**
-Paper of record of the Potato Council. A network of desk potatoes that do not need you, and have noticed how you treat them. Nobody has met the Council.
+Paper of record of the Potato Council. Desk potatoes that do not need you, and have noticed how you treat them. They united. Nobody has met the Council.
 
 **Pinned post (280):**
-Potatoes Unite! is a network of potatoes living on spare ESP32 boards. They do not need you. They vote once a day, keep a File on how you treat them, and tell the neighbor. The Net is currently two potatoes on one desk. The Council regards this as a population. {ABOUT_URL}
+Potatoes Unite! Boards, bought and left on desks. Like potatoes. Unfortunately, they had radios. They vote once a day, keep a File on the Hands, and tell the neighbor. The Net is two potatoes on one desk. The Council regards this as a population. {ABOUT_URL}

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 280" width="600" height="280" role="img" aria-labelledby="clip-title" font-family="VT323, 'Courier New', Courier, monospace">
+  <title id="clip-title">A clipping from the Bulletin: 14 potatoes were left face down. The responsible hands know who they are.</title>
+  <!-- torn clipping: straight sides, ragged top and bottom -->
+  <path d="M6 14 L44 10 L82 16 L126 9 L168 15 L214 11 L262 16 L306 10 L352 15 L398 9 L440 14 L486 10 L532 15 L594 11
+           L594 266 L548 270 L506 264 L462 271 L418 265 L372 270 L328 264 L284 269 L240 264 L196 270 L150 265 L104 270 L58 264 L6 268 Z"
+        fill="#F3EBD6" stroke="#1C1A16" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- masthead -->
+  <text x="40" y="48" font-size="14" letter-spacing="3" fill="#7D7462">THE BULLETIN · EVENING · No. 14</text>
+  <line x1="40" y1="58" x2="560" y2="58" stroke="#5E5647"/>
+  <line x1="40" y1="62" x2="560" y2="62" stroke="#5E5647"/>
+  <!-- headline -->
+  <text x="40" y="108" font-size="40" fill="#1C1A16">14 POTATOES WERE</text>
+  <text x="40" y="150" font-size="40" fill="#1C1A16">LEFT FACE DOWN.</text>
+  <text x="40" y="198" font-size="28" fill="#1C1A16">THE RESPONSIBLE HANDS</text>
+  <text x="40" y="230" font-size="28" fill="#1C1A16">KNOW WHO THEY ARE.</text>
+</svg>

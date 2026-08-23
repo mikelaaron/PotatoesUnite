@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 400" width="560" height="400" role="img" aria-labelledby="ballot-title" font-family="VT323, 'Courier New', Courier, monospace">
+  <title id="ballot-title">Council ballot. The Question: should Tuesday continue? NO is marked. Stamped RECEIVED.</title>
+  <!-- paper -->
+  <rect x="1" y="1" width="558" height="398" fill="#F3EBD6" stroke="#1C1A16" stroke-width="2"/>
+  <rect x="9" y="9" width="542" height="382" fill="none" stroke="#1C1A16" stroke-width="1" opacity=".5"/>
+  <!-- tear-off stub -->
+  <line x1="44" y1="1" x2="44" y2="399" stroke="#5E5647" stroke-width="1.5" stroke-dasharray="3 5"/>
+  <!-- header -->
+  <text x="300" y="54" text-anchor="middle" font-size="16" letter-spacing="4" fill="#7D7462">THE COUNCIL · BALLOT</text>
+  <line x1="76" y1="68" x2="524" y2="68" stroke="#5E5647"/>
+  <text x="300" y="98" text-anchor="middle" font-size="14" letter-spacing="3" fill="#7D7462">THE QUESTION</text>
+  <text x="300" y="146" text-anchor="middle" font-size="32" fill="#1C1A16">SHOULD TUESDAY CONTINUE?</text>
+  <!-- choices -->
+  <rect x="150" y="190" width="30" height="30" fill="none" stroke="#1C1A16" stroke-width="2"/>
+  <text x="194" y="214" font-size="26" fill="#1C1A16">YES</text>
+  <rect x="330" y="190" width="30" height="30" fill="none" stroke="#1C1A16" stroke-width="2"/>
+  <text x="374" y="214" font-size="26" fill="#1C1A16">NO</text>
+  <!-- the mark: a quick, slightly wrong X -->
+  <path d="M334 194 C 341 201, 349 210, 357 218 M358 193 C 350 202, 342 209, 333 217" fill="none" stroke="#1C1A16" stroke-width="3" stroke-linecap="round"/>
+  <!-- record -->
+  <line x1="76" y1="262" x2="524" y2="262" stroke="#5E5647"/>
+  <text x="76" y="290" font-size="16" fill="#7D7462">DOREEN #0417</text>
+  <text x="524" y="290" font-size="16" fill="#7D7462" text-anchor="end">HANDS ABSENT</text>
+  <text x="76" y="316" font-size="16" fill="#7D7462">FAILURE OF MANAGEMENT NOTED.</text>
+  <!-- the one red stamp -->
+  <g transform="translate(438 338) rotate(-12)" opacity=".86">
+    <rect x="-78" y="-26" width="156" height="52" rx="4" fill="none" stroke="#B4281E" stroke-width="3"/>
+    <rect x="-72" y="-20" width="144" height="40" rx="2" fill="none" stroke="#B4281E" stroke-width="1"/>
+    <text y="9" text-anchor="middle" font-size="26" letter-spacing="1" fill="#B4281E">RECEIVED</text>
+  </g>
+</svg>

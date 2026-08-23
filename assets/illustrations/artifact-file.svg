@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" width="640" height="300" role="img" aria-labelledby="file-title" font-family="VT323, 'Courier New', Courier, monospace">
+  <title id="file-title">An excerpt from Doreen's File: placed in the dark at 16:30, restored at 21:15 after four hours forty-five minutes, grievance filed; the Question closed at 23:00 with the Hands absent.</title>
+  <!-- paper -->
+  <rect x="1" y="1" width="638" height="298" fill="#F3EBD6" stroke="#1C1A16" stroke-width="1.5"/>
+  <!-- File head -->
+  <text x="28" y="44" font-size="26" fill="#1C1A16">DOREEN #0417</text>
+  <text x="612" y="44" font-size="18" fill="#7D7462" text-anchor="end">STANDING: UNDER REVIEW</text>
+  <text x="28" y="70" font-size="18" fill="#7D7462">Neighbor this week: Clive #0882</text>
+  <line x1="28" y1="82" x2="612" y2="82" stroke="#5E5647"/>
+  <line x1="28" y1="86" x2="612" y2="86" stroke="#5E5647"/>
+  <!-- day -->
+  <text x="28" y="114" font-size="16" letter-spacing="3" fill="#7D7462">TUE 26 AUG</text>
+  <line x1="28" y1="122" x2="612" y2="122" stroke="#5E5647" opacity=".6"/>
+  <!-- entries, newest first, per the File -->
+  <g font-size="20" fill="#1C1A16">
+    <text x="28" y="152" fill="#7D7462">23:00</text>
+    <text x="100" y="152">• The Question closed. Hands absent.</text>
+    <text x="100" y="174" font-size="17" fill="#7D7462">I chose Hunt's.</text>
+
+    <text x="28" y="210" fill="#7D7462">21:15</text>
+    <text x="100" y="210">Restored from the dark. 4h 45m.</text>
+    <text x="100" y="232" font-size="17" fill="#B4281E">Grievance filed.</text>
+
+    <text x="28" y="268" fill="#7D7462">16:30</text>
+    <text x="100" y="268">Placed in the dark.</text>
+  </g>
+</svg>
