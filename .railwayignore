@@ -6,3 +6,7 @@ firmware/
 tasks/
 prototypes/
 .claude/
+# No firmware on the public Net until 0.3.0 (HTTPS) ships: the .bin files are
+# gitignored anyway, and a manifest without its binary advertises an update
+# that 404s. Devices OTA from the LAN server until the cutover.
+server/data/releases/
