@@ -80,7 +80,12 @@ test('masthead: lede, clock, the return signal, nav, footer', () => {
   assert.match(html, /<p class="lede">Every potato is connected to the Net\. When the Net reaches a conclusion, the Council announces it\.<\/p>/);
   assert.match(html, /<p class="next" data-next-utc="\d+" data-printed-utc="\d+">NEXT EDITION IN 13 H 0 MIN\.<\/p>/);
   assert.match(html, /The Net · TUE 25 AUG · Day 1 · <a href="\/about">About<\/a>/);
-  assert.match(html, /<footer><p>No location\. No audio\. Nothing reported below five potatoes\. <a href="\/about#privacy">Privacy record →<\/a><\/p><\/footer>/);
+  assert.match(html, /<footer><p>No location\. No audio\. Public counts start at five potatoes\. <a href="\/about#privacy">Privacy record →<\/a><\/p><\/footer>/);
+  assert.match(html, /<input id="claim-code" name="code" size="8" maxlength="8"/, 'room for the whole code');
+  assert.match(html, /\.claim input \{[^}]*width: 12ch; height: 2\.4rem;[^}]*\}/);
+  assert.match(html, /\.claim button \{[^}]*height: 2\.4rem;[^}]*\}/, 'input and button align');
+  assert.match(html, /--red: #e0684f/, 'the marker red has a dark-theme value');
+  assert.match(html, /\.lede \{ margin: 0 0 var\(--s2\); color: var\(--ink\); \}/, 'the lede is left-aligned prose');
   assert.doesNotMatch(html, /issued on/);
   assert.match(renderBoard(w.board(), { tuberUrl: 'https://x.com/thetuber' }), /<p>Editions are also issued on <a href="https:\/\/x\.com\/thetuber">X<\/a>\.<\/p>/);
   set(at(0, 5, 1)); // five minutes after the morning print

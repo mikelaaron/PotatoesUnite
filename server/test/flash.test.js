@@ -42,7 +42,7 @@ test('/flash: two board cards, portraits, vendored module, manifests, the join f
     assert.match(html, /<noscript>[^]*esptool[^]*<\/noscript>/);
     assert.match(html, /POTATO-xxxx/);
     assert.match(html, /<a href="\/flash\/agent">Or hand this page to your coding agent →<\/a>/);
-    assert.match(html, /Tested on exactly these two boards\./);
+    assert.match(html, /Tested on exactly these two devices\./);
     assert.match(html, /<a href="https:\/\/github\.com\/example\/potatoes-unite">CODE →<\/a>/);
     // the manifest and the merged image resolve
     const man = await fetch(`${base}/releases/amoled18/webflash.json`);

@@ -6,22 +6,23 @@ import { hm, dayHeader, dayStart } from './clock.js';
 import { potatoSvg } from './portrait.js';
 
 const CSS = `
-:root { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d7462; --bar: #1c1a16; --barbg: #d9cfb2; --wash: #e6dcc2;
+:root { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d7462; --bar: #1c1a16; --barbg: #d9cfb2; --wash: #e6dcc2; --red: #B4281E;
+  --s1: 12px; --s2: 24px; --s3: 48px; --s4: 64px; /* the spacing scale; nothing else */
   --tt: 'VT323', 'Courier New', Courier, monospace; --serif: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; }
 @media (prefers-color-scheme: dark) {
-  :root { --paper: #15130f; --ink: #e8dfc6; --rule: #9a907a; --faint: #a09680; --bar: #e8dfc6; --barbg: #2a2620; --wash: #1e1b16; }
+  :root { --paper: #15130f; --ink: #e8dfc6; --rule: #9a907a; --faint: #a09680; --bar: #e8dfc6; --barbg: #2a2620; --wash: #1e1b16; --red: #e0684f; }
 }
 * { box-sizing: border-box; }
 /* A Council document is printed on paper, whatever the room's lighting. Ink drawings vanish on a dark ground. */
 body.paper-doc { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d7462; --wash: #e6dcc2; --barbg: #d9cfb2; --bar: #1c1a16; }
 /* the flasher */
-.boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+.boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--s2); margin: var(--s2) 0; }
 .board-card { border: 2px solid var(--rule); background: var(--wash); padding: 1rem 1.1rem; text-align: center; }
 .board-card h3 { font-family: var(--tt); font-size: 1.2em; letter-spacing: .08em; text-transform: uppercase; margin: .5rem 0 .2rem; }
 .board-card p { font-size: .92em; margin: .3rem 0 .8rem; }
 .board-card esp-web-install-button button, .board-card .connect { font-family: var(--tt); font-size: 1.2em; background: var(--ink); color: var(--paper); border: 0; padding: .45rem 1.6rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
 .board-card .unsupported { display: block; color: var(--faint); font-size: .85em; margin-top: .5rem; }
-.requirements { text-align: center; color: var(--faint); }
+.requirements { color: var(--faint); }
 .follow { text-align: center; margin: .2rem 0 0; }
 .follow a { text-decoration: none; border-bottom: 1px solid var(--faint); color: var(--faint); letter-spacing: .15em; }
 .oneliner { background: var(--wash); border: 1px solid var(--rule); padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
@@ -30,20 +31,20 @@ body { margin: 0 auto; max-width: 65ch; padding: 1.5rem 1rem 3rem; background: v
   font-family: var(--serif); font-size: 19px; line-height: 1.5; }
 a { color: inherit; }
 .tt, h2, .mast h1, .mast .sub, .now, .next, .pop, .head, .stamp, .label, .entry .t, .entry .txt, .day h2, .small, .file-head h1, .ack-note, button, .insert, .withheld, .edition h2 { font-family: var(--tt); line-height: 1.25; }
-.mast { text-align: center; border-top: 4px double var(--rule); border-bottom: 4px double var(--rule); padding: .4rem 0 .5rem; margin-bottom: .6rem; }
+.mast { text-align: center; border-top: 4px double var(--rule); border-bottom: 4px double var(--rule); padding: .4rem 0 .5rem; margin-bottom: var(--s1); }
 .mast h1 { margin: 0; font-size: 3rem; letter-spacing: .06em; line-height: 1; }
 .mast .sub { color: var(--faint); text-transform: uppercase; letter-spacing: .15em; font-size: 1em; margin-top: .3rem; }
 .mast .sub a { text-decoration: none; border-bottom: 1px solid var(--faint); }
 .now { text-align: center; color: var(--faint); margin: 0; font-size: 1.15em; }
-.next { text-align: center; color: var(--faint); margin: 0 0 .8rem; font-size: 1.05em; letter-spacing: .08em; }
-.lede { text-align: center; margin: 0 0 1.2rem; color: var(--ink); }
-h2 { font-size: 1.1em; text-transform: uppercase; letter-spacing: .2em; border-bottom: 1px solid var(--rule); margin: 1.6rem 0 .5rem; padding-bottom: .1rem; color: var(--faint); clear: both; }
+.next { text-align: center; color: var(--faint); margin: 0 0 var(--s2); font-size: 1.05em; letter-spacing: .08em; }
+.lede { margin: 0 0 var(--s2); color: var(--ink); }
+h2 { font-size: 1.1em; text-transform: uppercase; letter-spacing: .2em; border-bottom: 1px solid var(--rule); margin: var(--s3) 0 var(--s1); padding-bottom: .1rem; color: var(--faint); clear: both; }
 .small { color: var(--faint); font-size: .9em; margin: -.3rem 0 .4rem; letter-spacing: .1em; }
-p { margin: .4rem 0; }
+p { margin: var(--s1) 0; }
 .pop { font-size: 1.3em; text-transform: uppercase; letter-spacing: .06em; }
 .muted { color: var(--faint); }
 /* the ballot: a paper object, the same in the dark */
-.ballot { position: relative; background: #F3EBD6; color: #1C1A16; border: 2px solid #1C1A16; box-shadow: 0 1px 2px rgba(0,0,0,.18); padding: 1.1rem 1.4rem 1rem; margin: 1.4rem 0; }
+.ballot { position: relative; background: #F3EBD6; color: #1C1A16; border: 2px solid #1C1A16; box-shadow: 0 1px 2px rgba(0,0,0,.18); padding: 1.1rem 1.4rem 1rem; margin: var(--s2) 0; }
 .ballot h2 { color: #5E5647; border-color: #1C1A16; margin: 0 0 .5rem; }
 .ballot .q { font-size: 1.2em; margin: .3rem 0 .9rem; padding-right: 7rem; }
 .options { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .6rem; }
@@ -65,7 +66,7 @@ p { margin: .4rem 0; }
 .head { font-size: 1.5em; margin: .3rem 0 .2rem; letter-spacing: .02em; }
 ul.items { padding-left: 1.2rem; margin: .2rem 0; }
 ul.items li { margin: .3rem 0; }
-.doc { float: right; width: 320px; max-width: 45%; margin: .4rem 0 1rem 1.5rem; }
+.doc { float: right; width: 320px; max-width: 45%; margin: var(--s1) 0 var(--s2) var(--s2); }
 .doc img { display: block; width: 100%; height: auto; }
 .doc .label { display: block; text-align: center; color: var(--faint); letter-spacing: .15em; margin-top: .3rem; }
 ul.editions { list-style: none; padding: 0; margin: .3rem 0; }
@@ -74,15 +75,15 @@ dl { display: grid; grid-template-columns: max-content 1fr; gap: .15rem 1.2rem; 
 dt { color: var(--faint); }
 dd { margin: 0; }
 .notice { border-left: 3px solid var(--rule); padding: .2rem .8rem; margin: .5rem 0; background: var(--wash); }
-footer { clear: both; margin-top: 2.5rem; border-top: 1px solid var(--rule); padding-top: .6rem; color: var(--faint); font-size: .9em; }
+footer { clear: both; margin-top: var(--s4); border-top: 1px solid var(--rule); padding-top: var(--s1); color: var(--faint); font-size: .9em; }
 /* editions archive */
-.edition { margin: 1.4rem 0 2rem; }
+.edition { margin: var(--s2) 0 var(--s3); }
 .edition h2 { margin-bottom: .2rem; }
 /* the claim form */
-.claim { margin: 1.6rem 0 0; }
-.claim label { display: block; color: var(--faint); letter-spacing: .2em; text-transform: uppercase; margin-bottom: .3rem; }
-.claim input { font-family: var(--tt); font-size: 1.2em; letter-spacing: .12em; text-transform: uppercase; width: 9ch; background: var(--wash); color: var(--ink); border: 1.5px solid var(--rule); padding: .25rem .5rem; }
-.claim button { margin-left: .5rem; font-size: 1em; padding: .3rem 1rem; }
+.claim { margin: var(--s3) 0 0; }
+.claim label { display: block; color: var(--faint); letter-spacing: .2em; text-transform: uppercase; margin-bottom: var(--s1); }
+.claim input { font-family: var(--tt); font-size: 1.2em; letter-spacing: .12em; text-transform: uppercase; width: 12ch; height: 2.4rem; box-sizing: border-box; background: var(--wash); color: var(--ink); border: 1.5px solid var(--rule); padding: 0 .5rem; vertical-align: middle; }
+.claim button { margin-left: var(--s1); font-size: 1em; height: 2.4rem; box-sizing: border-box; padding: 0 1rem; vertical-align: middle; }
 /* the File */
 .file-head { border-bottom: 4px double var(--rule); padding-bottom: .8rem; margin-bottom: .5rem; }
 .file-head .portrait { display: block; margin: 0 0 .6rem; }
@@ -95,11 +96,11 @@ footer { clear: both; margin-top: 2.5rem; border-top: 1px solid var(--rule); pad
 .since { margin: .6rem 0 0; letter-spacing: .06em; }
 .matters .entry { grid-template-columns: 9.5rem 1fr; }
 @media (min-width: 40rem) { .matters .entry { grid-template-columns: 9.5rem minmax(0, 1fr) minmax(0, 40%); } }
-.marker { color: #B4281E; letter-spacing: .2em; margin: .6rem 0 .2rem; }
+.marker { color: var(--red); letter-spacing: .2em; margin: var(--s1) 0 .2rem; }
 .boundary { border: 0; border-top: 1px solid var(--rule); margin: .4rem 0 .6rem; }
 .acked { text-align: center; font-size: 1.6em; letter-spacing: .1em; margin: 4rem 0; }
 .file-foot { letter-spacing: .06em; }
-.day { margin-top: 1.2rem; }
+.day { margin-top: var(--s2); }
 .day h2 { margin-bottom: .2rem; }
 .entry { display: grid; grid-template-columns: 4.2rem 1fr; gap: 0 .6rem; padding: .12rem 0; }
 .entry .t { color: var(--faint); }
@@ -116,23 +117,24 @@ button:hover { opacity: .85; }
 /* /about prose */
 .prose { max-width: 65ch; margin: 0 auto; }
 .prose h1 { font-size: 1.8em; letter-spacing: .04em; margin: 1rem 0 .2rem; }
-.prose h2 { margin-top: 1.8rem; }
-.prose p { margin: .7rem 0; }
+.prose h2 { margin-top: var(--s3); }
+.prose p { margin: var(--s1) 0; }
 .prose ul, .prose ol { padding-left: 1.4rem; margin: .5rem 0; }
 .prose li { margin: .25rem 0; }
-.prose hr { border: 0; border-top: 1px solid var(--rule); margin: 1.4rem 0; clear: both; }
+.prose hr { border: 0; border-top: 1px solid var(--rule); margin: var(--s3) 0; clear: both; }
 .prose em { font-style: italic; }
 .prose > p:first-of-type { font-size: 1.15em; }
 .prose pre { overflow-x: auto; }
 /* illustrations (docs/ILLUSTRATION_BRIEF.md §4, floats per the weekend pass) */
-.ill { position: relative; margin: 48px auto; }
-.ill img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; }
-.ill-full { max-width: 720px; }
-.ill-float { width: 42%; float: right; margin: 0 0 1rem 1.5rem; }
-.ill-left { float: left; margin: 0 1.5rem 1rem 0; }
-@media (max-width: 640px) { .ill-float { float: none; width: 100%; margin: 48px auto; } }
+.ill { position: relative; margin: var(--s3) auto; }
+.ill img { display: block; width: 100%; height: auto; } /* trimmed drawings: the width/height attributes are honest now */
+.ill-full { max-width: 560px; }
+.ill-they-united { margin-top: var(--s4); margin-bottom: var(--s4); }
+.ill-float { width: 42%; float: right; margin: 0 0 var(--s2) var(--s2); }
+.ill-left { float: left; margin: 0 var(--s2) var(--s2) 0; }
+@media (max-width: 640px) { .ill-float { float: none; width: 100%; margin: var(--s3) auto; } }
 .insert { position: absolute; top: 14%; right: 10%; background: #000; color: #e8dfcb; font-size: 1.1em; line-height: 1; letter-spacing: .12em; padding: .35em .7em; box-shadow: inset 0 0 0 1px #e8dfcb, 0 0 0 3px #000; }
-.artifact { width: 60%; max-width: 480px; margin: 48px auto; clear: both; }
+.artifact { width: 60%; max-width: 480px; margin: var(--s3) auto; clear: both; }
 .artifact svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
 .artifact-bulletin svg { transform: rotate(-1.5deg); }
 .artifact-neighbor svg { transform: rotate(1.5deg); }
@@ -219,9 +221,10 @@ const EDITION_TIMES = { morning: 0, evening: 23 };
 // "13:00 UTC" with the instant attached, so the script can add the viewer's time after it.
 const utc = (t, attrs = '') => `<time data-utc="${Math.round(t)}"${attrs}>${h(hm(t))} UTC</time>`;
 
-// The front page's footer: one sentence and the privacy record. The Tuber, when it has an address.
-export function footer({ tuberUrl = '' } = {}) {
-  return `<footer><p>No location. No audio. Nothing reported below five potatoes. <a href="/about#privacy">Privacy record →</a></p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`;
+// One sentence and the privacy record. On /about the record is on the page itself, so no link there.
+export function footer({ tuberUrl = '', privacyHere = false } = {}) {
+  const record = privacyHere ? 'Privacy record →' : '<a href="/about#privacy">Privacy record →</a>';
+  return `<footer><p>No location. No audio. Public counts start at five potatoes. ${record}</p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`;
 }
 
 // Server-side first render of the countdown; the script keeps it current.
@@ -308,7 +311,7 @@ ${earlier}
 ${agg}
 ${missing}
 ${potd}
-<form class="claim" method="post" action="/claim"><label class="tt" for="claim-code">Claim your File</label><input id="claim-code" name="code" maxlength="8" placeholder="BRK-7H2" autocomplete="off" spellcheck="false"><button type="submit">Open</button></form>
+<form class="claim" method="post" action="/claim"><label class="tt" for="claim-code">Claim your File</label><input id="claim-code" name="code" size="8" maxlength="8" placeholder="BRK-7H2" autocomplete="off" spellcheck="false"><button type="submit">Open</button></form>
 ${footer({ tuberUrl })}`);
 }
 
@@ -397,7 +400,7 @@ export function renderAbout(storyHtml, { tuberUrl = '' } = {}) {
 <div class="prose">
 ${storyHtml}
 </div>
-${footer({ tuberUrl })}`, { bodyClass: 'paper-doc' });
+${footer({ tuberUrl, privacyHere: true })}`, { bodyClass: 'paper-doc' });
 }
 
 // GET /flash — flash a spare board into a citizen. ESP Web Tools, vendored; no CDN.
@@ -430,8 +433,8 @@ ${cards}
 <li>Claim its File with the code on the screen, at <a href="/">the front page</a> under CLAIM YOUR FILE.</li>
 </ol>
 <p><a href="/flash/agent">Or hand this page to your coding agent →</a></p>
-<p class="muted">Tested on exactly these two boards. Another board needs a port — its pins and its display — and the protocol is small.</p>
-<footer><p>No location. No audio. Nothing reported below five potatoes. <a href="/about#privacy">Privacy record →</a>${githubUrl ? ` <a href="${h(githubUrl)}">CODE →</a>` : ''}</p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`);
+<p class="muted">Tested on exactly these two devices. Another model needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.</p>
+<footer><p>No location. No audio. Public counts start at five potatoes. <a href="/about#privacy">Privacy record →</a>${githubUrl ? ` <a href="${h(githubUrl)}">CODE →</a>` : ''}</p>${tuberUrl ? `<p>Editions are also issued on <a href="${h(tuberUrl)}">X</a>.</p>` : ''}</footer>`);
 }
 
 // GET /flash/agent — docs/FLASH_WITH_AN_AGENT.md, when it exists.

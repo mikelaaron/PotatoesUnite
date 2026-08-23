@@ -54,8 +54,8 @@ export function findIllustration(dir, slug) {
 // The neglect image carries the screen's own readout as HTML, and its caption is the File line.
 const INSERTS = { neglect: { insert: 'DARK.', caption: '16:30 PLACED IN THE DARK.' } };
 
-// council and buying-frenzy run full width; the rest float, alternating right then left, and the prose wraps their shape.
-const FULL_WIDTH = new Set(['council', 'buying-frenzy']);
+// Group scenes run full width, centered; only the two single-subject drawings float (right, then left).
+const FULL_WIDTH = new Set(['council', 'buying-frenzy', 'first-contact', 'they-united']);
 
 function figureHtml(slug, alt, ill, state) {
   const sz = ill.size || { w: 1440, h: 960 };

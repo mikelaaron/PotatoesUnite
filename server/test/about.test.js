@@ -28,8 +28,9 @@ test('/about renders the standfirst and no placeholder when GITHUB_URL is unset'
   assert.match(html, /All of it is open\. Inside: the server/);
   assert.match(html, /<h2 id="what-it-is-not">What it is not<\/h2>\s*<ul><li>No [^<]+<\/li>/, 'the list follows its heading (copy may change; shape must not)');
   assert.match(html, /<h2 id="privacy">Privacy<\/h2>/, 'the privacy record has its anchor');
-  assert.match(html, /<footer><p>No location\. No audio\. Nothing reported below five potatoes\. <a href="\/about#privacy">Privacy record →<\/a><\/p><\/footer>/);
-  assert.match(html, /<ol><li>A supported board\./);
+  assert.match(html, /<footer><p>No location\. No audio\. Public counts start at five potatoes\. Privacy record →<\/p><\/footer>/, 'plain text on the page that holds the record');
+  assert.ok(!html.includes('<a href="/about#privacy">'), 'no self-link');
+  assert.match(html, /<ol><li>A supported device\./);
   assert.match(html, /<p><strong>[^<]+\?<\/strong><br>[^<]+<\/p>/, 'a Q&A pair renders as a bold question, a break, the answer');
   assert.match(html, /About · <a href="\/">Front page<\/a>/);
   assert.match(html, /Your device never sends where it is\./, 'the privacy record is in the story itself');
@@ -50,15 +51,16 @@ test('image slots become figures when the file exists, nothing when it does not'
   // council and buying-frenzy run full width; the rest float, alternating right then left, wrapping their shape
   assert.match(html, /<figure class="ill ill-buying-frenzy ill-full">/);
   assert.match(html, /<figure class="ill ill-council ill-full">/);
+  assert.match(html, /<figure class="ill ill-first-contact ill-full">/, 'group scenes do not float');
+  assert.match(html, /<figure class="ill ill-they-united ill-full">/);
   assert.match(html, /<figure class="ill ill-neglect ill-float ill-right" style="shape-outside: url\(\/illustrations\/neglect\.png\); shape-image-threshold: \.2; shape-margin: 1\.25rem;">/);
-  assert.match(html, /<figure class="ill ill-first-contact ill-float ill-left" style="shape-outside: url\(\/illustrations\/first-contact\.png\);/);
-  assert.match(html, /<figure class="ill ill-the-file ill-float ill-right"/);
-  assert.match(html, /<figure class="ill ill-they-united ill-float ill-left"/);
+  assert.match(html, /<figure class="ill ill-the-file ill-float ill-left"/, 'the second float takes the left');
   // the neglect figure keeps the screen's own readout
   assert.match(html, /<figure class="ill ill-neglect[^>]*><img[^>]*><span class="insert">DARK\.<\/span><\/figure>/);
-  // width/height read from the file, 3:2
+  // width/height read from the trimmed file: honest dimensions, no forced ratio
   const sz = imageSize(path.join(ILL_DIR, 'council.png'));
-  assert.equal(sz.w / sz.h, 1.5);
+  assert.ok(sz.w > 0 && sz.h > 0);
+  assert.match(html, new RegExp(`<img src="/illustrations/council\\.png" width="${sz.w}" height="${sz.h}"`));
   // an empty folder: no figures at all, and no broken images
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'potato-ill-'));
   const bare = storyToHtml(d.story, { illustrationsDir: empty, artifactsDir: ART_DIR });
@@ -81,10 +83,11 @@ test('artifact blocks inline the Council SVGs; the teletext text is the fallback
   const page = renderAbout(html);
   assert.match(page, /\.artifact-bulletin svg \{ transform: rotate\(-1\.5deg\); \}/);
   assert.match(page, /\.artifact-neighbor svg \{ transform: rotate\(1\.5deg\); \}/);
-  assert.match(page, /\.ill-full \{ max-width: 720px; \}/);
-  assert.match(page, /\.ill-float \{ width: 42%; float: right; margin: 0 0 1rem 1\.5rem; \}/);
-  assert.match(page, /\.ill-left \{ float: left; margin: 0 1\.5rem 1rem 0; \}/);
-  assert.match(page, /@media \(max-width: 640px\) \{ \.ill-float \{ float: none; width: 100%; margin: 48px auto; \} \}/);
+  assert.match(page, /\.ill-full \{ max-width: 560px; \}/);
+  assert.match(page, /\.ill-they-united \{ margin-top: var\(--s4\); margin-bottom: var\(--s4\); \}/, 'the closing figure gets its air');
+  assert.match(page, /\.ill-float \{ width: 42%; float: right; margin: 0 0 var\(--s2\) var\(--s2\); \}/);
+  assert.match(page, /\.ill-left \{ float: left; margin: 0 var\(--s2\) var\(--s2\) 0; \}/);
+  assert.doesNotMatch(page, /aspect-ratio: 3 \/ 2/, 'no forced ratio on honest images');
   assert.match(page, /\.prose hr \{[^}]*clear: both; \}/);
   assert.match(page, /\.artifact \{[^}]*clear: both; \}/);
 });
@@ -137,7 +140,7 @@ test('the markdown subset', () => {
 test('Part D copy: the port sentence, the two teletext lines, Issued by The Tuber', () => {
   const d = new Data({ dataDir: DATA_DIR, assetsDir: ASSETS_DIR, docsDir: DOCS_DIR });
   const html = storyToHtml(d.story, { illustrationsDir: ILL_DIR, artifactsDir: ART_DIR });
-  assert.match(html, /e-paper\. Tested on exactly these two boards\. Another board needs a port — its pins and its display — and the protocol is small\./);
+  assert.match(html, /Tested on exactly these two devices\./, 'the honest note, in its current wording');
   assert.match(html, /<figure class="ill ill-they-united[^]*?<p class="tt">THE TUBER TELLS YOU WHAT POTATO SOCIETY DID\.<\/p>\n<p class="tt">THE FILE TELLS YOU WHAT YOUR POTATO THINKS HAPPENED BETWEEN THE TWO OF YOU\.<\/p>/);
   const { w } = makeWorld();
   assert.match(renderBoard(w.board()), /<\/ul><div class="small">Issued by The Tuber\.<\/div>/);
