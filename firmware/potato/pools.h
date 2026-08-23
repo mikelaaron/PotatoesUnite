@@ -121,8 +121,7 @@ static const char *const LINE_ALONE_48H = "Day three. The plant is also here.";
 static const char *const LINE_ALONE_72H = "I've started a list.";
 static const char *const LINE_ALONE_7D  = "The plant and I have an understanding now.";
 static const char *const LINE_RETURN = "Oh. It's you.";
-static const char *const LINE_RETURN_LONG =
-    "I assumed the worst. Then I assumed you were fine. Then I stopped assuming.";
+static const char *const LINE_RETURN_LONG = "I assumed the worst. Then that you were fine. Then nothing.";
 static const char *const LINE_PLUGGED_OVERNIGHT = "Charged while you slept. One of us was productive.";
 static const char *const LINE_FULL = "Full. Thank you. Don't make it strange.";
 static const char *const LINE_UNPLUGGED = "On my own now. Noted.";
@@ -132,10 +131,23 @@ static const char *const LINE_BATT_10 = "Ten percent. This is the comment.";
 static const char *const LINE_BATT_5  = "I'm going dormant. This was a decision, and it wasn't mine.";
 static const char *const LINE_DORMANT_3D = "I've been in the cellar. I've come back different. Slightly.";
 static const char *const LINE_NET_LOST = "The Net's gone. It's just us.";
-static const char *const LINE_NET_BACK = "Back. I missed two Bulletins. Give me a moment.";
+static const char *const LINE_NET_BACK = "Back. I missed the Bulletins. Give me a moment.";
 static const char *const LINE_SATURDAY = "It's Saturday. You're allowed. I'm noting it anyway.";
 // With no scene at all (never registered, nothing cached), §12 on eyes.
 static const char *const LINE_EYES = "I have eyes. All potatoes do. Mine are on you.";
+
+// Every single line, for the host length check (docs/COPY_REVIEW.md §1: a
+// scene line is clipped at 60 characters; nothing here may exceed it at its
+// worst-case fill). Add new LINE_* constants here too.
+static const char *const ALL_SINGLE_LINES[] = {
+    LINE_DARK_NOW, LINE_DARK_10M, LINE_DARK_1H, LINE_DARK_3H, LINE_CEILING_20M,
+    LINE_CEILING_RESTORED, LINE_ALONE_4H, LINE_ALONE_8H, LINE_ALONE_24H,
+    LINE_ALONE_48H, LINE_ALONE_72H, LINE_ALONE_7D, LINE_RETURN, LINE_RETURN_LONG,
+    LINE_PLUGGED_OVERNIGHT, LINE_FULL, LINE_UNPLUGGED, LINE_BATT_30, LINE_BATT_20,
+    LINE_BATT_10, LINE_BATT_5, LINE_DORMANT_3D, LINE_NET_LOST, LINE_NET_BACK,
+    LINE_SATURDAY, LINE_EYES,
+};
+static const int ALL_SINGLE_LINES_N = (int)(sizeof(ALL_SINGLE_LINES) / sizeof(ALL_SINGLE_LINES[0]));
 
 struct Pool { const char *const *lines; uint8_t n; };
 #define POOL_OF(a) {a, (uint8_t)(sizeof(a) / sizeof(a[0]))}

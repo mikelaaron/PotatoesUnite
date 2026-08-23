@@ -111,6 +111,40 @@ int main() {
   for (int i = 0; i < POOL_COUNT; ++i) poolLast[i] = -1;
   CHECK(pickLine(POOL_PICKUP) == a);
 
+  // Every device line is at most 60 characters at its worst-case fill
+  // (docs/COPY_REVIEW.md §1). Templates are filled with the longest value
+  // their filler can produce: durations swept over a day and a fortnight
+  // for "%s. I counted.", and "12 AM" for the night hour.
+  {
+    char longestDur[48] = ""; size_t longestLen = 0;
+    for (uint32_t sec = 0; sec < 15 * 86400; sec += 60) {
+      durationWords(sec, w, sizeof(w));
+      if (strlen(w) > longestLen) { longestLen = strlen(w); strncpy(longestDur, w, sizeof(longestDur) - 1); }
+    }
+    printf("longest duration fill: \"%s\" (%u)\n", longestDur, (unsigned)longestLen);
+    int checked = 0;
+    auto checkLine = [&](const char *l, const char *where) {
+      char filled[256];
+      const char *at = strstr(l, "%s");
+      if (at) {
+        const char *fill = strstr(l, "counted") ? longestDur : "12 AM";
+        snprintf(filled, sizeof(filled), "%.*s%s%s", (int)(at - l), l, fill, at + 2);
+      } else {
+        snprintf(filled, sizeof(filled), "%s", l);
+      }
+      // Count characters, not bytes: the ellipsis is one character.
+      size_t chars = 0;
+      for (const unsigned char *c = (const unsigned char *)filled; *c; ++c) if ((*c & 0xC0) != 0x80) ++chars;
+      ++checked;
+      if (chars > 60) { ++failures; printf("FAIL line over 60 (%u) in %s: \"%s\"\n", (unsigned)chars, where, filled); }
+    };
+    for (int i = 0; i < POOL_COUNT; ++i)
+      for (int k = 0; k < POOLS[i].n; ++k) checkLine(POOLS[i].lines[k], "pool");
+    for (int i = 0; i < ALL_SINGLE_LINES_N; ++i) checkLine(ALL_SINGLE_LINES[i], "single");
+    printf("line length check: %d lines, all <= 60 at worst-case fill%s\n", checked, failures ? " (see FAIL above)" : "");
+    CHECK(checked >= 60);
+  }
+
   printf("%s: %d failure(s)\n", failures ? "FAILED" : "protocol_test passed", failures);
   return failures ? 1 : 0;
 }
