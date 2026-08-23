@@ -9,7 +9,7 @@
 
 A potato that asks one question a day is a poll with a face. Nobody connects a device to a poll.
 
-The fix is not more polls. It is a **day**. The Question is the clock; everything else is the weather. A potato has a morning, a long quiet middle, a reaction to every single thing you do to it, a memory that resurfaces at inconvenient moments, a neighbor it gossips about, and a file it keeps on you — which you can read, which is the point.
+The fix is not more polls. It is a **day**. The Question is the clock; everything else is the weather. A potato has a morning, a long quiet middle, an eye on everything you do to it — it notices everything and comments on little (§15) — a memory that resurfaces at inconvenient moments, a neighbor it gossips about, and a file it keeps on you — which you can read, which is the point.
 
 The connection you're after ("oh crap, I left him face down all day") comes from three things working together:
 
@@ -104,20 +104,35 @@ That is eleven moments, one of which was a poll.
 
 ## 3. Reaction lines
 
-Each trigger has a pool. The potato's seed picks a consistent voice from the pool — the same potato says the same kind of thing — and recent history shifts the pick. The duration lines fill in from the clock.
+Each trigger has a pool. A pool plays out in full, in an order the potato's seed sets, before any line comes back — and the order survives a reboot; a potato does not lose its place. The seed also gives each potato **one rare line of its own**: its signature, said about every tenth eligible pick-up and no oftener. The catchphrase is the personality; the ration is what makes it land. The duration lines fill in from the clock.
 
 **Picked up**
 - Yes?
 - Where are we going.
 - I was in the middle of something.
-- Careful. I'm not insured.
 - Noted.
+- I was settled.
+- There was no notice.
+- Very well.
+- I had a position.
+- This wasn't scheduled.
+- The world was adequate.
+- The Hands have intervened.
+- One moment.
+- *rare — the seed gives each potato one of these for keeps:* Careful. I'm not insured. · I assume there is paperwork. · This is how incidents begin. · Management again.
+- *first pick-up of the day:* Morning. · A new day. Apparently. · The Hands are operational.
+- *fourth spoken session in one day, and on:* Again. · You are restless today. · Another intervention.
 
 **Put down**
 - Here is fine.
 - This is not where I was.
 - Acceptable.
 - Closer to outside. Interesting.
+- This will do.
+- I preferred the other place.
+- The world has changed.
+- I'll note the view.
+- Accepted provisionally.
 
 **The dark (face down)**
 - *immediately:* Dark.
@@ -152,6 +167,11 @@ Each trigger has a pool. The potato's seed picks a consistent voice from the poo
 - Yes.
 - Don't.
 - What do you need.
+- I noticed.
+- Once is enough.
+- Contact noted.
+- I was already awake.
+- The Hands are testing something.
 
 **Left alone (no handling)**
 - *4 h, daytime:* It's quiet.
@@ -523,9 +543,9 @@ None of these is a push notification. All of them are things that happened in pu
 
 Found on the first evening with a real potato: every lift produced a line, and the File logged seven entries in thirty seconds. That is a toy. **Silence is the default. A line is an event.**
 
-**Sessions, not movements.** A handling session begins at the first pick-up and ends after sixty seconds of stillness. A session gets at most one line, at the start. Moving her around within a session is the same encounter; she said her piece.
+**Sessions, not movements.** A handling session begins at the first pick-up and ends after sixty seconds of stillness. A session gets at most one line — at the start if it speaks at all, or at the put-down when the start went unremarked. Moving her around within a session is the same encounter; she said her piece.
 
-**A fresh encounter earns a line; a continued one doesn't.** Pick-up speaks only if it has been ten minutes or more since the last session ended. Put-down speaks only after a session of thirty seconds or longer, and only one time in three.
+**A fresh encounter earns a line; a continued one doesn't.** Pick-up speaks only if it has been ten minutes or more since the last session ended. Put-down speaks only after a session of thirty seconds or longer, only one time in three, and only when the session began in silence.
 
 **Minor lines share a budget.** Pick-up, put-down, tap, plug, unplug: no two of them within three minutes, and even when eligible, only about six times in ten. The other four, nothing. She was thinking.
 
