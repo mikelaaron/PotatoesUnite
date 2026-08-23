@@ -1,8 +1,8 @@
 {
-  "version": "0.2.3",
-  "file": "0.2.3.bin",
-  "sha256": "df57a85d899e438541a22347b1059752d0733fecf9d981d1bee2c48287c64f31",
-  "size": 1344128,
-  "notes": "Pools walk as bags; one rare line per potato; morning and restless slots",
-  "published": "2026-08-23T22:22:26Z"
+  "version": "0.2.4",
+  "file": "0.2.4.bin",
+  "sha256": "9d15ab8b2fb89fa140951ab461f5f563b73ddcb43fc5854c4f09109261bf0d37",
+  "size": 1344192,
+  "notes": "Eyes hold forward; a new line earns a glance down; no more reading",
+  "published": "2026-08-23T22:30:41Z"
 }
