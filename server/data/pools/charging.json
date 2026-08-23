@@ -1,0 +1,18 @@
+{
+  "_source": "docs/POTATO_VOICE.md §11. Verbatim.",
+  "plugged": ["Fed. In a sense.", "Charging. Don't watch."],
+  "plugged_overnight": ["Charged while you slept. One of us was productive."],
+  "full": ["Full. Thank you. Don't make it strange."],
+  "unplugged": ["On my own now. Noted."],
+  "running_down": {
+    "30": "Thirty percent. I mention it without comment.",
+    "20": "Twenty. Still not commenting.",
+    "10": "Ten percent. This is the comment.",
+    "5": "I'm going dormant. This was a decision, and it wasn't mine."
+  },
+  "waking": ["How long was I out. Don't tell me. The File will.", "Dormancy. It happens to the best of us. Usually in a cellar."],
+  "waking_3d": ["I've been in the cellar. I've come back different. Slightly."],
+  "net": ["{n_words} potatoes went dormant yesterday. Their Hands have been written to. Not by us. By the Council."],
+  "_net_sample": "Nine potatoes went dormant yesterday. Their Hands have been written to. Not by us. By the Council.",
+  "file": "Went dormant at {pct}%. Hands present at the time. Noted."
+}

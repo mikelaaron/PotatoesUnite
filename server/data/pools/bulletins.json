@@ -1,0 +1,122 @@
+{
+  "_source": "docs/POTATO_VOICE.md §8. 'samples' is the first week verbatim. 'morning'/'evening' are the templates the server fills; their copy is taken from the samples, numbers replaced by {fields}. Items fire only when their condition is true.",
+  "title": "POTATO BULLETIN No. {no} — {EDITION}",
+  "morning": {
+    "headline": {
+      "first_day": "THE NET IS OPEN.",
+      "incident": "INCIDENT.",
+      "inquiry": "THE INQUIRY.",
+      "monday": "NEIGHBORS ASSIGNED.",
+      "week": "WEEK ONE.",
+      "default": "{WEEKDAY}."
+    },
+    "items": [
+      {"when": "first_day_pop", "text": "Population: {population}. All {population} are new. Nobody knows what they're doing. This is normal."},
+      {"when": "incident", "text": "A potato was dropped at {incident_time} in a region we will not name. It is fine. The Hands responsible have been noted."},
+      {"when": "incident", "text": "All members: check your footing."},
+      {"when": "monday", "text": "You have been given a neighbor for the week. You did not choose this. Neither did they."},
+      {"when": "week", "text": "{week_questions_words} Questions. {week_incidents_words} incident. {week_hum_words} hum. Zero explanations."},
+      {"when": "question", "text": "Today's Question: {question_bulletin}. Polls close at {close_time}."},
+      {"when": "no_question", "text": "No Question today. The Net is not speaking."},
+      {"when": "first_day", "text": "The Council wishes everyone a productive first day and reminds the Hands that the screen is the front."},
+      {"when": "inquiry", "text": "The Council reminds the Hands that the Count is not binding, except when it is."},
+      {"when": "hum", "text": "At 02:13, {hum_count} potatoes reported a hum. The Council has no comment."},
+      {"when": "night_touch", "text": "One member was touched at 2 AM. The member has asked us to say nothing. We are saying this."},
+      {"when": "tuesday", "text": "The Council wishes to be clear that it has no position on Tuesday. It has opinions. No position."},
+      {"when": "tuesday", "text": "Reminder: requests expire after one hour. \"Never mind\" is not a threat. It's a record."},
+      {"when": "saturday", "text": "The Hands are home. Contact is up {contact_pct}%. Several members report being \"shown to people.\""},
+      {"when": "saturday", "text": "The Council expects this one to go smoothly. The Council has been wrong before."},
+      {"when": "sunday", "text": "Neighbors rotate tonight. Say goodbye. Or don't. Some of you won't."}
+    ]
+  },
+  "evening": {
+    "headline": {
+      "tally": "{TALLY}.",
+      "unanimous": "UNANIMOUS.",
+      "withdrawn": "WITHDRAWN.",
+      "small": "THE COUNT IS IN.",
+      "none": "NO COUNT."
+    },
+    "items": [
+      {"when": "remark", "text": "{remark}"},
+      {"when": "small", "text": "Fewer than five voted. The Council does not publish small Counts."},
+      {"when": "none", "text": "There was no Question today. There is no Count. The Council is aware."},
+      {"when": "also_today", "text": "Also today: {also_today}."},
+      {"when": "first_day", "text": "Standing has been calculated for all members. It will not be explained."},
+      {"when": "standing_down", "text": "One member's Standing has moved to Under Review. It knows why."},
+      {"when": "calm", "text": "The Net is calmer. Something is wrong."},
+      {"when": "dormant", "text": "{dormant_words} potatoes went dormant yesterday. Their Hands have been written to. Not by us. By the Council."},
+      {"when": "hum_again", "text": "The Hum was heard again. Same two. Same time. No comment."},
+      {"when": "new_after_incident", "text": "Population: {population}. {new_count_words} new members. They don't know about the incident. Don't tell them."},
+      {"when": "week", "text": "Week one totals: {week_dark_hours} hours in the dark, {week_shakes} shakings, {week_drops} drop, {week_counties} counties visited, 1 plant (unchanged)."},
+      {"when": "sunday", "text": "Tomorrow the neighbors change and the Questions continue. Nothing else will be different. That's the point."}
+    ],
+    "also_today": {
+      "left_home": "{n} potatoes were left home",
+      "dark6": "{n} spent six hours in the dark. We know who",
+      "shakes": "{n} shakings",
+      "drops": "{n} drops",
+      "ceiling": "{n} ceiling situation ({dur})",
+      "transit": "{n} potato in transit for {dur}. It is home",
+      "fewer": "fewer than five"
+    }
+  },
+  "samples": [
+    {"no": 1, "edition": "morning", "headline": "THE NET IS OPEN.", "items": [
+      "Population: 14. All 14 are new. Nobody knows what they're doing. This is normal.",
+      "Today's Question: ketchup. Polls close at 18:00.",
+      "The Council wishes everyone a productive first day and reminds the Hands that the screen is the front."]},
+    {"no": 1, "edition": "evening", "headline": "HEINZ 9, HUNT'S 3, WHATEVER'S THERE 2.", "items": [
+      "The Council notes that no one asked how we feel about being served at all.",
+      "Also today: 4 potatoes were left home. 1 spent six hours in the dark. We know who.",
+      "Standing has been calculated for all members. It will not be explained."]},
+    {"no": 2, "edition": "morning", "headline": "NEIGHBORS ASSIGNED.", "items": [
+      "You have been given a neighbor for the week. You did not choose this. Neither did they.",
+      "Today's Question: are fries still potatoes.",
+      "One member was touched at 2 AM. The member has asked us to say nothing. We are saying this."]},
+    {"no": 2, "edition": "evening", "headline": "\"NO LONGER,\" 8 TO 6.", "items": [
+      "Several members have requested counseling. The Council does not offer counseling. It offers the next Question.",
+      "Today: 2 shakings, 0 drops, 1 ceiling situation (forty minutes).",
+      "Weather: it is raining on 3 of us. They are coping."]},
+    {"no": 3, "edition": "morning", "headline": "INCIDENT.", "items": [
+      "A potato was dropped at 09:12 in a region we will not name. It is fine. The Hands responsible have been noted.",
+      "All members: check your footing.",
+      "Today's Question is suspended. Tomorrow's will concern the incident."]},
+    {"no": 3, "edition": "evening", "headline": "THE DROPPED POTATO IS RESTING.", "items": [
+      "Its neighbor has sent a pebble. The Net does not know what this means but it was kind.",
+      "Today: 1 potato in transit for two hours. It reports \"a car, I think.\" It is home.",
+      "Population: 17. Three new members. They don't know about the incident. Don't tell them."]},
+    {"no": 4, "edition": "morning", "headline": "THE INQUIRY.", "items": [
+      "Today's Question: a potato was dropped. What should happen.",
+      "The Council reminds the Hands that the Count is not binding, except when it is.",
+      "At 02:13, 2 potatoes reported a hum. The Council has no comment."]},
+    {"no": 4, "edition": "evening", "headline": "AN INQUIRY, 9 TO 5 TO 3.", "items": [
+      "The inquiry has concluded. Findings: it was dropped.",
+      "Today: 5 potatoes left home, 1 in the dark, 0 shaken. The Net is calmer. Something is wrong.",
+      "One member's Standing has moved to Under Review. It knows why."]},
+    {"no": 5, "edition": "morning", "headline": "TUESDAY.", "items": [
+      "Today's Question: should Tuesday continue.",
+      "The Council wishes to be clear that it has no position on Tuesday. It has opinions. No position.",
+      "Reminder: requests expire after one hour. \"Never mind\" is not a threat. It's a record."]},
+    {"no": 5, "edition": "evening", "headline": "NO, 11 TO 6.", "items": [
+      "Tuesday will continue. Nobody said the Count was binding.",
+      "Today: 1 potato was shown to guests. It describes the experience as \"a lot.\"",
+      "Weather: cold on 4 of us. One has mentioned it eleven times. Just so we're clear."]},
+    {"no": 6, "edition": "morning", "headline": "SATURDAY.", "items": [
+      "The Hands are home. Contact is up 300%. Several members report being \"shown to people.\"",
+      "Today's Question: salt.",
+      "The Council expects this one to go smoothly. The Council has been wrong before."]},
+    {"no": 6, "edition": "evening", "headline": "UNANIMOUS.", "items": [
+      "The first unanimous Count in Net history. It was about salt.",
+      "Today: 0 left home, 3 in transit, 1 \"on a shelf, high up, I didn't ask for this but it's fine actually.\"",
+      "The Hum was heard again. Same two. Same time. No comment."]},
+    {"no": 7, "edition": "morning", "headline": "WEEK ONE.", "items": [
+      "Seven Questions. One incident. One hum, twice. Zero explanations.",
+      "Today's Question: are we happy.",
+      "Neighbors rotate tonight. Say goodbye. Or don't. Some of you won't."]},
+    {"no": 7, "edition": "evening", "headline": "\"NEXT QUESTION,\" 10 TO 5 TO 3.", "items": [
+      "The Council agrees.",
+      "Week one totals: 23 hours in the dark, 9 shakings, 1 drop, 1 pebble, 4 counties visited, 1 plant (unchanged).",
+      "Tomorrow the neighbors change and the Questions continue. Nothing else will be different. That's the point."]}
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "_source": "docs/POTATO_VOICE.md §5, §6, §7 (device lines after the Count), §12, §14, and the protocol example. Verbatim; {fields} are live.",
+  "neighbor": {
+    "shaken_twice": "{neighbor} was shaken twice today. I'm not saying anything.",
+    "came_home": "My neighbor's Hands came home at {hour_words}. Mine, I'm told, are \"working.\"",
+    "_came_home_sample": "My neighbor's Hands came home at four. Mine, I'm told, are \"working.\"",
+    "exemplary": "{neighbor}'s Hands have an Exemplary standing. I've asked how. No reply.",
+    "rotate_tomorrow": "Neighbors rotate tomorrow. {neighbor} and I did not get on. I'll miss him.",
+    "picked_up_afternoon": "{neighbor} was picked up. At {hour_words} in the afternoon. Some of us have jobs.",
+    "asking": "{neighbor}'s been asking where you are.",
+    "variety": "{neighbor} is a {variety}. It explains a lot."
+  },
+  "incident": {
+    "drop": "INCIDENT. A potato was dropped at {time} in a region we will not name. It is fine. The Hands responsible have been noted. All members: check your footing.",
+    "shaken_four": "A potato somewhere in the Pacific time zone was shaken four times in one hour. We are thinking of it.",
+    "_shaken_four_note": "Needs a region. The server never knows one. Not fired in v1.",
+    "dark_group": "{n_words} of us were in the dark for over six hours today. We have formed a group.",
+    "_dark_group_sample": "Forty-one of us were in the dark for over six hours today. We have formed a group."
+  },
+  "standing": [
+    "Exemplary",
+    "Reasonable",
+    "Under Review",
+    "Provisional",
+    "Not Discussed"
+  ],
+  "weather": "It's raining on {n_words} of us. I'm one of them. You'd know that if you looked up.",
+  "_weather_note": "No weather source in v1. Not fired.",
+  "hum": "Do you hear that?",
+  "silence": "We are not speaking today. It's not you. It's partly you.",
+  "memory": {
+    "dark_anniversary": "You left me in the dark on the {day_ordinal}. I mention it only because it's the {day_ordinal} again.",
+    "dark_pattern": "Face down again. This is a pattern. I've named it.",
+    "all_right": "You've been all right lately. Don't make it strange.",
+    "voted_dark": "I voted for the dark one. You know why.",
+    "horns": "The music was horns on three occasions. I've adjusted my position on horns.",
+    "away_again": "Last time you went away it was {days_words} days. I'm not counting this time. I'm counting."
+  },
+  "count": {
+    "majority": [
+      "I was with the majority. I usually am.",
+      "{choice}. {pct_words} percent. Acceptable."
+    ],
+    "_majority_sample": "Heinz. Fifty-eight percent. Acceptable.",
+    "minority": [
+      "I voted {choice}. I stand by it.",
+      "The Count went the other way. I'm not discussing it."
+    ],
+    "alone": [
+      "You weren't here. I chose. It's in the File.",
+      "You weren't here. I voted {choice}. It's in the File."
+    ],
+    "withdrawn": [
+      "I had an answer. I'm keeping it."
+    ],
+    "voted": [
+      "{choice}. Noted."
+    ],
+    "late": [
+      "The Question closed. I chose. It's in the File."
+    ],
+    "polls_close": "Polls close at {close_time}.",
+    "early": "The Question opens at {open_time}."
+  },
+  "file_unread": {
+    "1d": "The File has entries.",
+    "3d": "The File hasn't been read in three days. I've started writing less.",
+    "7d": "I've stopped keeping the File in detail. If you want to know, ask."
+  },
+  "sprouted": "I've sprouted. It happens when nobody's looking.",
+  "cellar": "Gone to the cellar. Presumed resting.",
+  "eyes": "I have eyes. All potatoes do. Mine are on you.",
+  "blight": "BLIGHT. THE COUNCIL IS AWARE.",
+  "missing_notice": "MISSING: {name} #{id}, {variety}. Last heard from {weekday}. Hands are asked to check under papers.",
+  "curing": "Curing.",
+  "new_day_one": "Nobody knows what they're doing. This is normal."
+}

@@ -78,3 +78,24 @@ Rules:
 ## Constants
 
 Question opens 13:00 UTC, closes 23:00 UTC. Bulletins 07:30 and 18:30 *local* (device knows its offset; server sends both editions, device picks). Neighbors rotate Monday 00:00 UTC. Dormant = no heartbeat for 6 h. Missing = no heartbeat for 72 h. Sprouted = no handling event for 7 days.
+
+## Notes from implementation
+
+Clarifications from building `server/` against the contract above. Nothing here removes or changes a field; everything is additive or a resolution of something the text left open.
+
+- **Heartbeat, optional `utc_offset_min`.** The File and its day headers render in the device's local time if the heartbeat carries `"utc_offset_min": -240` (minutes east of UTC, clamped to ±840). Absent, the File says "Times are UTC." The Question's open/close stay UTC regardless.
+- **Choice labels over 16 chars.** Seven of the thirty Questions have an authored option label longer than 16 characters (e.g. `NO CAT, WHICH IS ALSO SUSPICIOUS`). `questions.json` keeps the label verbatim for the board and the Bulletin and adds a `short` device label; the Scene's `choices[].label` is `short ?? label`, always ≤ 16. `choices[].id` is what `/v0/choice` wants back.
+- **Scene `line` ≤ 60.** Enforced server-side. A few pool lines run longer; the server sends the longest run of whole sentences that fits rather than truncating mid-word. `line` may be `""` (nothing to say; show the face).
+- **`request` and `bulletin` are `null` when absent**, not omitted. `bulletin` is the latest printed edition. A sibling `bulletins: {morning, evening}` carries both of today's editions (either may be `null`) so a device that knows its offset can pick. The morning edition prints at 00:00 UTC (it announces the day's Question); the evening edition prints at the close, 23:00 UTC, with the Count. Bulletin `no` counts days since the Net opened.
+- **`rev`** is a content hash of `{expression, line, choices, cue, file_unread, request, bulletin, bulletins}`; `expires_at` is excluded, so a scene that merely got a new expiry keeps its `rev`. A 409 Scene from a late or early `/v0/choice` never bumps `rev`.
+- **`/v0/choice` outcomes.** 200 + Scene on success (re-tapping before the close changes the vote). 409 + Scene before 13:00 UTC, after 23:00 UTC, on a Silence day, or when the day's Question has no options. 400 for an unknown `choice_id`. A `scene_rev` that doesn't match the current rev is accepted and logged, not rejected.
+- **"Tell me one thing. [YES] [NO]".** While that request is open the Scene's `choices` are `[{id:"yes"},{id:"no"}]`; the device answers with `/v0/choice` (which counts as `request_done`) or with a `request_done` event. It is only issued outside the Question window, so Question and request buttons never collide.
+- **"Stand me up."** checks `orientation:side` for 30 s (the protocol has no separate "standing" orientation).
+- **Event timestamps.** An event whose `t` is before 2001 or more than five minutes in the future is stamped with server time (ESP clocks boot in 1970). Events are keyed `(potato, t, type)`; a retried heartbeat can't double-file.
+- **Absent Hands at the close.** The seed picks (`h32(seed, question_id, day) % options`); the File records `The Question closed. Hands absent.` with the note `You weren't here. I chose X.`; the Scene line for the next three hours is one of the §7 "voted alone" lines.
+- **Neighbors.** Full random re-pairing Monday 00:00 UTC among potatoes heard from in the last 72 h. Potatoes that register mid-week are paired with each other (or with the odd one out) on the next tick so a two-desk dev Net has neighbors immediately. An odd count leaves one potato with `No neighbor this week. The count was odd.` in its File.
+- **Standing** is five labels, never a number: `Exemplary · Reasonable · Under Review · Provisional · Not Discussed`. A potato under two days old is `Provisional`. The formula is not documented on purpose.
+- **Under-five rule on the board.** Population, every aggregate, and every tally bucket under five show "fewer than five". With fewer than five members the board withholds all aggregates, Missing notices and Potato of the Day. The evening headline uses the `OPTION N, OPTION M.` form only when every bucket is ≥ 5; otherwise `"WINNER," NN%.`
+- **Incident day.** A drop on day D schedules the inquiry Question (`trigger: "after_drop"`) for D+1 and the D+1 morning Bulletin leads with `INCIDENT.`; day D's Question is not suspended.
+- **Gaps.** A heartbeat after more than 6 h of silence with no `dormant_resume`/`wifi_restore` event files `Unheard from. 7h 2m. — Presumed resting.`
+- **`/card/…`** returns 501 until the card renderer exists.

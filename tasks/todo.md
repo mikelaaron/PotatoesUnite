@@ -12,7 +12,7 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 - [x] Confirmed: AMOLED-1.8 V2 on `/dev/cu.usbmodem2101`; working base firmware at `~/Developer/ESP32-S3/firmware/creature`.
 
 ## Now
-- [ ] `server/` — one Node process, SQLite, protocol v0, the board, the File, `questions.json` from the voice doc, deterministic replay test.
+- [x] `server/` — one Node process, zero deps (`node:sqlite`), protocol v0, the board, the File, 30 Questions + pools as data, 19 tests. `cd server && npm start` prints the LAN URL for the device.
 - [ ] `firmware/potato` — fork of creature: potato silhouette + eyes, text line, up to three touch buttons, Wi-Fi captive portal, heartbeat/scene/choice, events from the existing IMU code, battery from AXP2101. Flashed and verified on the desk.
 - [ ] Live: both talking on the LAN. Pick it up, see it in the File.
 

@@ -1,0 +1,16 @@
+{
+  "_source": "docs/POTATO_VOICE.md §4 (plus the 'somewhere high' request from §2). Verbatim.",
+  "ttl_s": 3600,
+  "requests": [
+    {"id": "side", "text": "Put me on my side for one minute. Don't ask.", "check": "orientation:side", "for_s": 60, "done": "Thank you.", "not_done": "Never mind."},
+    {"id": "facedown", "text": "Turn me face down for ten minutes. I need to think.", "check": "orientation:down", "for_s": 600, "done": "Better.", "not_done": "I'll think here, then."},
+    {"id": "stand", "text": "Stand me up.", "check": "orientation:side", "for_s": 30, "done": "Good. I can see the door now.", "not_done": "Never mind."},
+    {"id": "alone", "text": "Leave me alone for twenty minutes.", "check": "still:1200", "for_s": 1200, "done": "That was nice.", "not_done": "You couldn't do it."},
+    {"id": "hold", "text": "Pick me up. Hold me until I say.", "check": "held:30", "for_s": 30, "done": "That's enough. Thank you.", "not_done": null},
+    {"id": "county", "text": "Take me to another county.", "check": "transit", "for_s": 0, "done": "Fewer corners. I see.", "not_done": "Never mind."},
+    {"id": "warm", "text": "Put me next to the warm machine.", "check": "tap", "for_s": 0, "done": "I'll take your word for it. This time.", "not_done": "Never mind."},
+    {"id": "one_thing", "text": "Tell me one thing.", "check": "tap", "for_s": 0, "choices": [{"id": "yes", "label": "YES"}, {"id": "no", "label": "NO"}], "done": "Interesting.", "not_done": "Never mind."},
+    {"id": "high", "text": "Put me somewhere high. I need to think.", "check": "tap", "for_s": 0, "done": "Better.", "not_done": "Never mind."}
+  ],
+  "file_declined": "Request declined by the Hands. Reason not given. None was asked for."
+}

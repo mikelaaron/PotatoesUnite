@@ -1,0 +1,109 @@
+# The Net — Potatoes Unite server
+
+One Node process. Zero dependencies. `node:sqlite` for storage, plain HTML for the pages, JSON files for everything an editor would ever touch.
+
+It implements protocol v0 (`docs/PROTOCOL.md`) and the world described in `docs/POTATO_VOICE.md`: the Question, the Count, Bulletins, neighbors, Standing, requests, and the File.
+
+## Run
+
+Needs Node ≥ 22.13 (for `node:sqlite`; developed on 24.18). No `npm install`.
+
+```sh
+cd server
+npm start            # listens on 0.0.0.0:8080
+PORT=9090 npm start  # or another port
+```
+
+On startup it prints the Mac's LAN address(es):
+
+```
+POTATOES UNITE! The Net is open on http://0.0.0.0:8080
+  LAN: http://192.168.1.23:8080   (point a device at this)
+  db: /…/server/data/potatoes.db
+```
+
+Environment: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (`server/data/potatoes.db`; the `data/*.db*` files are git-ignored).
+
+## Endpoints
+
+| Method | Path | What |
+|---|---|---|
+| POST | `/v0/register` | `{secret, board, fw}` → `{potato_id, name, variety, seed, claim_code}`. Idempotent per secret. |
+| POST | `/v0/heartbeat` | telemetry + events → Scene. Events are drained on 200 (duplicates by `(potato, t, type)` are ignored, so retries are safe). |
+| POST | `/v0/choice` | `{secret, scene_rev, choice_id}` → Scene. 409 + Scene before open / after close. 400 for an unknown `choice_id`. |
+| GET | `/` | The board. Aggregates (never a bucket under five), the Question, the latest Bulletin, Missing notices, Potato of the Day. |
+| GET | `/file/{claim_code}` | The File. Read-only. |
+| POST | `/file/{claim_code}/ack` | Acknowledge. The one action. Redirects back. |
+| GET | `/card/…` | 501 for now. |
+| GET | `/health` | `{ok: true}` |
+
+Logs carry method, path, status and time. Claim codes are masked; secrets never appear.
+
+## The LAN dev setup
+
+1. Mac and device on the same Wi-Fi.
+2. `npm start` here; read the `LAN:` line.
+3. Point the firmware at `http://<that ip>:8080` (plain HTTP is fine on the LAN).
+4. Register, heartbeat, pick the potato up, open `http://<that ip>:8080/file/<claim code>` in a browser and watch it arrive.
+
+A scripted walk-through without a device:
+
+```sh
+S=$(head -c 16 /dev/urandom | xxd -p)
+curl -s localhost:8080/v0/register -d "{\"secret\":\"$S\",\"board\":\"amoled18\",\"fw\":\"0.1.0\"}"
+curl -s localhost:8080/v0/heartbeat -d "{\"secret\":\"$S\",\"rev_seen\":0,\"battery\":{\"pct\":63,\"charging\":false,\"vbus\":false},\"orientation\":\"up\",\"since_handled_s\":10,\"sound\":\"quiet\",\"events\":[{\"t\":$(date +%s),\"type\":\"pickup\"}]}"
+curl -s localhost:8080/v0/choice -d "{\"secret\":\"$S\",\"scene_rev\":1,\"choice_id\":\"heinz\"}"   # between 13:00 and 23:00 UTC
+```
+
+The world advances on a 30 s tick (and on every request): Questions open at 13:00 UTC and close at 23:00 UTC, absent potatoes vote by seed at close, Bulletins print (morning edition at 00:00 UTC, evening at the close), neighbors rotate Monday 00:00 UTC, requests expire after an hour. If the server was down across a close, the next tick catches up day by day.
+
+## Data files (the admin tool)
+
+All hot-reloaded within ~2 s of a save. A file that fails to parse is ignored and the previous copy kept (the error is logged).
+
+- `data/questions.json` — the thirty Questions. See below.
+- `data/broadcasts.json` — an array of scheduled overrides:
+  - `{"id":"s1","type":"silence","from":"2026-09-01T00:00:00Z","to":"2026-09-02T00:00:00Z"}` — the Silence. No Question that day, no requests, every screen shows the line.
+  - `{"id":"l1","type":"line","from":"…","to":"…","line":"…"}` — one line on every screen while active.
+- `data/pools/*.json` — reactions, charging, requests, net lines, File templates, Bulletin templates. Copy is verbatim from the voice doc; `{fields}` are live values. Keys beginning with `_` are notes.
+- `../assets/varieties.json` — the ten varieties (skin, silhouette, eyes, dither, lean). One file for the device, the File, the board and the cards.
+
+### Adding a Question
+
+Append to `data/questions.json`:
+
+```json
+{"id": "q31", "text": "Shown on the device, ≤ 60 chars.", "topic": "for the File: 'The Question: {topic}.'",
+ "bulletin": "for the morning Bulletin: 'Today's Question: {bulletin}.'",
+ "options": [{"id": "yes", "label": "YES"}, {"id": "long", "label": "A LONG LABEL OVER 16", "short": "DEVICE LABEL"}],
+ "count": "The authored Count line, kept verbatim.",
+ "remark": "The part of the Count line the evening Bulletin prints after the live tally. May use {pct.<option_id>}."}
+```
+
+Optional flags: `"withdrawn": true` (runs, then the Count says it was withdrawn; no tally published), `"trigger": "after_drop"` (only runs the day after a drop incident; it preempts the rotation). Max three options; device labels (`short` or `label`) must be ≤ 16 chars. The rotation asks the least-recently-asked Question first, file order breaking ties — so a new Question runs the next day. `npm test` checks the limits.
+
+## Tests
+
+```sh
+npm test
+```
+
+`node --test`. Covers a replayed Tuesday printing the File, the absent-Hands vote (and its determinism), the threshold-of-five rule on the board, scene `rev` stability, the Question rotation and the post-drop inquiry, neighbors with an odd count, Standing labels, hot reload, and the Silence.
+
+## Shape
+
+```
+server.js          HTTP, routing, logging, LAN banner
+lib/world.js       the world: register, heartbeat, choice, tick, neighbors, Standing, bulletins, scene, board, File
+lib/pages.js       board and File HTML (paper and ink, VT323 with a monospace fallback, light and dark)
+lib/data.js        hot-reloaded JSON
+lib/db.js          node:sqlite schema
+lib/clock.js       UTC day/week math and the protocol constants
+lib/rng.js         seeded hashing and picks
+lib/text.js        number words, durations, templates
+lib/names.js       160 mid-century names
+data/              questions, broadcasts, pools, the database
+test/              node --test
+```
+
+Determinism: a potato's seed comes from its number; its name, variety, voice and absent votes come from the seed. Same seed + same events → same File. Scene `rev` only moves when the scene's content changes (the hash excludes `expires_at`).

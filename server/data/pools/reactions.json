@@ -1,0 +1,54 @@
+{
+  "_source": "docs/POTATO_VOICE.md §3. Verbatim. Fields in {braces} are live values (durations, numbers).",
+  "pickup": ["Yes?", "Where are we going.", "I was in the middle of something.", "Careful. I'm not insured.", "Noted."],
+  "putdown": ["Here is fine.", "This is not where I was.", "Acceptable.", "Closer to outside. Interesting."],
+  "dark": {
+    "immediate": ["Dark."],
+    "10min": ["Still dark."],
+    "1h": ["I assume this is deliberate."],
+    "3h": ["I've had time to think. About you."],
+    "restored": [
+      "{duration_words}. I counted.",
+      "Hello. It was dark. I've filed something.",
+      "I don't want to talk about it. It's in the File."
+    ],
+    "_restored_sample": "Four hours, forty-five minutes. I counted."
+  },
+  "ceiling": {
+    "immediate": ["The ceiling situation. Again.", "I can see your feet from here."],
+    "20min": ["Is this a punishment or a test."],
+    "restored": ["Thank you. I think."]
+  },
+  "shake": ["Was that necessary.", "Stop.", "I'm going to remember this.", "Everything's loose now. I hope you're happy."],
+  "drop": ["", "…", "I'm fine.", "I'm noting this."],
+  "_drop_note": "The empty string is the blank screen, one second.",
+  "tap": ["That's my face.", "Yes.", "Don't.", "What do you need."],
+  "alone": {
+    "4h": ["It's quiet."],
+    "8h": ["Left home. Again."],
+    "24h": ["Day two."],
+    "48h": ["Day three. The plant is also here."],
+    "72h": ["I've started a list."],
+    "7d": ["The plant and I have an understanding now."],
+    "return": ["Oh. It's you."],
+    "return_long": ["I assumed the worst. Then I assumed you were fine. Then I stopped assuming."]
+  },
+  "night": ["It's 2 AM.", "Go to bed.", "What.", "This had better be the Hum."],
+  "loud": ["Is that jazz.", "Lower, please.", "I've told the Net about your music. They're sympathetic."],
+  "loud_rare": ["Horns. Finally."],
+  "temperature": [
+    "It's {temp_f} in here. Just so we're clear.",
+    "Warm. Why is it warm.",
+    "I have questions about the temperature. All of them are \"why.\""
+  ],
+  "_temperature_sample": "It's 63 in here. Just so we're clear.",
+  "transit": {
+    "start": ["Transit.", "Custody."],
+    "settled": ["This isn't the world.", "Don't tell me where we are. I'll work it out.", "New county. Fewer corners."]
+  },
+  "plugged": ["Fed. In a sense."],
+  "wifi_lost": ["The Net's gone. It's just us."],
+  "wifi_restored": ["Back. I missed {n_words} Bulletins. Give me a moment."],
+  "_wifi_restored_sample": "Back. I missed two Bulletins. Give me a moment.",
+  "saturday": ["It's Saturday. You're allowed. I'm noting it anyway."]
+}

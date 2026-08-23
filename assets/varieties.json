@@ -1,0 +1,23 @@
+{
+  "_source": "docs/POTATO_VOICE.md §13. One file drives the device, the File, the board, and the cards.",
+  "_fields": {
+    "skin": "hex tint for color surfaces (AMOLED, board, cards)",
+    "skin_dark": "hex for dark-theme surfaces",
+    "silhouette": "w/h = aspect (h relative to w=1.0); knobs = 0..1 bumpiness; rough = 0..1 skin texture; size = relative scale 0.7..1.2",
+    "eyes": "x/y = left eye centre as a fraction of the silhouette box; gap = distance between eyes as a fraction of width; size = radius as a fraction of width; count = how many eyes (potatoes have several; two are the face)",
+    "dither": "1-bit surfaces (e-paper): none | fine | medium | coarse | checker",
+    "lean": "one small temperament nudge, used rarely in line picks"
+  },
+  "varieties": [
+    {"id": "russet", "name": "Russet", "skin": "#8B6A45", "skin_dark": "#6E5236", "silhouette": {"shape": "long-oval", "w": 1.0, "h": 0.58, "knobs": 0.35, "rough": 0.8, "size": 1.05}, "eyes": {"x": 0.34, "y": 0.42, "gap": 0.26, "size": 0.06, "count": 5}, "dither": "coarse", "lean": "stubborn"},
+    {"id": "yukon_gold", "name": "Yukon Gold", "skin": "#D9B35A", "skin_dark": "#B8953F", "silhouette": {"shape": "round", "w": 1.0, "h": 0.88, "knobs": 0.15, "rough": 0.3, "size": 1.0}, "eyes": {"x": 0.36, "y": 0.44, "gap": 0.24, "size": 0.06, "count": 4}, "dither": "fine", "lean": "agreeable, suspicious of it"},
+    {"id": "red", "name": "Red", "skin": "#A64B3C", "skin_dark": "#86392D", "silhouette": {"shape": "round", "w": 1.0, "h": 0.9, "knobs": 0.1, "rough": 0.25, "size": 0.8}, "eyes": {"x": 0.37, "y": 0.45, "gap": 0.22, "size": 0.065, "count": 4}, "dither": "medium", "lean": "quick to file"},
+    {"id": "fingerling", "name": "Fingerling", "skin": "#E3D2A6", "skin_dark": "#BFAE84", "silhouette": {"shape": "narrow", "w": 1.0, "h": 0.42, "knobs": 0.6, "rough": 0.4, "size": 0.95}, "eyes": {"x": 0.3, "y": 0.4, "gap": 0.2, "size": 0.05, "count": 6}, "dither": "none", "lean": "anxious about transit"},
+    {"id": "purple_majesty", "name": "Purple Majesty", "skin": "#4B2A5E", "skin_dark": "#3A1F4A", "silhouette": {"shape": "oval", "w": 1.0, "h": 0.66, "knobs": 0.2, "rough": 0.35, "size": 1.0}, "eyes": {"x": 0.35, "y": 0.42, "gap": 0.25, "size": 0.06, "count": 4}, "dither": "coarse", "lean": "vain"},
+    {"id": "kennebec", "name": "Kennebec", "skin": "#C9A877", "skin_dark": "#A68A5F", "silhouette": {"shape": "oval", "w": 1.0, "h": 0.7, "knobs": 0.08, "rough": 0.15, "size": 1.15}, "eyes": {"x": 0.36, "y": 0.43, "gap": 0.26, "size": 0.06, "count": 3}, "dither": "fine", "lean": "patient"},
+    {"id": "maris_piper", "name": "Maris Piper", "skin": "#E8DCB8", "skin_dark": "#C4B893", "silhouette": {"shape": "oval", "w": 1.0, "h": 0.68, "knobs": 0.18, "rough": 0.3, "size": 1.0}, "eyes": {"x": 0.35, "y": 0.43, "gap": 0.25, "size": 0.06, "count": 4}, "dither": "none", "lean": "British, somehow"},
+    {"id": "king_edward", "name": "King Edward", "skin": "#E4C9B4", "skin_dark": "#BFA48F", "silhouette": {"shape": "rounded", "w": 1.0, "h": 0.8, "knobs": 0.22, "rough": 0.45, "size": 1.05}, "eyes": {"x": 0.35, "y": 0.41, "gap": 0.26, "size": 0.065, "count": 4}, "dither": "medium", "lean": "believes it is King. Isn't."},
+    {"id": "desiree", "name": "Désirée", "skin": "#C96F6A", "skin_dark": "#A65652", "silhouette": {"shape": "oval", "w": 1.0, "h": 0.64, "knobs": 0.2, "rough": 0.3, "size": 1.0}, "eyes": {"x": 0.34, "y": 0.42, "gap": 0.27, "size": 0.06, "count": 4}, "dither": "medium", "lean": "contrarian"},
+    {"id": "charlotte", "name": "Charlotte", "skin": "#E6CF8E", "skin_dark": "#C2AC70", "silhouette": {"shape": "oval", "w": 1.0, "h": 0.6, "knobs": 0.05, "rough": 0.1, "size": 0.85}, "eyes": {"x": 0.36, "y": 0.44, "gap": 0.24, "size": 0.055, "count": 3}, "dither": "none", "lean": "sentimental, denies it"}
+  ]
+}

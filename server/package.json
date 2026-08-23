@@ -1,0 +1,16 @@
+{
+  "name": "potatoes-unite-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Net. Authoritative world server for Potatoes Unite: protocol v0, the board, the File.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test 'test/*.test.js'"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {}
+}
