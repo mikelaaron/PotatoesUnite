@@ -33,8 +33,11 @@ test('a replayed Tuesday prints the File the voice doc describes', () => {
   const done = hb(w, secret, [{ t: at(21, 24), type: 'request_done', request_id: req.id }]);
   assert.equal(done.line, 'Better.', 'the potato acknowledges compliance');
   set(at(23, 5));
+  const BO = w.pools.bulletin_out;
+  assert.ok([...BO.not_mentioned.any, ...BO.not_mentioned.evening].includes(hb(w, secret, []).line), 'the evening edition is out; it says so first');
+  set(at(2, 5, 1)); // the bulletin-out hours are over; the Count line holds until 05:00
   const after = hb(w, secret, []);
-  assert.match(after.line, /^You weren't here\./, 'the potato voted alone and says so');
+  assert.match(after.line, /^You weren't here\./, `the potato voted alone and says so: ${after.line}`);
 
   const f = w.file(reg.claim_code);
   const text = fileText(f);

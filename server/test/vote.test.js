@@ -59,7 +59,7 @@ test('the Count: majority, minority, and the File lines for present voters', () 
   w.choice({ secret: SECRET(11), scene_rev: 1, choice_id: 'heinz' });
   w.choice({ secret: SECRET(12), scene_rev: 1, choice_id: 'heinz' });
   w.choice({ secret: SECRET(13), scene_rev: 1, choice_id: 'hunts' });
-  set(at(23, 2)); w.tick();
+  set(at(2, 30, 1)); w.tick(); // after the two bulletin-out hours; the Count line holds until 05:00
   const t = w.tally('2026-08-25');
   assert.deepEqual(t.winners, ['heinz']);
   assert.equal(t.counts.heinz, 2);

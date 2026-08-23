@@ -83,6 +83,20 @@ Append to `data/questions.json`:
 
 Optional flags: `"withdrawn": true` (runs, then the Count says it was withdrawn; no tally published), `"trigger": "after_drop"` (only runs the day after a drop incident; it preempts the rotation). Max three options; device labels (`short` or `label`) must be ≤ 16 chars. The rotation asks the least-recently-asked Question first, file order breaking ties — so a new Question runs the next day. `npm test` checks the limits.
 
+## Pushing things (the owner's console)
+
+```sh
+npm run push -- line "The Council is watching the plant." 20m
+npm run push -- event "A crate has appeared." "OPEN IT|IGNORE IT|REPORT IT" 30m \
+   --file "Asked about the crate." --after "Interesting." \
+   --result "The crate has been opened by {pct_open_it}%. Contents: undisclosed."
+npm run push -- clear        # drop expired entries
+```
+
+Both append to `data/broadcasts.json` (`from` = now, `to` = now + duration; ids `l1…`, `e1…`), which the server hot-reloads. A `line` shows on every screen while active. An `event` shows its line and up to three buttons (labels ≤ 16 chars; ids are slugs of the labels, e.g. `open_it`) whenever the daily Question is not on the buttons — if both are live, the Question wins and the event waits. Taps arrive at `/v0/choice` like any vote. The File gets `{file}: Open it.` when the Hands choose, or `{file} Hands absent.` with a seed choice at `to`; for ten minutes after `to` every potato says `{after}`; the next Bulletin carries `{result}` with `{pct_<id>}` and `{n_<id>}` fills — or "The Council does not publish small Counts." when fewer than five voted or a `{n_…}` bucket is under five. `--file`/`--after`/`--result` are optional; edit the JSON by hand for anything fancier.
+
+When an edition prints, every potato spends the next two hours on one §16 line ("The Bulletin's out. I've read it. You should." — or a "mentioned" line if it is named in the edition, is Potato of the Day, or caused the incident), unless an event line is speaking.
+
 ## Tests
 
 ```sh

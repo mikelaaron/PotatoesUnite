@@ -1,0 +1,19 @@
+{
+  "_source": "docs/POTATO_VOICE.md §16. Verbatim. One line per potato in the two hours after an edition prints. The File gets nothing for this.",
+  "not_mentioned": {
+    "any": [
+      "The Bulletin's out. I've read it. You should.",
+      "New edition. Nothing about you in it. Yet.",
+      "The paper's out. Read it before the neighbor does."
+    ],
+    "morning": ["Morning edition. The Council has opinions again."],
+    "evening": ["Evening edition. The Count is in. I'm not saying."]
+  },
+  "mentioned": {
+    "any": [
+      "New Bulletin. I'm mentioned. It isn't flattering.",
+      "The paper's out. Page one is us. Mostly you."
+    ],
+    "evening": ["Evening edition. I'm in it. Don't ask which part."]
+  }
+}

@@ -118,7 +118,7 @@ test('among events, severity picks the speaker: shake beats pickup and the charg
 });
 
 test('the ration: thirty seconds of fumbling is one entry, not seven', () => {
-  const { w, set } = makeWorld({ start: at(7, 0, -1) });
+  const { w, set } = makeWorld({ start: at(2, 40) }); // joined after last night's close: no Count line to outrank the tap
   const secret = SECRET(14);
   const { claim_code } = w.register({ secret, board: 'amoled18', fw: '0.1.0' });
   const T = (m, s) => at(3, m) + s; // 03:0m:ss

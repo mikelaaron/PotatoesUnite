@@ -18,9 +18,9 @@ test('/about renders the standfirst and no placeholder when GITHUB_URL is unset'
   assert.doesNotMatch(html, /\{GITHUB_URL\}/);
   assert.doesNotMatch(html, /Short forms|Twitter bio|\{ABOUT_URL\}/);
   assert.match(html, /All of it is open\. Inside: the server/);
-  assert.match(html, /<h2>What it is not<\/h2>\s*<ul><li>No feeding\. It has been fed\.<\/li>/);
+  assert.match(html, /<h2>What it is not<\/h2>\s*<ul><li>No [^<]+<\/li>/, 'the list follows its heading (copy may change; shape must not)');
   assert.match(html, /<ol><li>A supported board\./);
-  assert.match(html, /<p><strong>Why a potato\?<\/strong><br>A board lay on a desk/);
+  assert.match(html, /<p><strong>[^<]+\?<\/strong><br>[^<]+<\/p>/, 'a Q&A pair renders as a bold question, a break, the answer');
   assert.match(html, /<a href="\/">The Net<\/a>/);
   assert.match(html, /Your device never sends where it is\./);
   // with the env var, the sentence gets its link

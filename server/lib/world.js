@@ -674,6 +674,13 @@ export class World {
     const day = C.dayKey(t);
     const row = this.questionRow(day);
     const q = row && row.question_id ? this.data.question(row.question_id) : null;
+    const questionLive = !!(q && q.options.length && t >= C.openAt(t) && !row.closed && t < C.closeAt(t) && !this.activeBroadcast('silence', t));
+    const ev = this.activeEvent(t);
+    const evChoice = ev ? ev.choices.find((c) => c.id === choice_id) : null;
+    if (evChoice && !(questionLive && q.options.some((o) => o.id === choice_id))) {
+      this.recordEventVote(p, ev, evChoice, t);
+      return { status: 200, scene: this.scene(p, t) };
+    }
     if (!q || !q.options.length || t < C.openAt(t) || this.activeBroadcast('silence', t)) {
       return { status: 409, scene: this.scene(p, t, { line: fill(N.early, { open_time: `${C.hm(C.openAt(t))} UTC` }), choices: [] }) };
     }
@@ -733,6 +740,7 @@ export class World {
     this.store.setMeta('last_tick_day', today);
     this.ensureNeighbors(t);
     this.expireRequests(t);
+    this.settleEvents(t);
     for (const p of this.active(t)) {
       if (!p.st.session && !p.st.charge_pending && !(p.st.dark_since && !p.st.dark_filed) && !(p.st.inverted_since && !p.st.inverted_filed)) continue;
       this.settle(p, t);
@@ -771,12 +779,88 @@ export class World {
   bulletinNo(day) { return this.dayIndex(day) + 1; }
   latestBulletin(t) {
     const r = this.store.get('SELECT * FROM bulletins WHERE t <= ? ORDER BY t DESC LIMIT 1', t);
-    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t } : null;
+    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t, day: r.day } : null;
   }
   bulletin(day, edition) {
     const r = this.store.get('SELECT * FROM bulletins WHERE day = ? AND edition = ?', day, edition);
-    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t } : null;
+    return r ? { no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t, day: r.day } : null;
   }
+
+  // Potato of the Day for a day: chosen among potatoes with an entry the day before. Null under five members.
+  potdFor(day, ds, t) {
+    if (this.active(t).length < 5) return null;
+    const cands = this.store.all('SELECT DISTINCT potato_id FROM entries WHERE t >= ? AND t < ? ORDER BY potato_id', ds - DAY, ds).map((r) => r.potato_id);
+    if (!cands.length) return null;
+    const p = this.byId(cands[h32(day, 'potd') % cands.length]);
+    const e = this.store.get(`SELECT * FROM entries WHERE potato_id = ? AND t >= ? AND t < ? AND withheld = 0 ORDER BY standing ASC, t DESC LIMIT 1`, p.id, ds - DAY, ds);
+    return { p, e };
+  }
+
+  // §16: is this potato in the edition? Named in it, Potato of the Day, or the incident it caused.
+  mentionedIn(p, b, t) {
+    const text = `${b.headline} ${b.items.join(' ')}`;
+    if (new RegExp(`\\b${p.name}\\b`).test(text)) return true;
+    const ds = C.dayStartOfKey(b.day);
+    const potd = this.potdFor(b.day, ds, t);
+    if (potd && potd.p.id === p.id) return true;
+    if (b.edition === 'morning' && /^INCIDENT\./.test(b.headline)) {
+      if (this.store.get(`SELECT 1 FROM entries WHERE potato_id = ? AND kind = 'drop' AND t >= ? AND t < ?`, p.id, ds - DAY, ds)) return true;
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------------ ad-hoc events (broadcasts of type "event")
+  activeEvent(t) {
+    const e = this.activeBroadcast('event', t);
+    return e && Array.isArray(e.choices) && e.choices.length ? e : null;
+  }
+  eventVote(p, ev) { return this.store.get('SELECT * FROM votes WHERE day = ? AND potato_id = ?', `event:${ev.id}`, p.id); }
+
+  recordEventVote(p, ev, choice, t) {
+    this.store.run('INSERT INTO votes(day, potato_id, choice_id, by_hands, t) VALUES (?, ?, ?, 1, ?) ON CONFLICT(day, potato_id) DO UPDATE SET choice_id = excluded.choice_id, by_hands = 1, t = excluded.t', `event:${ev.id}`, p.id, choice.id, t);
+    const F = this.pools.file.event_vote;
+    const prev = this.store.get(`SELECT id FROM entries WHERE potato_id = ? AND kind = 'event_vote' AND created_t >= ? AND text LIKE ?`, p.id, ev.from_t, `${String(ev.file || '').replace(/\.$/, '')}:%`);
+    if (prev) this.store.run('DELETE FROM entries WHERE id = ?', prev.id);
+    this.addEntry(p, { t, kind: 'event_vote', text: fill(F.text, { file: String(ev.file || 'Asked.').replace(/\.$/, ''), label: sayLabel(choice.label) }) });
+  }
+
+  // At `to`: the absent vote by seed, the tally, and the result text for the next edition.
+  settleEvents(t) {
+    for (const ev of this.data.broadcasts) {
+      if (!ev || ev.type !== 'event' || !ev.to || !Array.isArray(ev.choices) || !ev.choices.length) continue;
+      const to = iso(ev.to), from = ev.from ? iso(ev.from) : 0;
+      if (!Number.isFinite(to) || to > t || this.store.meta(`event_settled:${ev.id}`)) continue;
+      const F = this.pools.file;
+      const members = this.store.all('SELECT * FROM potatoes WHERE created_t <= ? AND last_seen_t >= ?', to, to - C.MISSING_S).map((r) => this.load(r));
+      const counts = Object.fromEntries(ev.choices.map((c) => [c.id, 0]));
+      for (const m of members) {
+        let v = this.eventVote(m, ev);
+        if (!v) {
+          const c = ev.choices[h32(m.seed, ev.id, 'event') % ev.choices.length];
+          this.store.run('INSERT INTO votes(day, potato_id, choice_id, by_hands, t) VALUES (?, ?, ?, 0, ?)', `event:${ev.id}`, m.id, c.id, to);
+          this.addEntry(m, { t: to, kind: 'event_absent', text: fill(F.event_absent.text, { file: ev.file || 'Asked.' }) });
+          v = { choice_id: c.id };
+        }
+        counts[v.choice_id] = (counts[v.choice_id] || 0) + 1;
+      }
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      // Under five: fewer than five voted, or the result would print a {n_<id>} bucket under five.
+      const small = total < 5 || ev.choices.some((c) => new RegExp(`\\{n_${c.id}\\}`).test(ev.result || '') && (counts[c.id] || 0) < 5);
+      const fields = {};
+      for (const c of ev.choices) { fields[`pct_${c.id}`] = pct(counts[c.id] || 0, total); fields[`n_${c.id}`] = counts[c.id] || 0; }
+      const text = small ? F.event_small : fill(ev.result || '', fields);
+      this.store.setMeta(`event_result:${ev.id}`, JSON.stringify({ id: ev.id, from: from, to, after: ev.after || '', text, counts, total, small }));
+      this.store.setMeta(`event_settled:${ev.id}`, String(t));
+    }
+  }
+  // The edition printed in the last two hours, if any.
+  bulletinOut(t) {
+    if (!this.pools.bulletin_out) return null;
+    const b = this.latestBulletin(t);
+    return b && t >= b.t && t - b.t < 2 * HOUR ? b : null;
+  }
+  eventResults() { return this.store.all(`SELECT key, value FROM meta WHERE key LIKE 'event_result:%'`).map((r) => JSON.parse(r.value)); }
+
 
   ensureBulletin(day, edition, ds, t) {
     if (this.store.get('SELECT 1 FROM bulletins WHERE day = ? AND edition = ?', day, edition)) return;
@@ -861,6 +945,12 @@ export class World {
     }
     items = items.slice(0, 4);
     const at = edition === 'morning' ? ds : ds + C.CLOSE_H * HOUR;
+    for (const r of this.eventResults()) {
+      if (this.store.meta(`event_published:${r.id}`) || r.to > at || !r.text) continue;
+      items.splice(Math.min(1, items.length), 0, r.text);
+      this.store.setMeta(`event_published:${r.id}`, `${day}/${edition}`);
+    }
+    items = items.slice(0, 5);
     this.store.run('INSERT OR IGNORE INTO bulletins(day, edition, no, headline, items, t) VALUES (?, ?, ?, ?, ?, ?)', day, edition, this.bulletinNo(day), headline, JSON.stringify(items), at);
   }
 
@@ -871,6 +961,9 @@ export class World {
     const N = this.pools.net, R = this.pools.reactions, CH = this.pools.charging;
     const row = this.questionRow(day);
     const q = row && row.question_id ? this.data.question(row.question_id) : null;
+    const countDay = t >= C.closeAt(t) ? day : C.dayKey(t - DAY);
+    const countRow = this.questionRow(countDay);
+    const countClose = C.closeAt(C.dayStartOfKey(countDay));
     const silence = this.activeBroadcast('silence', t);
     const lineBc = this.activeBroadcast('line', t);
     const open = this.questionOpen(t);
@@ -881,6 +974,9 @@ export class World {
     const lastOut = st.last_request_outcome;
     const rx = st.reaction && t - st.reaction.at < this.reactionWindow(st.reaction) ? st.reaction : null;
     const rxLine = rx ? this.reactionLine(p, rx) : null;
+    const ev = this.activeEvent(t);
+    const evVote = ev ? this.eventVote(p, ev) : null;
+    const evAfter = this.eventResults().find((r) => t >= r.to && t < r.to + 10 * MIN && r.after);
     const humT = C.humAt(t);
     const expires = [ds + DAY];
     let line = '', choices = [], expression = null, cue = 'none';
@@ -911,11 +1007,19 @@ export class World {
     } else if (open && vote && t - vote.t < 10 * MIN) {
       const opt = q.options.find((o) => o.id === vote.choice_id) || { label: vote.choice_id };
       line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.short || opt.label) }); expires.push(vote.t + 10 * MIN);
-    } else if (row && row.closed && t - C.closeAt(t) < 3 * HOUR && t >= C.closeAt(t) && this.countOutcome(p, day)) {
-      const out = this.countOutcome(p, day);
-      line = fill(sp(N.count[out.kind], 'count', day), out);
+    } else if (ev && !evVote && !open) {
+      // An ad-hoc event takes the buttons only while the daily Question is not on them.
+      line = ev.line || ''; choices = ev.choices.map((c) => ({ id: c.id, label: c.label })); expression = 'waiting'; expires.push(ev.to_t);
+    } else if (ev && evVote && t - evVote.t < 10 * MIN && !open) {
+      const c = ev.choices.find((x) => x.id === evVote.choice_id) || { label: evVote.choice_id };
+      line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(c.label) }); expires.push(evVote.t + 10 * MIN);
+    } else if (evAfter) {
+      line = evAfter.after; expires.push(evAfter.to + 10 * MIN);
+    } else if (countRow && countRow.closed && t >= countClose && t - countClose < 6 * HOUR && this.countOutcome(p, countDay) && !this.bulletinOut(t)) {
+      const out = this.countOutcome(p, countDay);
+      line = fill(sp(N.count[out.kind], 'count', countDay), out);
       expression = out.kind === 'majority' ? 'pleased' : out.kind === 'minority' || out.kind === 'alone' ? 'aggrieved' : 'neutral';
-      expires.push(C.closeAt(t) + 3 * HOUR);
+      expires.push(countClose + 6 * HOUR);
     } else if (rxLine) {
       line = rxLine.line; expression = rxLine.expression; expires.push(rx.at + this.reactionWindow(rx));
     } else if (req) {
@@ -925,6 +1029,14 @@ export class World {
       line = fill(sp(N.count.voted, 'voted'), { choice: sayLabel(opt.short || opt.label) }); expires.push(C.closeAt(t));
     }
 
+    const lb = !line && !silence && !lineBc ? this.bulletinOut(t) : null;
+    if (lb) {
+      // §16: a new edition is news the potato has and the Hands don't. Once, for two hours.
+      const BO = this.pools.bulletin_out;
+      const pool = this.mentionedIn(p, lb, t) ? BO.mentioned : BO.not_mentioned;
+      line = sp([...(pool.any || []), ...(pool[lb.edition] || [])], 'bulletin_out', lb.day, lb.edition);
+      expires.push(lb.t + 2 * HOUR);
+    }
     if (!line && !silence && !lineBc) {
       // The weather: whichever of these is true, rotating every two hours so it resurfaces unpredictably.
       const cands = [];
@@ -1021,14 +1133,8 @@ export class World {
     const missingRows = this.store.all('SELECT * FROM potatoes WHERE last_seen_t < ? ORDER BY last_seen_t DESC LIMIT 10', t - C.MISSING_S);
     const missing = small ? [] : missingRows.map((m) => fill(N.missing_notice, { name: m.name, id: m.id, variety: this.variety(m.variety).name, weekday: C.weekdayName(m.last_seen_t) }));
     let potd = null;
-    if (!small) {
-      const cands = this.store.all('SELECT DISTINCT potato_id FROM entries WHERE t >= ? AND t < ? ORDER BY potato_id', ds - DAY, ds).map((r) => r.potato_id);
-      if (cands.length) {
-        const p = this.byId(cands[h32(day, 'potd') % cands.length]);
-        const e = this.store.get(`SELECT * FROM entries WHERE potato_id = ? AND t >= ? AND t < ? AND withheld = 0 ORDER BY standing ASC, t DESC LIMIT 1`, p.id, ds - DAY, ds);
-        potd = { name: p.name, id: p.id, variety: this.variety(p.variety).name, excerpt: e ? `${e.text}${e.note ? `  ${e.note}` : ''}` : '' };
-      }
-    }
+    const pd = small ? null : this.potdFor(day, ds, t);
+    if (pd) potd = { name: pd.p.name, id: pd.p.id, variety: this.variety(pd.p.variety).name, excerpt: pd.e ? `${pd.e.text}${pd.e.note ? `  ${pd.e.note}` : ''}` : '' };
     return {
       t, day, no: this.bulletinNo(day), population, small, question,
       bulletin: this.latestBulletin(t), silence: !!this.activeBroadcast('silence', t), silenceLine: N.silence,

@@ -38,6 +38,9 @@
   "no_neighbor": {"text": "No neighbor this week. The count was odd.", "note": "It wasn't personal."},
   "curing": {"text": "Joined the Net.", "note": "Curing. Can still vote. The Council has decided this."},
   "acknowledged": {"text": "The File was read.", "note": "Noted."},
+  "event_vote": {"text": "{file}: {label}."},
+  "event_absent": {"text": "{file} Hands absent."},
+  "event_small": "The Council does not publish small Counts.",
   "silent": {"text": "Unheard from. {dur}.", "note": "Presumed resting."},
   "header": {
     "neighbor": "Neighbor this week: {neighbor} #{id}.",

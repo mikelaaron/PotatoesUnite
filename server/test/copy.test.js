@@ -42,6 +42,7 @@ const SCENE_POOLS = [
   ['charging', { plugged: d.pools.charging.plugged, plugged_overnight: d.pools.charging.plugged_overnight, full: d.pools.charging.full, unplugged: d.pools.charging.unplugged, running_down: d.pools.charging.running_down, waking: d.pools.charging.waking, waking_3d: d.pools.charging.waking_3d }],
   ['net', { neighbor: d.pools.net.neighbor, hum: d.pools.net.hum, silence: d.pools.net.silence, memory: d.pools.net.memory, count: d.pools.net.count, file_unread: d.pools.net.file_unread, sprouted: d.pools.net.sprouted, cellar: d.pools.net.cellar, eyes: d.pools.net.eyes }],
   ['requests', d.pools.requests.requests.map((r) => ({ text: r.text, done: r.done, not_done: r.not_done || '' }))],
+  ['bulletin_out', d.pools.bulletin_out],
   ['questions', d.questions.map((q) => q.text)],
 ];
 
