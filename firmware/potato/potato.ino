@@ -205,7 +205,9 @@ static Spring sLean, sSx, sSy, sDrift, sGazeX, sGazeY, sPerk;
 
 static float breathPhase = 0.0f;
 static float blinkIn = 3.0f, blinkT = -1.0f;   // blinkT < 0 means eyes open
-static float saccadeIn = 1.0f;
+static float glanceIn = 8.0f;        // seconds until the next idle glance down
+static uint32_t glanceUntilMs = 0;   // while set, the eyes are on the text band
+static float glanceX = 0.0f;         // small sideways lean of a glance
 static float gazeTX = 0.0f, gazeTY = 0.0f;
 
 static float arousal = 0.0f;      // 0..1 stirred right now
@@ -330,6 +332,8 @@ static void say(const char *line, float seconds) {
   strncpy(reactionLine, line, MAX_LINE - 1);
   reactionLine[MAX_LINE - 1] = 0;
   reactionUntilMs = millis() + (uint32_t)(seconds * 1000.0f);
+  glanceX = 0.0f;
+  glanceUntilMs = millis() + 2400;   // it looks down at its own words
   USBSerial.printf("line: %s\n", line);
 }
 
@@ -493,8 +497,13 @@ static void applySceneJson(const char *json) {
   if (!parseScene(json, sd)) { USBSerial.println("scene: bad json"); return; }
   sceneRev = sd.rev;
   expression = sd.expression;
+  const bool lineChanged = strncmp(sceneLine, sd.line, MAX_LINE - 1) != 0;
   strncpy(sceneLine, sd.line, MAX_LINE - 1);
   sceneLine[MAX_LINE - 1] = 0;
+  if (lineChanged && sceneLine[0]) {
+    glanceX = 0.0f;
+    glanceUntilMs = millis() + 2400;   // news from the Net earns a look down
+  }
   fileUnread = sd.fileUnread;
 
   Choice choices[MAX_CHOICES];
@@ -848,7 +857,7 @@ void setup() {
   sSx.x = 1.0f;
   sSy.x = 1.0f;
   blinkIn = frange(T.blinkMin, T.blinkMax);
-  saccadeIn = frange(T.saccadeMin, T.saccadeMax);
+  glanceIn = frange(T.glanceMin, T.glanceMax);
 
   bootMs = millis();
   USBSerial.printf("potato up. fw %s. russet, %dx%d. It has eyes.\n",
@@ -1501,18 +1510,28 @@ void loop() {
     const float localY = -dx * sn + dy * c;
     gazeTX = fminf(fmaxf(localX / (BASE_R * 0.85f), -1.0f), 1.0f);
     gazeTY = fminf(fmaxf(localY / (BASE_R * 0.85f), -1.0f), 1.0f);
+  } else if ((int32_t)(tNow - glanceUntilMs) < 0) {
+    // A line just appeared, or an idle glance is due: down, at the text
+    // band. A momentary glance outranks the standing unread posture.
+    gazeTX = glanceX;
+    gazeTY = 1.0f;
   } else if (fileUnread > 0) {
     // The File has entries. Eyes toward the nearest screen edge.
     gazeTX = sDrift.x >= 0.0f ? 1.0f : -1.0f;
     gazeTY = 0.15f;
   } else {
-    saccadeIn -= dt;
-    if (saccadeIn <= 0.0f) {
-      saccadeIn = frange(T.saccadeMin, T.saccadeMax) * (1.0f - arousal * 0.55f);
-      // Stirred, it looks at you rather than wandering.
-      const float wander = (1.0f - arousal);
-      gazeTX = frange(-1.0f, 1.0f) * wander;
-      gazeTY = frange(-0.6f, 0.6f) * wander;
+    // At rest the eyes are forward, on the Hands. No side-to-side scanning;
+    // a potato does not read the county. Now and then it glances down at
+    // the line on its own; stirred, it just watches you.
+    gazeTX = 0.0f;
+    gazeTY = 0.0f;
+    glanceIn -= dt;
+    if (glanceIn <= 0.0f) {
+      glanceIn = frange(T.glanceMin, T.glanceMax) * (1.0f + arousal);
+      if (arousal < 0.35f) {
+        glanceX = frange(-0.25f, 0.25f);
+        glanceUntilMs = tNow + (uint32_t)frange(900.0f, 1600.0f);
+      }
     }
   }
   springTo(sGazeX, gazeTX, T.gazeSettle, 18.0f, dt);

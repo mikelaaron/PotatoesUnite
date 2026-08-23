@@ -16,10 +16,10 @@ struct Temperament {
   float breathRate;        // radians/sec at rest
   float breathDepth;       // fraction of radius
 
-  float blinkMin, blinkMax;  // seconds between blinks at rest
-  float saccadeMin, saccadeMax;
+  float blinkMin, blinkMax;    // seconds between blinks at rest
+  float glanceMin, glanceMax;  // seconds between idle glances down at the line
 
-  float gazeRange;         // how far the eyes wander, fraction of body radius
+  float gazeRange;         // how far the eyes move, fraction of body radius
   float gazeSettle;        // spring constant for eye movement
 
   float perkHeight;        // body stretch when stirred
@@ -40,8 +40,8 @@ static const Temperament POTATO = {
 
     .blinkMin = 3.0f,
     .blinkMax = 9.0f,
-    .saccadeMin = 1.6f,
-    .saccadeMax = 5.5f,
+    .glanceMin = 7.0f,
+    .glanceMax = 16.0f,
 
     .gazeRange = 0.10f,
     .gazeSettle = 90.0f,
