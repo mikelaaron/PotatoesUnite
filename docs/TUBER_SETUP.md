@@ -6,7 +6,7 @@ Planning and copy; the owner posts by hand. Times are US Eastern: the Question o
 
 **Handle, in preference order.** Observed 23 Aug 2026 from the server-rendered title of `x.com/<handle>`; the first also in a browser.
 
-1. **@thetuberpress** — "User Profile Not Found" on X. Free on Bluesky ("Profile not found") and mastodon.social ("Record not found"). **Take this one.**
+1. **@IssuedByCouncil** — SECURED 23 Aug (both @potatoesunite and @thetuberpress fell through / were passed over; the Council's own byline reads even better). Display name stays **The Tuber**; the handle is the issuing authority.
 2. @potatoes_unite — not found on X or mastodon.social; invalid on Bluesky.
 3. @potatoesunitenet — not found on X.
 
