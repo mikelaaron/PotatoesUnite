@@ -53,6 +53,14 @@ About page: no captions; transparent cut-out images float with text wrapping the
 - [x] File v2 (the case against management) and claim-code → long-token exchange with rate limit.
 - [x] Rosemary's stale line: server hold fixed; voted potatoes rotate lines; the device-side cause was most likely the 4 KB scene cap (raised to 8 KB in 0.2.1).
 
+## Variety pass (23 Aug evening) — ChatGPT's repetition review, adopted with changes
+Doreen's "I'm not insured." on every boot: confirmed mechanical. The firmware walk reset with `poolHist` on reboot (uploads, dormancy) so the first pick-up always reopened at the seed's habitual line; the server picked by event time with no memory (1-in-5 back-to-back repeats).
+Adopted: pools walk as seeded shuffle bags (full pool before any repeat, no repeat across cycle or reboot — cursors in NVS on the device, in `st` on the server); pick-up 5→12 core lines, put-down 4→9, tap 4→9; rare lines split out; put-down is now the §15 fallback (only when the session began in silence); both doc contradictions fixed (§ intro "reaction to every single thing", §15 one-line-per-session).
+Changed from the proposal: instead of a rare *pool* at 1-in-12, the seed gives each potato **one** signature rare line for keeps (Doreen keeps "I'm not insured."), every tenth eligible pick-up — the catchphrase is the personality, the ration makes it land. Cut the mug-adjacent lines ("So this is happening.", "I see we're doing this.", "You have my attention.", "So this is the decision.") and generic filler ("Another adjustment.", "A change has been made.", "All right.", "Apparently we're moving.").
+Firmware-only extras: morning pool (first spoken pick-up 04–12 local) and restless pool (fourth spoken session in one day). Server keeps core + signature only.
+- [x] Voice doc §3/§15, `reactions.json`, `pools.h` + `potato.ino` all updated; 66 server tests + host protocol_test pass; potato firmware builds as 0.2.3.
+- [ ] Release 0.2.3 to Doreen: `make -C firmware release BOARD=potato` → `npm run release`. (Server restart picks up the new pools; the paper board has no local pools.)
+
 ## Public launch checklist (23 Aug evening)
 - [x] Host: Railway chosen; domain purchased there (name TBD in docs). Deploy per docs/DEPLOY.md; needs the repo on GitHub or `railway up`.
 - [ ] /flash page (ESP Web Tools, in progress) + webflash merged binaries (in progress) + FLASH_WITH_AN_AGENT.md (in progress).
