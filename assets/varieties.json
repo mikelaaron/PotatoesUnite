@@ -9,7 +9,7 @@
     "lean": "one small temperament nudge, used rarely in line picks"
   },
   "varieties": [
-    {"id": "russet", "name": "Russet", "skin": "#8B6A45", "skin_dark": "#6E5236", "silhouette": {"shape": "long-oval", "w": 1.0, "h": 0.58, "knobs": 0.35, "rough": 0.8, "size": 1.05}, "eyes": {"x": 0.34, "y": 0.42, "gap": 0.26, "size": 0.06, "count": 5}, "dither": "coarse", "lean": "stubborn"},
+    {"id": "russet", "name": "Russet", "skin": "#A8743F", "skin_dark": "#5E3A1C", "silhouette": {"shape": "long-oval", "w": 1.0, "h": 0.58, "knobs": 0.35, "rough": 0.8, "size": 1.05}, "eyes": {"x": 0.34, "y": 0.42, "gap": 0.26, "size": 0.06, "count": 5}, "dither": "coarse", "lean": "stubborn"},
     {"id": "yukon_gold", "name": "Yukon Gold", "skin": "#D9B35A", "skin_dark": "#B8953F", "silhouette": {"shape": "round", "w": 1.0, "h": 0.88, "knobs": 0.15, "rough": 0.3, "size": 1.0}, "eyes": {"x": 0.36, "y": 0.44, "gap": 0.24, "size": 0.06, "count": 4}, "dither": "fine", "lean": "agreeable, suspicious of it"},
     {"id": "red", "name": "Red", "skin": "#A64B3C", "skin_dark": "#86392D", "silhouette": {"shape": "round", "w": 1.0, "h": 0.9, "knobs": 0.1, "rough": 0.25, "size": 0.8}, "eyes": {"x": 0.37, "y": 0.45, "gap": 0.22, "size": 0.065, "count": 4}, "dither": "medium", "lean": "quick to file"},
     {"id": "fingerling", "name": "Fingerling", "skin": "#E3D2A6", "skin_dark": "#BFAE84", "silhouette": {"shape": "narrow", "w": 1.0, "h": 0.42, "knobs": 0.6, "rough": 0.4, "size": 0.95}, "eyes": {"x": 0.3, "y": 0.4, "gap": 0.2, "size": 0.05, "count": 6}, "dither": "none", "lean": "anxious about transit"},

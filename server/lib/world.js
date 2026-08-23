@@ -207,19 +207,83 @@ export class World {
       this.addEntry(p, { t, kind: 'silent', text: fill(F.text, { dur: durShort(t - prevSeen) }), note: F.note, dur_s: t - prevSeen });
     }
 
+    const applied = [];
     for (const ev of events) {
       const r = this.store.run(
         'INSERT OR IGNORE INTO events(potato_id, t, type, dur_s, pct, request_id, received_t) VALUES (?, ?, ?, ?, ?, ?, ?)',
         p.id, ev.t, ev.type, ev.dur_s == null ? null : Math.round(num(ev.dur_s)), ev.pct == null ? null : Math.round(num(ev.pct)),
         ev.request_id == null ? null : String(ev.request_id), t);
-      if (r.changes) this.applyEvent(p, ev);
+      if (r.changes) { this.applyEvent(p, ev); applied.push(ev); }
     }
+    this.noteReaction(p, applied, t);
     if (p.orientation !== 'down' && p.st.dark_since && !events.some((e) => e.type === 'facedown_end')) p.st.dark_since = null;
     if (p.orientation !== 'inverted' && p.st.inverted_since && !events.some((e) => e.type === 'inverted_end')) p.st.inverted_since = null;
     this.applyIdle(p, since, t);
     this.maybeIssueRequest(p, t);
     this.save(p);
     return this.scene(p, t);
+  }
+
+  // Events in this heartbeat outrank steady state. The most severe one speaks; the rest are filed.
+  static severity(ev) {
+    const d = Math.max(0, num(ev.dur_s));
+    switch (ev.type) {
+      case 'drop': return 100;
+      case 'facedown_end': return d >= HOUR ? 90 : 60;
+      case 'inverted_end': return d >= 20 * MIN ? 80 : 60;
+      case 'shake': return 70;
+      case 'dormant_resume': return 65;
+      case 'transit_end': return 55;
+      case 'wifi_restore': return 50;
+      case 'loud': return 45;
+      case 'pickup': case 'putdown': case 'tap': case 'transit_start': return 40;
+      case 'charge_start': case 'charge_end': case 'battery_low': return 20;
+      default: return 0;
+    }
+  }
+  // Major reactions (≥ 60) hold the line for ten minutes and outrank the Question's buttons; minor ones for two.
+  reactionWindow(rx) { return rx.sev >= 60 ? 10 * MIN : 2 * MIN; }
+
+  noteReaction(p, events, t) {
+    let best = null;
+    for (const ev of events) {
+      const sev = World.severity(ev);
+      if (sev > 0 && (!best || sev >= best.sev)) best = { at: t, type: ev.type, dur_s: Math.max(0, num(ev.dur_s)), pct: ev.pct == null ? null : Math.round(num(ev.pct)), sev };
+    }
+    if (!best) return;
+    const cur = p.st.reaction;
+    if (cur && t - cur.at < this.reactionWindow(cur) && cur.sev > best.sev) return; // a bigger grievance is still speaking
+    p.st.reaction = best;
+  }
+
+  reactionLine(p, rx) {
+    const R = this.pools.reactions, CH = this.pools.charging, st = p.st;
+    const sp = (pool, ...salts) => pick((Array.isArray(pool) ? pool : [pool]).filter((x) => x), p.seed, ...salts) || '';
+    switch (rx.type) {
+      case 'drop': return { line: sp(R.drop, 'drop', rx.at), expression: 'aggrieved' };
+      case 'facedown_end': return { line: fill(sp(R.dark.restored, 'restored', st.dark_count || 0), { duration_words: durWords(rx.dur_s) }), expression: 'aggrieved' };
+      case 'inverted_end': return { line: sp(R.ceiling.restored, 'ceilrestored'), expression: 'aggrieved' };
+      case 'shake': return { line: sp(R.shake, 'shake', st.shake_count || 0), expression: 'aggrieved' };
+      case 'dormant_resume': return { line: rx.dur_s >= 3 * DAY ? sp(CH.waking_3d, 'wake3') : sp(CH.waking, 'wake', rx.at), expression: 'neutral' };
+      case 'transit_end': return { line: sp(R.transit.settled, 'settled', rx.at), expression: 'neutral' };
+      case 'transit_start': return { line: sp(R.transit.start, 'transit'), expression: 'neutral' };
+      case 'wifi_restore': {
+        const n = Math.floor(rx.dur_s / (12 * HOUR));
+        return n >= 1 ? { line: fill(sp(R.wifi_restored, 'wifi'), { n_words: numberWords(n) }), expression: 'neutral' } : null;
+      }
+      case 'loud': return { line: h32(p.seed, 'horns') % 7 === 0 ? sp(R.loud_rare, 'loudr') : sp(R.loud, 'loud', st.loud_count || 0), expression: 'aggrieved' };
+      case 'pickup': return { line: sp(R.pickup, 'pickup', rx.at), expression: 'neutral' };
+      case 'putdown': return { line: sp(R.putdown, 'putdown', rx.at), expression: 'neutral' };
+      case 'tap': return { line: sp(R.tap, 'tap', rx.at), expression: 'neutral' };
+      case 'charge_start': return { line: sp(CH.plugged, 'plugged', rx.at), expression: 'neutral' };
+      case 'charge_end': return { line: sp(CH.unplugged, 'unplugged'), expression: 'neutral' };
+      case 'battery_low': {
+        const keys = Object.keys(CH.running_down || {}).map(Number).sort((a, b) => a - b);
+        const k = keys.find((x) => x >= (rx.pct ?? 0)) ?? keys[keys.length - 1];
+        return k == null ? null : { line: CH.running_down[String(k)], expression: 'neutral' };
+      }
+      default: return null;
+    }
   }
 
   applyEvent(p, ev) {
@@ -714,6 +778,8 @@ export class World {
     const req = this.openRequest(p, t);
     const reqDef = req ? this.requestDef(req.kind) : null;
     const lastOut = st.last_request_outcome;
+    const rx = st.reaction && t - st.reaction.at < this.reactionWindow(st.reaction) ? st.reaction : null;
+    const rxLine = rx ? this.reactionLine(p, rx) : null;
     const humT = C.humAt(t);
     const expires = [ds + DAY];
     let line = '', choices = [], expression = null, cue = 'none';
@@ -733,11 +799,8 @@ export class World {
       line = d >= 20 * MIN ? sp(R.ceiling['20min'], 'ceil20') : sp(R.ceiling.immediate, 'ceil', st.dark_count || 0);
       expression = 'aggrieved';
       if (d < 20 * MIN) expires.push(st.inverted_since + 20 * MIN);
-    } else if (st.dark_restored_t && t - st.dark_restored_t < 10 * MIN) {
-      line = fill(sp(R.dark.restored, 'restored', st.dark_count || 0), { duration_words: durWords(st.dark_restored_dur || 0) });
-      expression = 'aggrieved'; expires.push(st.dark_restored_t + 10 * MIN);
-    } else if (st.ceiling_restored_t && t - st.ceiling_restored_t < 10 * MIN) {
-      line = sp(R.ceiling.restored, 'ceilrestored'); expires.push(st.ceiling_restored_t + 10 * MIN);
+    } else if (rxLine && rx.sev >= 60) {
+      line = rxLine.line; expression = rxLine.expression; expires.push(rx.at + this.reactionWindow(rx));
     } else if (open && !vote) {
       // The Question is the clock. Nothing but handling outranks its buttons.
       line = q.text; expression = 'waiting';
@@ -752,6 +815,8 @@ export class World {
       line = fill(sp(N.count[out.kind], 'count', day), out);
       expression = out.kind === 'majority' ? 'pleased' : out.kind === 'minority' || out.kind === 'alone' ? 'aggrieved' : 'neutral';
       expires.push(C.closeAt(t) + 3 * HOUR);
+    } else if (rxLine) {
+      line = rxLine.line; expression = rxLine.expression; expires.push(rx.at + this.reactionWindow(rx));
     } else if (req) {
       line = req.text; expression = 'waiting'; choices = (reqDef && reqDef.choices) || []; expires.push(req.expires_t);
     } else if (open && vote) {
