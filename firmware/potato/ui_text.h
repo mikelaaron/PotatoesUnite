@@ -51,6 +51,27 @@ static bool uiDirty = true;
 static bool uiBlanked = false;
 static uint32_t uiFlushUs = 0;
 
+// The status card: up to five plain lines in the text band, replacing the
+// line and the buttons while it is up. The Hands asked a direct question.
+static const int CARD_LINES = 5;
+static char uiCard[CARD_LINES][48];
+static uint8_t uiCardCount = 0;
+
+static void uiSetCard(const char *const *lines, uint8_t n) {
+  if (n > CARD_LINES) n = CARD_LINES;
+  for (uint8_t i = 0; i < n; ++i) { strncpy(uiCard[i], lines[i], 47); uiCard[i][47] = 0; }
+  uiCardCount = n;
+  uiDirty = true;
+}
+
+static void uiClearCard() {
+  if (!uiCardCount) return;
+  uiCardCount = 0;
+  uiDirty = true;
+}
+
+static inline bool uiCardActive() { return uiCardCount != 0; }
+
 static bool uiBegin(Arduino_G *out) {
   canvas = new TextCanvas(out);
   if (!canvas->beginPsram()) return false;
@@ -191,12 +212,27 @@ static void drawButtons() {
   }
 }
 
+static void drawCard() {
+  canvas->setFont(&FreeSans12pt7b);
+  canvas->setTextColor(PAPER);
+  const int adv = FreeSans12pt7b.yAdvance;       // 29: five lines fit in 156
+  const int ascent = (adv * 3) / 4;
+  const int top = (TEXT_H - uiCardCount * adv) / 2;
+  for (int i = 0; i < uiCardCount; ++i) {
+    canvas->setCursor(12, (int16_t)(top + i * adv + ascent));
+    canvas->print(uiCard[i]);
+  }
+}
+
 static void uiDraw() {
   if (!uiDirty) return;
   const uint32_t t0 = micros();
   canvas->fillScreen(BLACK);
-  if (uiLine[0]) drawLineBand();
-  if (uiChoiceCount) drawButtons();
+  if (uiCardCount) drawCard();
+  else {
+    if (uiLine[0]) drawLineBand();
+    if (uiChoiceCount) drawButtons();
+  }
   canvas->flush();
   uiFlushUs = micros() - t0;
   uiDirty = false;
@@ -205,6 +241,7 @@ static void uiDraw() {
 
 // Which button is under a screen-space touch, or -1.
 static int uiButtonAt(int sx, int sy) {
+  if (uiCardCount) return -1;   // no buttons while the card is up
   const int cy = sy - TEXT_Y;
   if (cy < BTN_TOP - 6 || cy > BTN_TOP + BTN_H + 6) return -1;
   for (int i = 0; i < uiChoiceCount; ++i) {

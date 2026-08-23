@@ -76,8 +76,11 @@ static const char *const LINES_TAP[] = {
     "What do you need.",
 };
 
+// The first entry takes the local hour from the clock ("It's 11 PM.") and
+// is skipped when the device has no clock yet. Never state a time that
+// isn't the clock's.
 static const char *const LINES_NIGHT[] = {
-    "It's 2 AM.",
+    "It's %s.",
     "Go to bed.",
     "What.",
     "This had better be the Hum.",
@@ -168,6 +171,12 @@ static const char *pickLine(PoolId id) {
   poolLast[id] = (int8_t)idx;
   ++poolHist[id];
   return p.lines[idx];
+}
+
+// "11 PM": hour only, 12-hour, no minutes.
+static void hour12Words(int hour24, char *out, size_t cap) {
+  const int h12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+  snprintf(out, cap, "%d %s", h12, hour24 < 12 ? "AM" : "PM");
 }
 
 // "Four hours, forty-five minutes" — the duration lines fill in from the

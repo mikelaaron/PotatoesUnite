@@ -37,7 +37,7 @@ python3 firmware/tools/serial_capture.py /dev/cu.usbmodem2101 20 /tmp/potato.log
 
 Serial dev keys (lower case, `h` lists them): `t` tap, `n` night, `p` pickup,
 `d` drop, `k` dark-restored, `q` demo Question with three buttons, `1`/`2`/`3` press a button, `x` clear,
-`a`/`w`/`z`/`v` expressions, `e` event queue, `c` claim code, `b` heartbeat
+`a`/`w`/`z`/`v` expressions, `e` event queue, `c` status card (what long-press shows), `b` heartbeat
 now, `i` identity and net status, `W` forget Wi-Fi credentials, `R` register again (e.g. after pointing at a new server; the server also triggers this by answering a heartbeat with 404).
 
 ## Wi-Fi setup
@@ -90,6 +90,13 @@ the battery thresholds require 60 s continuously in the new VBUS state, so a
 cable that loses contact in the hand is not an event. Physical events
 (`pickup`, `putdown`, `tap`, …) are still sent as they happen — the server
 coalesces them; only the *lines* are rationed.
+
+**Night touch** fills its time line from the clock ("It's 11 PM.", hour only)
+and skips that variant until NTP has set the time. **Long-press** on the body
+shows a plain status card in the text band for 20 s (name, number and
+variety; claim code; battery and charging state; local and UTC time; Net
+state) — no quips, a tap dismisses it early. The claim code is still shown as
+a line for 30 s right after registration.
 
 ## Identity and state (NVS namespace `potato`)
 

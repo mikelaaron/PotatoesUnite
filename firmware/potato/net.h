@@ -59,6 +59,7 @@ struct NetShared {
   char statusLine[MAX_LINE];   // shown when there is no scene (portal instructions)
   char status[48];             // one word for telemetry
   bool online, timeSynced, registered;
+  bool lastHttpOk;             // the last register/heartbeat/choice got an answer
   uint32_t heartbeats, failures;
   // loop -> task
   bool wantHeartbeat;
@@ -202,9 +203,10 @@ static bool doRegister() {
   const int code = httpPostJson("/v0/register", String(body), resp);
   if (code != 200) {
     netLog("register: http %d", code);
-    { NetLock l; ++net.failures; }
+    { NetLock l; ++net.failures; net.lastHttpOk = false; }
     return false;
   }
+  { NetLock l; net.lastHttpOk = true; }
   JsonDocument r;
   if (deserializeJson(r, resp) != DeserializationError::Ok) {
     netLog("register: bad json");
@@ -266,6 +268,7 @@ static bool doHeartbeat() {
     netPrefs.remove("pid");
     NetLock l;
     net.registered = false;
+    net.lastHttpOk = true;   // the server answered; it just does not know us
     ++net.failures;
     return false;
   }
@@ -273,12 +276,14 @@ static bool doHeartbeat() {
     netLog("heartbeat: http %d (%d events held)", code, nEvents);
     NetLock l;
     ++net.failures;
+    net.lastHttpOk = code > 0;
     return false;
   }
   {
     NetLock l;
     net.events->drop(nEvents);
     ++net.heartbeats;
+    net.lastHttpOk = true;
   }
   if (nowEpoch > 1700000000) netPrefs.putULong("last_epoch", (unsigned long)nowEpoch);
   netLog("heartbeat ok: %d events drained, %u bytes back", nEvents, resp.length());
@@ -295,8 +300,10 @@ static bool doChoice(int rev, const char *id) {
     netLog("choice %s: http %d", id, code);
     NetLock l;
     ++net.failures;
+    net.lastHttpOk = code > 0;
     return false;
   }
+  { NetLock l; net.lastHttpOk = true; }
   netLog("choice %s: http %d, %u bytes back", id, code, resp.length());
   storeScene(resp);
   return true;

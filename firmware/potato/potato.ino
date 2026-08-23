@@ -304,6 +304,8 @@ static bool inTransit = false;
 static uint32_t transitStartMs = 0;
 static int8_t pressedButton = -1;
 static uint32_t alarmedUntilMs = 0;   // wider eyes after a drop or a shake
+static uint32_t cardUntilMs = 0;      // the status card, long-press, 20 s
+static bool cardTouch = false;        // the touch that dismissed the card
 
 // The scene: what the Net last told us to show. Cached in NVS by the task.
 static int sceneRev = 0;
@@ -374,6 +376,70 @@ static void refreshLine() {
             : asleepNow ? ""
             : netStatusLine[0] ? netStatusLine
             : sceneLine[0] ? sceneLine : LINE_EYES);
+}
+
+// Night touch. The time variant is filled from the clock; with no clock it
+// is skipped for the next variant in the pool.
+static void sayNight() {
+  const char *l = pickLine(POOL_NIGHT);
+  const char *at = strstr(l, "%s");
+  if (!at) { say(l, REACTION_S); return; }
+  const int h = localHour();
+  if (h < 0) { say(pickLine(POOL_NIGHT), REACTION_S); return; }   // never the same twice running
+  char hw[12], buf[MAX_LINE];
+  hour12Words(h, hw, sizeof(hw));
+  snprintf(buf, sizeof(buf), "%.*s%s%s", (int)(at - l), l, hw, at + 2);
+  say(buf, REACTION_S);
+}
+
+static void upperInto(char *dst, size_t cap, const char *src) {
+  size_t i = 0;
+  for (; src[i] && i < cap - 1; ++i) {
+    const char c = src[i];
+    dst[i] = c == '_' ? ' ' : (c >= 'a' && c <= 'z' ? (char)(c - 32) : c);
+  }
+  dst[i] = 0;
+}
+
+// The status card: plain and bureaucratic, 20 s, no quips. The Hands asked
+// a direct question. A tap dismisses it early.
+static void showStatusCard() {
+  static char l[CARD_LINES][48];
+  char a[32], b[32];
+  if (identity.registered) {
+    upperInto(a, sizeof(a), identity.name);
+    upperInto(b, sizeof(b), identity.variety);
+    snprintf(l[0], 48, "%s #%s / %s", a, identity.potatoId, b);
+    snprintf(l[1], 48, "Claim %s", identity.claim);
+  } else {
+    snprintf(l[0], 48, "UNREGISTERED");
+    snprintf(l[1], 48, "No claim code yet");
+  }
+  if (battery.present && battery.pct >= 0) {
+    const char *state = !vbusGood ? "on battery"
+                        : (battery.pct >= 100 || !battery.charging) ? "full" : "charging";
+    snprintf(l[2], 48, "Battery %d%% / %s", battery.pct, state);
+  } else {
+    snprintf(l[2], 48, "Battery unknown / %s", vbusGood ? "on power" : "on battery");
+  }
+  const time_t now = time(nullptr);
+  if (now > 1700000000) {
+    struct tm lt, ut;
+    localtime_r(&now, &lt);
+    gmtime_r(&now, &ut);
+    const int h12 = lt.tm_hour % 12 == 0 ? 12 : lt.tm_hour % 12;
+    snprintf(l[3], 48, "%d:%02d %s here / %02d:%02d UTC", h12, lt.tm_min,
+             lt.tm_hour < 12 ? "AM" : "PM", ut.tm_hour, ut.tm_min);
+  } else {
+    snprintf(l[3], 48, "Time unknown");
+  }
+  bool online, ok;
+  { NetLock lk; online = net.online; ok = net.lastHttpOk; }
+  snprintf(l[4], 48, "%s", !online ? "Wi-Fi: none" : ok ? "Net: connected" : "Net: unreachable");
+  const char *lines[CARD_LINES] = {l[0], l[1], l[2], l[3], l[4]};
+  uiSetCard(lines, CARD_LINES);
+  cardUntilMs = millis() + 20000;
+  USBSerial.printf("card: \"%s\" | \"%s\" | \"%s\" | \"%s\" | \"%s\"\n", l[0], l[1], l[2], l[3], l[4]);
 }
 
 static void showClaim(float seconds) {
@@ -642,7 +708,7 @@ void setup() {
 static void serialCommand(int c) {
   switch (c) {
     case 't': sayPool(POOL_TAP); postEvent(EV_TAP); break;
-    case 'n': sayPool(POOL_NIGHT); break;
+    case 'n': sayNight(); break;
     case 'p': sayPool(POOL_PICKUP); postEvent(EV_PICKUP); break;
     case 'd':
       blankUntilMs = millis() + 1000; blanked = false; alarmedUntilMs = millis() + 5000;
@@ -669,7 +735,7 @@ static void serialCommand(int c) {
       else USBSerial.println("no such button");
       break;
     }
-    case 'c': showClaim(30.0f); break;
+    case 'c': showStatusCard(); break;
     case 'b': netRequestHeartbeat(); USBSerial.println("heartbeat requested"); break;
     case 'i':
       USBSerial.printf("identity: %s, %s #%s %s claim %s seed %08lx | net %s hb %lu fail %lu rev %d | server %s tz %s\n",
@@ -793,7 +859,15 @@ void loop() {
   }
 
   const bool beganTouch = rawTouch && !wasTouching;
-  if (beganTouch) {
+  if (beganTouch && uiCardActive()) {
+    // Tapping dismisses the card early; that touch is not a tap on the face.
+    uiClearCard();
+    cardUntilMs = 0;
+    cardTouch = true;
+    USBSerial.println("card: dismissed by touch");
+  }
+  if (!touching) cardTouch = false;
+  if (beganTouch && !cardTouch) {
     longPressFired = false;
     touchFor = 0.0f;
     pressingBody = touchOverBody;
@@ -818,7 +892,7 @@ void loop() {
       longPressFired = true;
       excite(0.25f);
       USBSerial.printf("longpress touch=%d,%d\n", touchX, touchY);
-      showClaim(30.0f);
+      showStatusCard();
     }
   }
   if (touching && pressingBody && !touchOverBody) {
@@ -830,7 +904,7 @@ void loop() {
     // Only a real finger-up on the body is a tap.
     if (!longPressFired && touchFor < LONG_PRESS_S) {
       excite(0.30f);
-      if (minorLineAllowed(millis())) sayPool(isNight() ? POOL_NIGHT : POOL_TAP);
+      if (minorLineAllowed(millis())) { if (isNight()) sayNight(); else sayPool(POOL_TAP); }
       postEvent(EV_TAP);   // event as it happens; the server coalesces
     }
     pressingBody = false;
@@ -1194,6 +1268,7 @@ void loop() {
 
   asleepNow = (isNight() && idleFor > 300.0f) ||
               expression == EXPR_ASLEEP || expression == EXPR_DORMANT;
+  if (uiCardActive() && (int32_t)(tNow - cardUntilMs) >= 0) uiClearCard();
   refreshLine();
   uiDraw();
 
