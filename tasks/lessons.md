@@ -209,3 +209,22 @@ capture first and reboot from inside (the firmware's serial `X`), or run
 esptool first and attach after; never both at once. If a board goes quiet
 right after a tool touched its port, reset it with esptool on a free port
 before suspecting firmware.
+
+## arduino-cli wipes --build-path when the flags change, and takes your log with it
+
+**2026-08-23.** `make release` died with `grep: build/potato/compile.log: No
+such file or directory` — yet the compile had *succeeded*. The recipe
+redirected the compile output into the build path, and `release` and
+`webflash` share that path while compiling with different flags (webflash
+bakes in `SERVER_URL_DEFAULT`). When the recorded flags fingerprint doesn't
+match, arduino-cli deletes everything in `--build-path` before rebuilding —
+including foreign files, including a log the shell holds open. The redirect
+keeps writing to the unlinked inode, the build finishes fine, and the file
+simply isn't there afterwards. Proven by planting a marker file and changing
+one `-D`: the marker vanished. The failure is one-shot — the next run's
+fingerprint matches, so retrying "fixes" it, which is how it hides.
+
+**How to apply:** never put anything you want to keep inside an arduino-cli
+`--build-path`; write logs *next to* it (`build/<board>-compile.log`). When a
+file that a just-succeeded command wrote is missing, suspect the tool that
+owns the directory, not the command that wrote the file.
