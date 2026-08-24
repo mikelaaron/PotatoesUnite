@@ -25,6 +25,14 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 ## Gate
 Two desks, one week, no bricks, no blight. One of us says a potato "decided" something.
 
+## Fresh-start rehearsal (prepped 23 Aug; needs the owner at the desk)
+The full new-user flow against the LAN Net (the public path waits for 0.3.0 HTTPS). Guinea pig: **Rosemary** (chip-erase → truly new citizen; old #0002 becomes a ghost the Net will report missing — that's the feature working). **Doreen is not touched.**
+1. LAN server running; Chrome → `http://localhost:8080/flash` (Web Serial allows localhost). webflash-0.2.4 for the AMOLED is built and in the manifest; paper stays 0.2.2.
+2. Identify the paper board's port by MAC (`firmware/tools/usb_mac.sh` — never open Doreen's port), `esptool erase_flash` it, then the flasher's Connect → install.
+3. Phone: join `POTATO-xxxx`, hand it the county's Wi-Fi.
+4. It names itself; claim the new File at `localhost:8080` with the code from the screen.
+5. Watch: first pick-up line, the ration, the Question, the File filling.
+
 ## Open from firmware bring-up (22 Aug)
 - [ ] One boot in ~10 after a USB reset came up with XCA9554/CST820/AXP2101 "not found" (no touch/PMU until next reboot). Likely an I2C slave holding SDA across reset; add a 9-clock bus-recovery pulse before `Wire.begin`.
 - [ ] `sound` is always "quiet" (ES8311 mic path not wired). `cue: throat_clear` logged, not played. No sprout drawing yet. Saturday line and "charged while you slept" not implemented.
