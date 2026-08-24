@@ -25,7 +25,14 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 ## Gate
 Two desks, one week, no bricks, no blight. One of us says a potato "decided" something.
 
-## Fresh-start rehearsal (prepped 23 Aug; needs the owner at the desk)
+## Fresh-start rehearsal — DONE 23 Aug night. Yvonne #0004 is the proof.
+The owner ran the whole stranger's flow: browser flash → POTATO-xxxx portal → registered → named (Yvonne, e-paper) → File claimed. Ghosts #0002 and #0003 rest in the cellar awaiting Missing notices.
+Findings, all addressed same night:
+- **Webflash images baked secrets.h** (dev Wi-Fi inside the public image; portal silently skipped). Fixed: `make webflash` compiles with `-DNO_SECRETS`. The `release` (OTA) target keeps secrets until 0.3.0 — at cutover, releases go NO_SECRETS too and bake `PUBLIC_SERVER_URL=https://potatoesunite.com`.
+- **The portal's pre-filled server URL (potatoes.local) answered to nothing** — the owner, who wrote the system, didn't know to change it; nobody will. Fixed: the LAN server now advertises `potatoes.local` itself (macOS `dns-sd -P` via `server/lib/mdns.js`; linux/public no-ops). Takes effect when the LAN server restarts — then kill the stopgap: `pkill -f "dns-sd -P potatoes"` (a detached advertiser from the rehearsal night keeps Yvonne connected until then).
+- **A blank S3 boot-loops and the port flickers in the picker** (erase artifact; shipped boards have vendor firmware). The /flash page now carries the "hold BOOT, replug" line.
+
+## (superseded) Fresh-start rehearsal (prepped 23 Aug; needs the owner at the desk)
 The full new-user flow against the LAN Net (the public path waits for 0.3.0 HTTPS). Guinea pig: **Rosemary** (chip-erase → truly new citizen; old #0002 becomes a ghost the Net will report missing — that's the feature working). **Doreen is not touched.**
 1. LAN server running; Chrome → `http://localhost:8080/flash` (Web Serial allows localhost). webflash-0.2.4 for the AMOLED is built and in the manifest; paper stays 0.2.2.
 2. Identify the paper board's port by MAC (`firmware/tools/usb_mac.sh` — never open Doreen's port), `esptool erase_flash` it, then the flasher's Connect → install.

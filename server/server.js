@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { World } from './lib/world.js';
 import { createApp } from './lib/app.js';
+import { advertiseMdns } from './lib/mdns.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8080;
@@ -29,13 +30,16 @@ const server = http.createServer(createApp({
   tuberUrl: process.env.TUBER_URL || '',
 }));
 
+let stopMdns = () => {};
 server.listen(PORT, HOST, () => {
   const lan = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i.address);
   log(`POTATOES UNITE! The Net is open on http://${HOST}:${PORT}`);
   for (const ip of lan) log(`  LAN: http://${ip}:${PORT}   (point a device at this)`);
   log(`  db: ${DB_PATH}`);
+  // The portal's default server URL is potatoes.local; a LAN Net answers to it.
+  stopMdns = advertiseMdns({ port: PORT, ip: lan[0], log });
 });
 
-const shutdown = () => { clearInterval(ticker); server.close(); world.close(); process.exit(0); };
+const shutdown = () => { clearInterval(ticker); stopMdns(); server.close(); world.close(); process.exit(0); };
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

@@ -422,6 +422,7 @@ ${b.portrait}
 ${cards}
 </div>
 <p class="requirements">Chrome or Edge, on a computer, with a USB data cable.</p>
+<p class="muted">If it says "Failed to initialize," or the port keeps vanishing from the list: hold the board's BOOT button, plug the cable back in while still holding it, and try again.</p>
 <noscript><p class="muted">Without JavaScript the button cannot reach the port. The command works anywhere Python does:</p>
 <pre class="oneliner">pip install esptool && esptool --port /dev/ttyUSB0 write_flash 0x0 webflash-&lt;version&gt;.bin   # image: /releases/&lt;board&gt;/webflash.json</pre></noscript>
 <h2>Then</h2>
