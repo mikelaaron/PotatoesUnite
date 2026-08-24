@@ -19,6 +19,48 @@ from `server/` boots and looks healthy, but `/about` loses its story and every i
    `railway domain potatoesunite.com --service net` attached it and Railway synced the CNAME and
    certificate itself within a minute. Set `GITHUB_URL` when the repo goes public.
 
+### `TRUST_PROXY=1` — set this before the door opens
+
+**On Railway this is not optional.** The device endpoints (`/v0/register`, `/v0/heartbeat`,
+`/v0/choice`) and the File-claim routes are rate-limited per client address. Railway terminates TLS at
+its edge, so `req.socket.remoteAddress` is the *edge's* address and is the same for every visitor on
+earth. Left unset, the first busy minute puts the whole internet — the owner's own potatoes included —
+behind one shared quota.
+
+```
+railway variables --service net --set "TRUST_PROXY=1"
+```
+
+`TRUST_PROXY` is the number of proxies in front of the server that are ours. `0` (the default, and what
+a LAN Net or `npm start` on a laptop gets) ignores `x-forwarded-for` completely, so nothing a stranger
+types can pass for an address. `1` reads the address the last trusted hop saw; anything a client
+prepends sits to the left of that and is discarded, so the header cannot be forged into a fresh quota.
+Put another proxy in front (Cloudflare ahead of Railway) and the number goes up to match.
+
+The server says which mode it is in on the second line of its startup log:
+
+```
+addresses: x-forwarded-for, 1 trusted hop(s)
+addresses: the socket (TRUST_PROXY unset — correct on a LAN, wrong behind a proxy)
+```
+
+### Loosening a limit without a deploy
+
+Every limit is an env var in `max/windowSeconds` form; `off` removes one entirely. Defaults are in
+`server/lib/app.js` (`LIMITS`), with the reasoning for each number beside it.
+
+| Variable | Default | What it rations |
+|---|---|---|
+| `RATE_HEARTBEAT` | `240/60` | heartbeats per address — six potatoes handled non-stop for a minute |
+| `RATE_CHOICE` | `60/60` | votes per address |
+| `RATE_REGISTER` | `10/3600` | **new** citizens per address; re-registering a known secret is free |
+| `RATE_REGISTER_NET` | `60/3600` | new citizens across the whole Net, the backstop against a fleet |
+| `RATE_CLAIM` | `10/60` | claim-code attempts per address |
+
+A refused device gets `429` with a `Retry-After`, which both firmwares treat as an ordinary failed call:
+events are held, the identity is kept. If a real potato ever trips one, loosen the variable — that is a
+bug in the number, not a device misbehaving.
+
 CLI footguns, learned the hard way (23 Aug):
 - The project link is **per-directory**. `railway up` from an unlinked directory silently creates
   a brand-new project instead of failing. Link the repo root before deploying.

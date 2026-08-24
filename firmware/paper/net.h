@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <HTTPClient.h>
+#include <NetworkClientSecure.h>
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
@@ -17,7 +18,7 @@
 #include "events.h"
 #include "protocol.h"
 
-// The Net. Protocol v0 (docs/PROTOCOL.md) over plain HTTP, from its own
+// The Net. Protocol v0 (docs/PROTOCOL.md) over HTTP or HTTPS, from its own
 // FreeRTOS task on core 0 so a slow server or an open captive portal never
 // stalls the face on core 1. The loop and the task share one struct under
 // one mutex; everything crossing is a copy, never a pointer into the other
@@ -162,11 +163,93 @@ static void loadIdentity(Preferences &p) {
   if (!tzString[0]) strncpy(tzString, TZ_DEFAULT, sizeof(tzString) - 1);
 }
 
+// ------------------------------------------------------------------ https ---
+//
+// Identical in firmware/potato and firmware/paper. Edit both.
+//
+// What this closes. Before 0.3.0 the device already reached an `https://` Net
+// and it was never safe: `HTTPClient::begin(String url)` fails to parse the
+// URL as http, falls through to `begin(url, (const char *)NULL)`, and that
+// installs a TLS transport whose verify() calls `setInsecure()`. The
+// handshake succeeded with *any* certificate, so anything on the path could
+// answer as the Net and hand a potato forged scenes, a forged Question or —
+// worst — a forged firmware image. The bug was never a missing TLS stack; it
+// was an unverified one.
+//
+// What replaces it: the Mozilla root store the Arduino core already ships
+// inside its own prebuilt mbedtls archive (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE
+// _DEFAULT_FULL — 150 roots, 68,983 bytes). Naming the blob's linker symbols
+// is what pulls it into the image. Nothing is pinned and nothing is generated
+// or committed here, so the Net renews its certificate (Let's Encrypt, every
+// 60 days) with no firmware update, and a refreshed root store arrives with
+// the next core update. Regenerating a narrower bundle is possible with the
+// core's tools/gen_crt_bundle.py, but costs a committed file that then has to
+// be maintained by hand; it buys ~50 KB of flash we are not short of.
+//
+// `http://` is untouched and still plain. That is how a LAN Net is reached
+// (the default http://potatoes.local:8080) and how the county runs today.
+extern "C" {
+extern const uint8_t x509CrtBundleStart[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t x509CrtBundleEnd[] asm("_binary_x509_crt_bundle_end");
+}
+
+// One plain client and one secure client for the whole net task — register,
+// heartbeat, choice, the OTA manifest and the OTA image all take turns on
+// them, so only one handshake's RAM is ever live and an update never doubles
+// it. Every request is a fresh connection: ~HTTPClient() stops the client it
+// was given, which is also what stops a kept-alive socket to one host being
+// reused for a request to another.
+static NetworkClient netPlainClient;
+static NetworkClientSecure netSecureClient;
+static bool netSecureReady = false;
+static bool netTlsHeapLogged = false;
+
+static inline bool urlIsHttps(const char *url) {
+  return strncasecmp(url, "https://", 8) == 0;
+}
+
+// A certificate is only valid between two dates, so it cannot be judged
+// without a clock. NTP is asked in onConnected(); until it answers, https is
+// refused rather than trusted.
+static inline bool netClockSet() { return time(nullptr) > 1700000000; }
+
+static void netSecureBegin() {
+  const size_t n = (size_t)(x509CrtBundleEnd - x509CrtBundleStart);
+  if (n < 1024) {
+    netLog("TLS: this build carries no CA bundle — https will be refused");
+    return;
+  }
+  netSecureClient.setCACertBundle(x509CrtBundleStart, n);
+  netSecureClient.setHandshakeTimeout(15);   // seconds; the core's default is 120
+  netSecureReady = true;
+  USBSerial.printf("net: TLS ready — Mozilla root store %u bytes, certificates verified\n",
+                   (unsigned)n);
+}
+
+// The transport this URL asks for, or nullptr when https cannot be trusted
+// yet (*why says which). A refusal is never fatal and never destructive: the
+// caller reports one failed request, and the potato keeps its secret, its
+// name, its claim code and its last scene, and tries again.
+static NetworkClient *netClientFor(const char *url, const char **why) {
+  *why = nullptr;
+  if (!urlIsHttps(url)) return &netPlainClient;
+  if (!netSecureReady) { *why = "no CA bundle in this build"; return nullptr; }
+  if (!netClockSet()) { *why = "waiting for the clock"; return nullptr; }
+  return &netSecureClient;
+}
+
 // ------------------------------------------------------------------- http ---
 
 // HTTPClient does not resolve .local names; mDNS does. Swap the host for its
 // address when the server URL is a .local name.
 static bool resolveUrl(char *out, size_t cap) {
+  // https is left exactly as written: the name in the URL is the name the
+  // certificate has to match, and mDNS would put a bare address there.
+  if (urlIsHttps(serverUrl)) {
+    strncpy(out, serverUrl, cap - 1);
+    out[cap - 1] = 0;
+    return true;
+  }
   const char *h = strstr(serverUrl, "://");
   if (!h) { strncpy(out, serverUrl, cap - 1); return true; }
   h += 3;
@@ -190,16 +273,34 @@ static bool resolveUrl(char *out, size_t cap) {
   return true;
 }
 
+// -100 unresolved host, -101 bad URL, -102 https refused (see netClientFor).
+// All three are < 0, which every caller already treats as "no answer": the
+// request fails, the events stay queued, nothing in NVS is touched.
 static int httpPostJson(const char *path, const String &body, String &resp) {
   char base[128];
   if (!resolveUrl(base, sizeof(base))) return -100;
   String url = String(base) + path;
+  const char *why = nullptr;
+  NetworkClient *client = netClientFor(url.c_str(), &why);
+  if (!client) { netLog("%s: https refused — %s", path, why); return -102; }
+  const bool secure = (client == &netSecureClient);
+  const uint32_t heapBefore = ESP.getFreeHeap();
   HTTPClient http;
   http.setTimeout(HTTP_TIMEOUT_MS);
   http.setConnectTimeout(HTTP_TIMEOUT_MS);
-  if (!http.begin(url)) return -101;
+  if (!http.begin(*client, url)) return -101;
   http.addHeader("Content-Type", "application/json");
   const int code = http.POST(body);
+  // Once, on the first verified connection: what one live TLS session
+  // actually costs on this board. Sampled before getString() allocates the
+  // body, so it is the session and nothing else.
+  if (secure && code > 0 && !netTlsHeapLogged) {
+    netTlsHeapLogged = true;
+    const uint32_t heapAfter = ESP.getFreeHeap();
+    USBSerial.printf("net: TLS live — heap %lu -> %lu (%ld bytes for one verified connection)\n",
+                     (unsigned long)heapBefore, (unsigned long)heapAfter,
+                     (long)heapBefore - (long)heapAfter);
+  }
   if (code > 0) resp = http.getString();
   http.end();
   return code;
@@ -439,6 +540,7 @@ static void onConnected() {
 static void netTask(void *arg) {
   (void)arg;
   bool dormantChecked = false;
+  bool waitingForClock = false;
   for (;;) {
     if (WiFi.status() != WL_CONNECTED) {
       if (wasOnline && !wifiLostAtMs) {
@@ -472,6 +574,27 @@ static void netTask(void *arg) {
         net.dormantFresh = true;
         net.dormantDurS = (uint32_t)(nowEpoch - (time_t)last);
       }
+    }
+
+    // On an https Net, nothing at all goes out before NTP answers: a
+    // certificate cannot be judged without a clock, and a first-boot
+    // registration that fails the handshake looks like a broken potato.
+    // Typically a second or two after the join; no refresh is spent on it.
+    if (urlIsHttps(serverUrl) && !synced) {
+      if (!waitingForClock) {
+        waitingForClock = true;
+        netSetStatus("clock");
+        netLog("https Net and no clock yet — waiting for NTP before speaking");
+        if (!identity.registered) netSetStatusLine("Waiting for the clock.");
+      }
+      vTaskDelay(pdMS_TO_TICKS(500));
+      continue;
+    }
+    if (waitingForClock) {
+      waitingForClock = false;
+      netSetStatus("online");
+      if (!identity.registered) netSetStatusLine("");
+      netLog("clock set; the Net can be verified");
     }
 
     if (!identity.registered) {
@@ -510,6 +633,7 @@ static void netBegin(Preferences &loopPrefs, EventQueue *events) {
   strncpy(net.status, "starting", sizeof(net.status));
   netPrefs.begin("potato", false);
   loadIdentity(loopPrefs);
+  netSecureBegin();
   otaBegin();
   net.registered = identity.registered;
 

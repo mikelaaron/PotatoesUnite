@@ -64,7 +64,8 @@ Deferred deliberately: **firmware 0.3.0 (HTTPS)**. It is the largest remaining t
 - [ ] Middle dot on the status card renders as " / " (ASCII font) — draw a 2 px dot or accept.
 
 ## Found 23 Aug morning
-- [ ] **Overnight dormancy.** Mac USB port slept → Doreen ran on battery from ~03:40 UTC, hit 5% at 06:13, dormant 06:23–13:18. Firmware needs a sleep mode: after 30 min idle or 23:00–06:00 local, panel off, Wi-Fi off, light sleep, wake every 15 min to heartbeat and on QMI8658 motion interrupt. Until then: wall charger at night.
+- [x] **Overnight dormancy.** Doze landed 24 Aug (`firmware/potato/sleep.h`): 30 min idle, or 5 min idle between 23:00–06:00 local, reached only from the existing panel-dark path so it never begins with something on the glass. Never while VBUS is present — the gate needs both the 2-sample and the 60 s debounce to agree. Estimated ~2.5–4 mA against the measured ~149 mA, so a night costs ~5% of the cell instead of 230% of it. **The QMI8658 interrupt cannot reach the S3 on this board** — INT1 goes to TCA9554 P6 and the expander's own INT pin is unconnected — so the doze reads the IMU's wake-on-motion latch once per 120 ms slice instead. The judging is still done in hardware by the QMI8658 at 128 Hz with the gyro off; pick-up latency is under 200 ms. `POTATO_IMU_INT_PIN` is implemented if a bodge wire is ever run. **Needs hardware: `POTATO_WOM_MG` (default 100) is the one number that could not be set honestly without a board.**
+- [ ] ~~superseded~~ Mac USB port slept → Doreen ran on battery from ~03:40 UTC, hit 5% at 06:13, dormant 06:23–13:18. Firmware needs a sleep mode: after 30 min idle or 23:00–06:00 local, panel off, Wi-Fi off, light sleep, wake every 15 min to heartbeat and on QMI8658 motion interrupt. Until then: wall charger at night.
 - [ ] Brown-out at 1% while charging (dormant/back within a minute at 13:19). Expected at that level; re-check after the sleep mode lands.
 - [x] Second device: `firmware/paper` (e-paper 1.54G) — a citizen that also prints the Bulletin. Registered 23 Aug 15:02 UTC as Rosemary #0002 (Red), paired with Doreen at once. Joined via secrets.h; the captive-portal save failed on this board (suspected reset during STA connect + panel refresh) — fix in progress.
 
@@ -98,3 +99,17 @@ Firmware-only extras: morning pool (first spoken pick-up 04–12 local) and rest
 - [ ] GitHub public (delete site/.openai/hosting.json first) → set GITHUB_URL.
 - [x] Handle secured: **@IssuedByCouncil** (display name The Tuber) → TUBER_URL=https://x.com/IssuedByCouncil when deploying; banner in progress.
 - [ ] pngquant the six illustrations before public.
+
+## 24 Aug — opening the Net to strangers
+
+The owner's call, and the right one: if nobody can join, there is no point. Three pieces landed together.
+
+- [x] **Firmware 0.3.0 — certificates are verified.** The device was already speaking HTTPS: `HTTPClient::begin(url)` falls through to `TLSTraits(nullptr)` → `setInsecure()`, and the 0.2.4 ELF was confirmed to carry the whole TLS stack and *zero* `esp_crt_bundle` symbols. It could always hold an encrypted conversation; it could never refuse an impostor. Now `setCACertBundle()` with the Mozilla root store already inside `libmbedtls.a` (`_binary_x509_crt_bundle_start`, 150 roots, 68,983 bytes) — a root store, not a pin, so Let's Encrypt renews with no device touched. **+70 KB flash** on both boards (PROTOCOL's ~100 KB guess was high), +160 B static RAM. OTA refuses a plain-http image URL when the server is https — that was the remote-code-execution path. A rejected certificate returns a negative code, which never matches the 401/403/404 re-register branch, so **TLS failure cannot clear an identity**. Heap per connection is unmeasured by design; the firmware prints it on first connect and PROTOCOL.md has the slot.
+- [x] **Rate limits on the device endpoints.** `/v0/register`, `/v0/heartbeat` and `/v0/choice` had none; with the Net public, an unlimited register means a shell loop owns every Count. Now 240/min heartbeat, 60/min choice, 10/hour register per address plus a **60/hour Net-wide ceiling**. Two traps found: (1) `req.socket.remoteAddress` on Railway is the *edge proxy*, identical for everyone — a naive limiter locks out the world, and the existing claim routes already had this latent bug; fixed with `clientKey()` + `TRUST_PROXY` (default 0 ignores the header entirely, so it cannot be spoofed on a LAN — verified: 14 forged `X-Forwarded-For` values still shared one quota). (2) Register is charged **on citizen creation, not on the asking** — the firmware retries every 15 s, and a penalising limiter with a 1-hour window would have let a blocked device top up its own window and lock itself out permanently.
+- [x] **429, never 403.** `net.h:267` treats 401/403/404 as "the server has forgotten me" and wipes `identity.registered` and the stored pid. A rate limiter answering 403 would have made every throttled potato forget its own name.
+
+## Next — to actually open the door
+- [ ] Flash Doreen with 0.3.0 and verify: I2C recovery, the doze overnight on battery, and TLS against the public Net.
+- [ ] Publish the 0.3.0 webflash binaries (GitHub Releases keeps them out of the deploy) — the flasher page turns itself back on when the manifests appear, no code change.
+- [ ] `TRUST_PROXY=1` on Railway when the rate limits deploy, or every visitor shares one quota.
+- [ ] Write the "run your own Net" page: clone, `npm start`, flash, join over http on the LAN. Works today, needs no TLS, and is the honest hacker path the MIT licence invites.

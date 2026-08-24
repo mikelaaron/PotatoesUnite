@@ -36,6 +36,7 @@
 #include <Preferences.h>
 #include <time.h>
 #include "board_pins.h"
+#include "sleep.h"
 #include "spring.h"
 #include "temperament.h"
 #include "render_rect.h"
@@ -678,6 +679,74 @@ static void excite(float amount) {
   if (habituation > 1.0f) habituation = 1.0f;
 }
 
+// ------------------------------------------------------------------ power ---
+// Both polls live out here because the doze runs them too: a potato that
+// sleeps through the night still has to notice the Hands plugging it in, and
+// its fifteen-minute heartbeat has to carry a battery reading that is not
+// eight hours old.
+
+// The PMU answers "external VBUS is good" even for charge-only adapters.
+// Require two consecutive changed samples so one I2C miss cannot switch the
+// power policy. If the PMU is absent, HWCDC still detects a computer host.
+// Self-rate-limiting at 1 Hz, so callers may call it as often as they like.
+static void vbusPoll(uint32_t nowMs) {
+  if (nowMs - lastPowerPollMs < 1000) return;
+  lastPowerPollMs = nowMs;
+  bool sample = false;
+  bool sampleValid = true;
+  if (powerReady) sampleValid = readVbusGood(&sample);
+  else sample = USBSerial.isPlugged();
+  if (!sampleValid) {
+    if (powerReadMisses < 3) ++powerReadMisses;
+    if (powerReadMisses >= 3) {
+      sample = USBSerial.isPlugged();
+      sampleValid = true;
+      USBSerial.println("power: AXP2101 reads missed — using USB-host fallback");
+    }
+  } else {
+    powerReadMisses = 0;
+  }
+  if (!sampleValid) return;
+  if (sample == vbusCandidate) {
+    if (vbusCandidateCount < 2) ++vbusCandidateCount;
+  } else {
+    vbusCandidate = sample;
+    vbusCandidateCount = 1;
+  }
+  if (vbusCandidateCount >= 2 && vbusGood != vbusCandidate) {
+    vbusGood = vbusCandidate;
+    USBSerial.printf("power: external VBUS %s\n", vbusGood ? "present" : "absent");
+  }
+}
+
+// Battery, every 5 s. The thresholds are downward crossings only, once per
+// discharge, and — because vbusStable is false only after 60 s off power —
+// never on a cable blip (tasks/lessons.md). Major lines: they bypass the
+// minor budget.
+static void batteryPoll(uint32_t nowMs) {
+  if (!powerReady || nowMs - lastBatteryPollMs < 5000) return;
+  lastBatteryPollMs = nowMs;
+  battery.present = power.isBatteryConnect();
+  battery.pct = battery.present ? power.getBatteryPercent() : -1;
+  battery.mv = battery.present ? (int)power.getBattVoltage() : -1;
+  battery.charging = power.isCharging();
+  battery.vbus = power.isVbusIn();
+  if (!battery.present || battery.pct < 0) return;
+  if (vbusStable) {
+    if (!battFullSaid && battery.pct >= 100) { battFullSaid = true; say(LINE_FULL, REACTION_S); }
+    return;
+  }
+  static const int BATT_T[4] = {30, 20, 10, 5};
+  static const char *const BATT_L[4] = {LINE_BATT_30, LINE_BATT_20, LINE_BATT_10, LINE_BATT_5};
+  uint8_t stage = battStage;
+  while (stage < 4 && battery.pct <= BATT_T[stage]) ++stage;
+  if (stage != battStage) {
+    battStage = stage;
+    say(BATT_L[stage - 1], REACTION_S);
+    postEvent(EV_BATTERY_LOW, battery.pct);
+  }
+}
+
 // ------------------------------------------------------------------ setup ---
 
 // What the boot bus looked like, kept so 'i' can answer "did recovery fire?"
@@ -785,6 +854,144 @@ static bool touchSetup(const char *when) {
 
 static uint32_t lastReprobeMs = 0;
 
+// ------------------------------------------------------------------- doze ---
+// State and the entry gate. The run loop itself is further down, after the
+// frame state it has to put back on the way out.
+
+static bool dozing = false;
+static bool dozeForce = false;          // the 'S' key: doze now, on power or not
+static uint32_t dozeCount = 0;          // how many times it has gone down
+static uint32_t dozeTotalMs = 0;        // cumulative time spent down
+static uint32_t dozeLastMs = 0;         // how long the last doze lasted
+static uint32_t dozeBeats = 0, dozeBeatFails = 0;
+static uint32_t dozeSlices = 0;         // light-sleep slices, all dozes
+static uint32_t dozeSliceAskedMs = 0;   // what the last slice asked the timer for
+static uint32_t dozeSliceSeenMs = 0;    // what millis() said had passed. If this
+                                        // reads ~0 against a 120 ms ask, esp_timer
+                                        // is not being advanced across light sleep
+                                        // and every second-counter here is stalling.
+static uint32_t dozeRejects = 0;        // esp_light_sleep_start() refusals
+static uint32_t dozeWomGuards = 0;      // stale WoM latches cleared and slept through
+static uint32_t dozeGpioSpurious = 0;   // GPIO wakes with nothing behind them
+static uint32_t dozeI2cFaults = 0;      // sensor reads that got no answer
+static WakeReason dozeLastWake = WAKE_NONE;
+static uint32_t dozeLastWakeMs = 0;
+static bool dozeImuIntArmed = false, dozeTouchIntArmed = false;
+static bool dozeTouchWakeGivenUp = false;   // sticky across dozes once it misbehaves
+static uint32_t dozeRetryAtMs = 0;          // after a sensor failure, do not thrash it
+static const uint32_t DOZE_RETRY_MS = 300000;
+
+// After a doze the accelerometer has just been reset and reconfigured. Its
+// first samples are not a fall and not a shake; the impulse detectors stay
+// out of the way until it has settled.
+static uint32_t detectorHoldMs = 0;
+
+// The left-alone ladder's thresholds. Out here rather than inside loop()
+// because the doze has to fast-forward past the ones it slept through.
+static const float ALONE_T_S[6] = {4 * 3600.0f, 8 * 3600.0f, 24 * 3600.0f,
+                                   48 * 3600.0f, 72 * 3600.0f, 7 * 86400.0f};
+
+// Why the potato may or may not go down right now. `why` is filled with the
+// first thing standing in the way, for the 's' dump.
+static bool dozeAllowed(char *why, size_t cap) {
+  const char *no = nullptr;
+  char status[48];
+  netStatusCopy(status, sizeof(status));
+  // Never on power, and never on the raw bit: vbusGood is the 2-sample
+  // debounce and vbusStable the 60-second one (voice doc §15), and both have
+  // to agree the potato is on its own. That is deliberately stricter than
+  // either — a cable that flickers cancels the doze at once, and a genuine
+  // unplug waits out the minute before it counts.
+  if (vbusGood || vbusStable) no = "on power";
+  else if (panelOn) no = "panel is lit";
+  else if (touching) no = "a finger on the glass";
+  else if (sessionActive) no = "handling session open";
+  // A request is a live invitation with a deadline and the IMU has to be
+  // watching for it to be met. It cannot pin the potato awake for long: the
+  // frame loop clears it at expires_at.
+  else if (request.active) no = "an open request to verify";
+  else if (uiCardActive()) no = "the card is up";
+  else if (!strcmp(status, "portal")) no = "the portal is open";
+  else if (dozeRetryAtMs && (int32_t)(millis() - dozeRetryAtMs) < 0) {
+    no = "the sensor would not arm; waiting to try again";
+  }
+  else if (!(idleFor > DOZE_IDLE_S || (isNight() && idleFor > DOZE_NIGHT_IDLE_S))) {
+    no = isNight() ? "not idle five minutes yet" : "not idle thirty minutes yet";
+  }
+  // Deliberately NOT reasons to stay up:
+  //
+  //   Unsent events, an unregistered potato, no Wi-Fi at all. Every one of
+  //   those means the Net is out of reach, and a potato that stays awake
+  //   waiting for an unreachable Net is exactly the potato that was dormant
+  //   by 06:23. It sleeps and tries again in fifteen minutes.
+  //
+  //   A Question on the buttons. The Question window is ten hours wide
+  //   (13:00-23:00 UTC) and this gate would cover all of it — the potato
+  //   would never doze in daylight. Nothing is lost: the panel is dark, so
+  //   the buttons are not visible, nobody can vote without picking it up,
+  //   and picking it up wakes it in under a fifth of a second. The Hands
+  //   absent at the close are the server's business, and it already votes
+  //   for them by seed.
+  //
+  //   A staged update. It only ever reaches here still staged because the
+  //   battery is under 30% and off power (netPoll reboots at any quieter
+  //   moment than this one), and an update waiting for battery it does not
+  //   have must not also stop the potato from saving that battery. It
+  //   installs on the next wake that qualifies.
+  if (why && cap) { strncpy(why, no ? no : "ready", cap - 1); why[cap - 1] = 0; }
+  return no == nullptr;
+}
+
+// The 's' key. Opening this board's port reboots it (tasks/lessons.md), so
+// anything that only appears in a boot log is unreadable in practice: this
+// has to answer "is it sleeping, why not, and what woke it last" on a device
+// that has been running for a week.
+static void dozeReport() {
+  char why[48];
+  const bool ready = dozeAllowed(why, sizeof(why));
+  const int h = localHour();
+  USBSerial.printf("doze: %s (%s) | idle %.0fs of %.0fs%s | vbus good %d stable %d\n",
+                   dozing ? "DOWN" : ready ? "ready" : "up", why, idleFor,
+                   isNight() ? DOZE_NIGHT_IDLE_S : DOZE_IDLE_S,
+                   h < 0 ? " | no clock, night rule off" : isNight() ? " | night" : "",
+                   vbusGood, vbusStable);
+  USBSerial.printf("  policy: down at %.0fs idle or %.0fs between 23:00-06:00 local; "
+                   "beat every %lus; slice %lums; WoM %dmg\n",
+                   DOZE_IDLE_S, DOZE_NIGHT_IDLE_S, (unsigned long)(DOZE_BEAT_MS / 1000),
+                   (unsigned long)(dozeImuIntArmed ? DOZE_SLICE_INT_MS : DOZE_SLICE_POLLED_MS),
+                   POTATO_WOM_MG);
+  USBSerial.printf("  wake: IMU %s | touch INT %s | timer always\n",
+                   POTATO_IMU_INT_PIN < 0
+                       ? "QMI8658 WoM latch read once per slice (no INT pin wired on this board)"
+                       : dozeImuIntArmed ? "QMI8658 INT, hardware wake" : "QMI8658 INT configured but not armed",
+                   dozeTouchWakeGivenUp ? "given up (kept firing with nothing behind it)"
+                   : dozeTouchIntArmed  ? "armed"
+                   : POTATO_TOUCH_WAKE  ? "not armed (was not idle high)"
+                                        : "disabled at build time");
+  USBSerial.printf("  last wake: %s%s | dozes %lu, %lu min down total, last %lu s\n",
+                   wakeReasonName(dozeLastWake),
+                   dozeLastWakeMs ? "" : " (none yet)",
+                   (unsigned long)dozeCount, (unsigned long)(dozeTotalMs / 60000),
+                   (unsigned long)(dozeLastMs / 1000));
+  USBSerial.printf("  counters: slices %lu, beats %lu (%lu failed), sleep refused %lu, "
+                   "stale WoM cleared %lu, spurious GPIO %lu, sensor no-answer %lu\n",
+                   (unsigned long)dozeSlices, (unsigned long)dozeBeats,
+                   (unsigned long)dozeBeatFails, (unsigned long)dozeRejects,
+                   (unsigned long)dozeWomGuards, (unsigned long)dozeGpioSpurious,
+                   (unsigned long)dozeI2cFaults);
+  // The one number that says whether the clock survived the sleep. Asked and
+  // seen should match within a millisecond or two. If seen is ~0, esp_timer is
+  // not being advanced from the RTC on wake and every second-counter in this
+  // firmware stalls while it dozes — the alone ladder, since_handled_s, the
+  // fifteen-minute beat.
+  if (dozeSliceAskedMs) {
+    USBSerial.printf("  last slice: asked %lums, millis() saw %lums%s\n",
+                     (unsigned long)dozeSliceAskedMs, (unsigned long)dozeSliceSeenMs,
+                     dozeSliceSeenMs + 20 < dozeSliceAskedMs
+                         ? "  <-- the clock is NOT tracking light sleep" : "");
+  }
+}
+
 void setup() {
   USBSerial.begin(115200);
   USBSerial.setTxTimeoutMs(0);
@@ -852,14 +1059,11 @@ void setup() {
     USBSerial.println("QMI8658 not found — check I2C on 15/14");
     while (true) delay(1000);
   }
-  qmi.configAccelerometer(SensorQMI8658::ACC_RANGE_4G,
-                          SensorQMI8658::ACC_ODR_1000Hz,
-                          SensorQMI8658::LPF_MODE_0);
-  qmi.enableAccelerometer();
-  qmi.configGyroscope(SensorQMI8658::GYR_RANGE_512DPS,
-                      SensorQMI8658::GYR_ODR_224_2Hz,
-                      SensorQMI8658::LPF_MODE_0);
-  qmi.enableGyroscope();
+  // One wording for the rates, in sleep.h, because the doze's wake path has
+  // to restore exactly these: the handling detector is calibrated against
+  // them and a wake that came back at a different ODR would quietly change
+  // what "being picked up" means.
+  imuConfigureNormal(qmi);
 
   vbusStable = vbusGood;
   vbusStableCand = vbusGood;
@@ -892,6 +1096,9 @@ void setup() {
   bootMs = millis();
   USBSerial.printf("potato up. fw %s. russet, %dx%d. It has eyes.\n",
                    FW_VERSION, (int)SHAPE.rx, (int)SHAPE.ry);
+  USBSerial.printf("doze: down after %.0fs idle, or %.0fs between 23:00-06:00 local; "
+                   "beat every %lus; never on VBUS. 's' reports it, 'S' forces it.\n",
+                   DOZE_IDLE_S, DOZE_NIGHT_IDLE_S, (unsigned long)(DOZE_BEAT_MS / 1000));
 }
 
 // Development-only: type a key in the serial monitor to exercise the same
@@ -941,6 +1148,13 @@ static void serialCommand(int c) {
       break;
     case 'W': netForgetWifi(); break;
     case 'R': netReregister(); break;
+    case 's': dozeReport(); break;
+    case 'S':
+      dozeForce = true;
+      USBSerial.println("doze: forced — the panel goes dark, the Net stands down, and it "
+                        "light-sleeps for up to five minutes. On USB the CDC drops while "
+                        "it sleeps: move the board to wake it, or re-plug.");
+      break;
     case 'm':
       USBSerial.printf("ration: session %d lifts %u quiet %.0fs | since last end %lds | minor cooldown %lds%s | vbusStable %d cand %d\n",
                        sessionActive, sessionLifts, sessionQuietS,
@@ -957,7 +1171,7 @@ static void serialCommand(int c) {
       USBSerial.println();
       break;
     case 'h':
-      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity + boot I2C, m ration state, W forget wifi, R register again");
+      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity + boot I2C, m ration state, s doze state + last wake, S doze now, W forget wifi, R register again");
       break;
     default: break;
   }
@@ -972,6 +1186,283 @@ static Rect prevBody = {0, 0, -1, -1};
 static float ax = 0.0f, ay = 0.0f, az = 1.0f;
 static float gx = 0.0f, gy = 0.0f, amag = 1.0f;
 static float motion = 0.0f;
+
+// One heartbeat from inside the doze. The battery is read first: a
+// fifteen-minute-old percentage is not worth sending, and the File would
+// rather have the truth than a round number.
+static void dozeBeatNow() {
+  ++dozeBeats;
+  lastBatteryPollMs = 0;   // it has been fifteen minutes; take a reading now
+  batteryPoll(millis());
+  netUpdateSnapshot(battery.pct, battery.charging, battery.vbus, orientationNow,
+                    (uint32_t)sinceHandledS);
+  if (!netSleepBeat(DOZE_BEAT_TIMEOUT_MS)) ++dozeBeatFails;
+}
+
+// The doze. Blocks until something ends it, which is the point: nothing else
+// in this firmware should be running while it does.
+static void dozeRun(bool forced) {
+  const uint32_t enteredMs = millis();
+  ++dozeCount;
+  dozing = true;
+
+  if (poolStateDirty) poolStateSave();   // a night must not lose the cursors
+
+  USBSerial.printf("doze: down at %.0fs idle%s%s — beat every %lus, slice %lums\n",
+                   idleFor, isNight() ? ", night" : "", forced ? ", FORCED" : "",
+                   (unsigned long)(DOZE_BEAT_MS / 1000),
+                   (unsigned long)(POTATO_IMU_INT_PIN >= 0 ? DOZE_SLICE_INT_MS
+                                                           : DOZE_SLICE_POLLED_MS));
+
+  // One heartbeat on the way down, through the normal path while the radio is
+  // still up, so the fifteen-minute clock starts from a known point instead
+  // of from whenever the last one happened to land.
+  {
+    uint32_t before, now;
+    { NetLock l; before = net.heartbeats; }
+    netRequestHeartbeat();
+    for (int i = 0; i < 100; ++i) {
+      { NetLock l; now = net.heartbeats; }
+      if (now != before) break;
+      delay(50);
+    }
+  }
+
+  // Hand the watch to the sensor. Gyroscope off, accelerometer down to
+  // low-power 128 Hz, the QMI8658's own comparator armed: about 1.5 mA
+  // becomes tens of microamps, and nothing on this chip looks at
+  // acceleration again until the potato is awake.
+  // If the sensor will not arm, there is nothing left that can notice the
+  // Hands, and a potato that cannot be woken is worse than one with
+  // yesterday's battery life. Back out before the Net is stood down —
+  // nothing has been given up yet — and do not try again for five minutes.
+  if (!imuEnterWom(qmi, POTATO_WOM_MG)) {
+    USBSerial.println("doze: the QMI8658 would not arm — staying up, again in five minutes");
+    imuLeaveWom(qmi);
+    // configWakeOnMotion() resets the chip before it does anything else, so
+    // even a failed attempt leaves the sensor freshly reset: the impulse
+    // detectors have to be held off here exactly as they are on a real wake.
+    detectorHoldMs = millis() + 300;
+    motion = motionFloor;
+    handledFor = 0.0f;
+    wasHandled = false;
+    freefallFor = 0.0f;
+    dropArmedUntilMs = 0;
+    shakePeaks = 0;
+    inPeak = false;
+    lastFrameUs = micros();
+    dozeRetryAtMs = millis() + DOZE_RETRY_MS;
+    dozing = false;
+    return;
+  }
+  imuWomFired(qmi);   // STATUS1 clears on read: begin from a clean latch
+  imuWomFired(qmi);
+
+  netSleep(10000);    // the task takes the radio down itself
+
+  // Wake sources. The timer is re-armed each slice; a GPIO is armed once,
+  // and only if it is genuinely idle right now — a level-triggered wake on a
+  // line that is already asserted returns from every sleep immediately and
+  // costs more than staying awake.
+  dozeImuIntArmed = false;
+  dozeTouchIntArmed = false;
+  bool anyGpio = false;
+  if (POTATO_IMU_INT_PIN >= 0) {
+    pinMode(POTATO_IMU_INT_PIN, INPUT);
+    if (digitalRead(POTATO_IMU_INT_PIN) == LOW) {   // WoM idles this low
+      gpio_wakeup_enable((gpio_num_t)POTATO_IMU_INT_PIN, GPIO_INTR_HIGH_LEVEL);
+      dozeImuIntArmed = true;
+      anyGpio = true;
+    }
+  }
+#if POTATO_TOUCH_WAKE
+  // GPIO21 is the only true hardware interrupt on this board (sleep.h), so
+  // it is worth arming even though a tap is not a pick-up.
+  if (!dozeTouchWakeGivenUp) {
+    pinMode(TP_INT, INPUT_PULLUP);
+    bool idleHigh = true;
+    for (int i = 0; i < 10 && idleHigh; ++i) {
+      if (digitalRead(TP_INT) == LOW) idleHigh = false;
+      delay(5);
+    }
+    if (idleHigh) {
+      gpio_wakeup_enable((gpio_num_t)TP_INT, GPIO_INTR_LOW_LEVEL);
+      dozeTouchIntArmed = true;
+      anyGpio = true;
+    }
+  }
+#endif
+  if (anyGpio) esp_sleep_enable_gpio_wakeup();
+
+  // Long slices are only affordable while a hardware wake can cut through
+  // them; without one the slice is how fast a pick-up is answered.
+  uint32_t sliceMs = dozeImuIntArmed ? DOZE_SLICE_INT_MS : DOZE_SLICE_POLLED_MS;
+  uint32_t lastBeatMs = millis(), lastYieldMs = millis();
+  uint32_t slices = 0, rejects = 0, beats = 0;
+  uint8_t faults = 0, spurious = 0;
+  WakeReason reason = WAKE_NONE;
+
+  while (reason == WAKE_NONE) {
+    esp_sleep_enable_timer_wakeup((uint64_t)sliceMs * 1000ULL);
+    const uint32_t beforeMs = millis();
+    const esp_err_t err = esp_light_sleep_start();
+    if (err != ESP_OK) {
+      ++dozeRejects;      // a wake source was already pending; do not spin
+      delay(sliceMs);
+      // Refused every time means an armed level is stuck asserted, and a
+      // doze that never actually sleeps costs more than one that never
+      // starts. Drop the GPIO sources and carry on with the timer.
+      if (++rejects >= 20 && (dozeImuIntArmed || dozeTouchIntArmed)) {
+        if (dozeTouchIntArmed) { gpio_wakeup_disable((gpio_num_t)TP_INT); dozeTouchIntArmed = false; dozeTouchWakeGivenUp = true; }
+        if (dozeImuIntArmed) { gpio_wakeup_disable((gpio_num_t)POTATO_IMU_INT_PIN); dozeImuIntArmed = false; }
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_GPIO);
+        sliceMs = DOZE_SLICE_POLLED_MS;   // the latch read is the wake path now
+        USBSerial.println("doze: light sleep kept being refused — GPIO wakes dropped");
+      }
+    }
+    // ESP-IDF advances esp_timer from the RTC on the way out of light sleep,
+    // so millis() covers the slept time and every millis()-keyed clock in
+    // this file stays true across the gap. The 's' dump prints the observed
+    // slice length so that is checkable on hardware rather than assumed.
+    const uint32_t sleptMs = millis() - beforeMs;
+    const float sleptS = sleptMs * 0.001f;
+    ++slices;
+    ++dozeSlices;
+    // These two are accumulated from dt in the frame loop, which does not run
+    // here. The heartbeat's since_handled_s and the left-alone ladder both
+    // depend on them, so the slept time has to be put back by hand.
+    sinceHandledS += sleptS;
+    idleFor += sleptS;
+
+    // Only meaningful when the chip actually slept: after a refusal this
+    // still reports whatever woke the previous slice.
+    const esp_sleep_wakeup_cause_t cause =
+        err == ESP_OK ? esp_sleep_get_wakeup_cause() : ESP_SLEEP_WAKEUP_UNDEFINED;
+    // Only a slice that ran to its timer says anything about the clock; one
+    // cut short by a GPIO is legitimately shorter than it asked for.
+    if (cause == ESP_SLEEP_WAKEUP_TIMER) {
+      dozeSliceAskedMs = sliceMs;
+      dozeSliceSeenMs = sleptMs;
+    }
+    if (cause == ESP_SLEEP_WAKEUP_GPIO) {
+      if (dozeImuIntArmed && digitalRead(POTATO_IMU_INT_PIN) == HIGH) reason = WAKE_MOTION;
+      else if (dozeTouchIntArmed && digitalRead(TP_INT) == LOW) reason = WAKE_TOUCH;
+      else {
+        ++spurious;
+        ++dozeGpioSpurious;
+        if (spurious >= DOZE_GPIO_SPURIOUS) {
+          if (dozeTouchIntArmed) {
+            gpio_wakeup_disable((gpio_num_t)TP_INT);
+            dozeTouchIntArmed = false;
+            dozeTouchWakeGivenUp = true;   // sticky: do not try it again
+            USBSerial.println("doze: touch INT fired with nothing behind it — disarmed");
+          } else if (dozeImuIntArmed) {
+            gpio_wakeup_disable((gpio_num_t)POTATO_IMU_INT_PIN);
+            dozeImuIntArmed = false;
+            USBSerial.println("doze: IMU INT fired with nothing behind it — disarmed");
+          }
+        }
+      }
+    }
+
+    // The sensor's latch, one register read. This is the interrupt being
+    // read over I2C, not the accelerometer being sampled and judged here —
+    // the QMI8658 decided, in hardware, at 128 Hz, while this chip was off.
+    // Only needed because its INT cannot reach this chip (sleep.h).
+    if (reason == WAKE_NONE && !dozeImuIntArmed) {
+      const int fired = imuWomFired(qmi);
+      if (fired < 0) {
+        ++dozeI2cFaults;
+        // Sleeping blind is worse than not sleeping at all: the failure
+        // mode has to be "yesterday's battery life", never "a potato that
+        // cannot be woken".
+        if (++faults >= DOZE_I2C_FAULTS) reason = WAKE_FAULT;
+      } else {
+        faults = 0;
+        if (fired) {
+          if (slices <= DOZE_WOM_SETTLE_SLICES) {
+            ++dozeWomGuards;      // on the first slices, more likely stale than real
+            imuWomFired(qmi);     // clear it and keep sleeping
+          } else {
+            reason = WAKE_MOTION;
+          }
+        }
+      }
+    }
+
+    // The Hands plugging it in at three in the morning. Through the same
+    // 2-sample debounce the frame loop uses, so vbusGood is coherent when
+    // the loop takes back over. A forced doze ignores it — otherwise it
+    // would end on the very USB cable it is being tested over.
+    vbusPoll(millis());
+    if (reason == WAKE_NONE && !forced && vbusGood) reason = WAKE_POWER;
+
+    if (reason == WAKE_NONE && millis() - lastBeatMs >= DOZE_BEAT_MS) {
+      lastBeatMs = millis();
+      ++beats;
+      dozeBeatNow();
+    }
+    if (reason == WAKE_NONE && forced && millis() - enteredMs >= DOZE_FORCED_MAX_MS) {
+      reason = WAKE_FORCED;
+    }
+    // Give both idle tasks the CPU a few times a second. Nothing runs while
+    // the chip is in light sleep, the task watchdog watches the idle tasks,
+    // and a watchdog reboot at 3am is a worse bug than the one being fixed.
+    if (millis() - lastYieldMs >= 500) { lastYieldMs = millis(); delay(3); }
+  }
+
+  // ------------------------------------------------------------------ up ---
+
+  imuLeaveWom(qmi);
+
+  // The accelerometer has just been reset and reconfigured. Its first samples
+  // are not a fall and not a shake, and the motion filter has no history —
+  // start it at the floor so the first frame cannot read as a pick-up that
+  // never happened.
+  detectorHoldMs = millis() + 300;
+  motion = motionFloor;
+  handledFor = 0.0f;
+  wasHandled = false;
+  freefallFor = 0.0f;
+  dropArmedUntilMs = 0;
+  shakePeaks = 0;
+  inPeak = false;
+  lastFrameUs = micros();   // dt must not be a fifteen-minute step
+
+  // Ladders that would otherwise fire every stage they slept through, one
+  // per frame, at a panel nobody is looking at. They happened; they were
+  // simply never said, which is the most in-character thing about them.
+  while (aloneStage < 6 && sinceHandledS >= ALONE_T_S[aloneStage]) ++aloneStage;
+  if (inDark) {
+    const uint32_t darkS = (millis() - darkStartMs) / 1000;
+    if (darkS >= 3 * 3600) darkStage = 3;
+    else if (darkS >= 3600) darkStage = 2;
+    else if (darkS >= 600) darkStage = 1;
+  }
+
+  // The panel is not touched here on purpose: clearing idleFor is enough for
+  // the frame loop's own power policy to light it on the very next pass,
+  // face-down still wins, and there is only one place that knows how.
+  if (reason == WAKE_MOTION || reason == WAKE_TOUCH) idleFor = 0.0f;
+  // A sensor that stopped answering would otherwise be re-armed on the very
+  // next frame, because nothing about being idle has changed.
+  if (reason == WAKE_FAULT) dozeRetryAtMs = millis() + DOZE_RETRY_MS;
+  else dozeRetryAtMs = 0;
+
+  netWake();
+
+  dozing = false;
+  dozeLastWake = reason;
+  dozeLastWakeMs = millis();
+  dozeLastMs = millis() - enteredMs;
+  dozeTotalMs += dozeLastMs;
+  USBSerial.printf("doze: up after %lus — %s | %lu slices, %lu beats this doze, "
+                   "%lu refused, %lu stale latches%s\n",
+                   (unsigned long)(dozeLastMs / 1000), wakeReasonName(reason),
+                   (unsigned long)slices, (unsigned long)beats, (unsigned long)rejects,
+                   (unsigned long)dozeWomGuards,
+                   reason == WAKE_FAULT ? " | the sensor stopped answering; staying up" : "");
+}
 
 void loop() {
   const uint32_t frameStart = micros();
@@ -1014,8 +1505,12 @@ void loop() {
 
   const float excess = motion - motionFloor;
 
-  const bool freefall = amag < FREEFALL_G;
-  const bool impact = amag > IMPACT_G;
+  // Straight out of a doze the sensor has just been reset and reconfigured.
+  // Its first samples are not a fall and not a shake; the impulse detectors
+  // stay out of the way for 300 ms rather than inventing an incident.
+  const bool detectorHold = (int32_t)(millis() - detectorHoldMs) < 0;
+  const bool freefall = amag < FREEFALL_G && !detectorHold;
+  const bool impact = amag > IMPACT_G && !detectorHold;
   if (settling) wasHandled = false;
   else if (!wasHandled && excess > HANDLE_ON) wasHandled = true;
   else if (wasHandled && excess < HANDLE_OFF) wasHandled = false;
@@ -1120,39 +1615,7 @@ void loop() {
     }
   }
 
-  // The PMU answers "external VBUS is good" even for charge-only adapters.
-  // Require two consecutive changed samples so one I2C miss cannot switch the
-  // power policy. If the PMU is absent, HWCDC still detects a computer host.
-  const uint32_t powerNowMs = millis();
-  if (powerNowMs - lastPowerPollMs >= 1000) {
-    bool sample = false;
-    bool sampleValid = true;
-    if (powerReady) sampleValid = readVbusGood(&sample);
-    else sample = USBSerial.isPlugged();
-    if (!sampleValid) {
-      if (powerReadMisses < 3) ++powerReadMisses;
-      if (powerReadMisses >= 3) {
-        sample = USBSerial.isPlugged();
-        sampleValid = true;
-        USBSerial.println("power: AXP2101 reads missed — using USB-host fallback");
-      }
-    } else {
-      powerReadMisses = 0;
-    }
-    if (sampleValid) {
-      if (sample == vbusCandidate) {
-        if (vbusCandidateCount < 2) ++vbusCandidateCount;
-      } else {
-        vbusCandidate = sample;
-        vbusCandidateCount = 1;
-      }
-      if (vbusCandidateCount >= 2 && vbusGood != vbusCandidate) {
-        vbusGood = vbusCandidate;
-        USBSerial.printf("power: external VBUS %s\n", vbusGood ? "present" : "absent");
-      }
-    }
-    lastPowerPollMs = powerNowMs;
-  }
+  vbusPoll(millis());
 
   const bool handledRise = handled && !prevHandled;
   prevHandled = handled;
@@ -1175,11 +1638,9 @@ void loop() {
   if (handled) sinceHandledS = 0.0f; else sinceHandledS += dt;
   if (handledRise) aloneStage = 0;
   {
-    static const float ALONE_T[6] = {4 * 3600.0f, 8 * 3600.0f, 24 * 3600.0f,
-                                     48 * 3600.0f, 72 * 3600.0f, 7 * 86400.0f};
     static const char *const ALONE_L[6] = {LINE_ALONE_4H, LINE_ALONE_8H, LINE_ALONE_24H,
                                            LINE_ALONE_48H, LINE_ALONE_72H, LINE_ALONE_7D};
-    if (aloneStage < 6 && sinceHandledS >= ALONE_T[aloneStage]) {
+    if (aloneStage < 6 && sinceHandledS >= ALONE_T_S[aloneStage]) {
       say(ALONE_L[aloneStage], REACTION_S * 2.0f);
       ++aloneStage;
     }
@@ -1295,7 +1756,7 @@ void loop() {
   // single impact is one jolt and does not count.
   {
     const float jolt = fabsf(amag - 1.0f);
-    if (!inPeak && jolt > 0.9f) {
+    if (!detectorHold && !inPeak && jolt > 0.9f) {
       inPeak = true;
       if (shakePeaks == 0 || tNow - shakeFirstMs > 1500) { shakePeaks = 0; shakeFirstMs = tNow; }
       ++shakePeaks;
@@ -1359,32 +1820,7 @@ void loop() {
       postEvent(EV_CHARGE_END);
     }
   }
-  if (powerReady && tNow - lastBatteryPollMs >= 5000) {
-    lastBatteryPollMs = tNow;
-    battery.present = power.isBatteryConnect();
-    battery.pct = battery.present ? power.getBatteryPercent() : -1;
-    battery.mv = battery.present ? (int)power.getBattVoltage() : -1;
-    battery.charging = power.isCharging();
-    battery.vbus = power.isVbusIn();
-    if (battery.present && battery.pct >= 0) {
-      if (vbusStable) {
-        if (!battFullSaid && battery.pct >= 100) { battFullSaid = true; say(LINE_FULL, REACTION_S); }
-      } else {
-        // Downward crossings only, once per discharge, and — because vbusStable
-        // is false only after 60 s off power — never on a cable blip. Major
-        // lines, so they bypass the minor budget.
-        static const int BATT_T[4] = {30, 20, 10, 5};
-        static const char *const BATT_L[4] = {LINE_BATT_30, LINE_BATT_20, LINE_BATT_10, LINE_BATT_5};
-        uint8_t stage = battStage;
-        while (stage < 4 && battery.pct <= BATT_T[stage]) ++stage;
-        if (stage != battStage) {
-          battStage = stage;
-          say(BATT_L[stage - 1], REACTION_S);
-          postEvent(EV_BATTERY_LOW, battery.pct);
-        }
-      }
-    }
-  }
+  batteryPoll(tNow);
 
   // Orientation, for the heartbeat and for requests. Screen +y is down.
   if (faceDown) strcpy(orientationNow, "down");
@@ -1426,7 +1862,7 @@ void loop() {
 
   // External power keeps the potato visible, but still lets it dim. This is
   // deliberately VBUS, not "serial monitor open". Face-down always wins.
-  const bool wantDark = (sleepT > 0.97f) || (!vbusGood && idleFor > DARK_AFTER_S);
+  const bool wantDark = (sleepT > 0.97f) || (!vbusGood && idleFor > DARK_AFTER_S) || dozeForce;
 
   if (wantDark && panelOn) {
     clearPanelBlack();
@@ -1450,6 +1886,13 @@ void loop() {
                        faceDown ? "turn it over to wake" : "pick it up to wake");
       lastLogMs = nowMs;
     }
+    // Dark is not the same as quiet. The panel being off saved nothing on
+    // the night of the 23rd — this is where the rest of the board goes down
+    // too. Only ever entered from here, so the doze can never start with
+    // something on the glass.
+    if (dozeForce) { dozeForce = false; dozeRun(true); return; }
+    char why[48];
+    if (dozeAllowed(why, sizeof(why))) { dozeRun(false); return; }
     delay(IDLE_FRAME_US / 1000);
     return;
   }

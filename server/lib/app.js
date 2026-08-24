@@ -23,9 +23,9 @@ function readJson(req) {
   });
 }
 
-const json = (res, status, body) => {
+const json = (res, status, body, extra = {}) => {
   const s = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(s), 'cache-control': 'no-store' });
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(s), 'cache-control': 'no-store', ...extra });
   res.end(res.headOnly ? undefined : s);
 };
 const html = (res, status, body, extra = {}) => {
@@ -35,17 +35,110 @@ const html = (res, status, body, extra = {}) => {
 
 const NO_SUCH_CODE = 'The Council has no record of that claim code.';
 const TOO_MANY = 'The Council is not taking further attempts from you this minute.';
+const TOO_FAST = 'The Council is not taking further calls from you.';
+const ENOUGH_FROM_YOU = 'The Council is not enrolling further potatoes from you.';
+const REGISTER_CLOSED = 'The Council has stopped enrolling. It does not explain itself.';
 
 // Ten claim attempts per address per minute. In memory; the Council keeps no longer record of who tried.
-function limiter(max = 10, windowS = 60) {
+//
+// Calling it records an attempt and answers whether that attempt was inside the limit — the shape the
+// claim routes have always used. `peek` asks without recording and `charge` records without asking, so a
+// quota can be spent on what actually happened (a citizen created) rather than on the asking, and a
+// refusal never extends its own lockout.
+export function limiter(max = 10, windowS = 60, clock = () => Date.now() / 1000) {
   const seen = new Map();
-  return (ip, now = Date.now() / 1000) => {
-    const arr = (seen.get(ip) || []).filter((t) => now - t < windowS);
-    arr.push(now); seen.set(ip, arr);
-    if (seen.size > 10000) for (const [k, v] of seen) if (!v.some((t) => now - t < windowS)) seen.delete(k);
-    return arr.length <= max;
-  };
+  const live = (key, now) => { const arr = (seen.get(key) || []).filter((t) => now - t < windowS); seen.set(key, arr); return arr; };
+  const sweep = (now) => { if (seen.size > 10000) for (const [k, v] of seen) if (!v.some((t) => now - t < windowS)) seen.delete(k); };
+  const f = (key, now = clock()) => { const arr = live(key, now); arr.push(now); sweep(now); return arr.length <= max; };
+  f.peek = (key, now = clock()) => live(key, now).length < max;
+  f.charge = (key, now = clock()) => { live(key, now).push(now); sweep(now); };
+  f.max = max; f.windowS = windowS;
+  return f;
 }
+
+// Configured off: the Council counts nothing and refuses nothing.
+const openLimit = () => Object.assign(() => true, { peek: () => true, charge: () => {}, max: Infinity, windowS: 0 });
+
+// `RATE_*` env vars, in "max/windowSeconds" form — "10/3600". "off" removes the limit. Anything else
+// unparseable keeps the default: a typo in an env var must not silently open the Net or close it.
+export function parseRate(spec, [max, windowS]) {
+  const s = String(spec ?? '').trim().toLowerCase();
+  if (!s) return limiter(max, windowS);
+  if (s === 'off' || s === 'none') return openLimit();
+  const m = s.match(/^(\d+)\s*\/\s*(\d+)$/);
+  return m && Number(m[1]) > 0 && Number(m[2]) > 0 ? limiter(Number(m[1]), Number(m[2])) : limiter(max, windowS);
+}
+
+// What a legitimate potato actually does (docs/PROTOCOL.md, "Heartbeat timing"), and how many of them
+// can sit behind one household address. These are the ceilings a shell loop hits, not the ceilings a
+// potato hits: every one of them is at least an order of magnitude above the worst honest traffic.
+export const LIMITS = {
+  // A device heartbeats every 120 s, and 1.5 s after the *last* event of a burst — each event pushes the
+  // due time out again, so sustained handling is capped at one call per 1.5 s, i.e. 40/min for one
+  // potato. Six potatoes in one office, all being handled without pause for a solid minute, is 240.
+  // Idle, those six cost 3/min. Heartbeats do not vote, so this is about storage and writes, not the Count.
+  heartbeat: [240, 60],
+  // A vote is one POST per potato per Question, plus however many times the Hands change their mind
+  // before the close. Losing one to a 429 loses a vote outright (the firmware drops it, see below), so
+  // this stays loose: the Count is defended by rationing identities, not choices — one potato, one vote,
+  // so hammering /v0/choice from one secret only ever rewrites that potato's own vote.
+  choice: [60, 60],
+  // Registering happens once in a device's life, plus again if the server ever forgets it. Ten new
+  // citizens from one address in an hour is already an office unboxing a crate.
+  register: [10, 3600],
+  // The backstop, across all addresses: a botnet or a cloud fleet has more addresses than the per-address
+  // limit can see. The Net has two desks on it; sixty new citizens in an hour is far past any honest
+  // week. The owner would rather the door shut for an hour than have the Counts decided by a stranger.
+  register_net: [60, 3600],
+  claim: [10, 60],
+};
+
+// Strip what is decoration rather than address: brackets, a port, the IPv6 spelling of an IPv4 address.
+function normalizeIp(s) {
+  let a = String(s || '').trim().toLowerCase();
+  if (a.startsWith('[')) a = a.slice(1, a.indexOf(']') > 0 ? a.indexOf(']') : undefined);
+  else if (/^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(a)) a = a.slice(0, a.lastIndexOf(':'));
+  if (a.startsWith('::ffff:')) a = a.slice(7);
+  return a;
+}
+
+// An IPv6 address folded to its /64. One subscriber is handed the whole block, so a household's potatoes
+// share a key (which is what the household limit wants) and nobody walks out of a limit one address at a
+// time (which is what the register limit wants).
+function v6net(a) {
+  if (!a.includes(':')) return a;
+  const [head = '', tail = ''] = a.split('::');
+  const h = head ? head.split(':') : [];
+  if (!a.includes('::')) return h.length === 8 ? `${h.slice(0, 4).join(':')}::/64` : a;
+  const t = tail ? tail.split(':') : [];
+  const full = [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill('0'), ...t];
+  return full.length === 8 ? `${full.slice(0, 4).join(':')}::/64` : a;
+}
+
+// The address the Council holds responsible for a burst. Two opposite failures to avoid.
+//
+// Behind an edge proxy (Railway), `remoteAddress` is the proxy's and is identical for every visitor on
+// earth: a limit keyed on it locks out the internet, the owner's own potatoes included, in the first busy
+// minute. In front of one, `x-forwarded-for` is whatever the caller typed and keying on it is no limit
+// at all. So `trustProxy` states how many hops in front of us are ours:
+//
+//   0 — the default, and what `npm start` on a laptop gets — ignores the header completely. No header a
+//       stranger sends can change their key.
+//   N — reads the address the Nth-from-last hop saw. Our proxy appends what it saw, so anything the
+//       client prepended sits to the *left* of that and is discarded. Left-most is only trusted when the
+//       proxy sent a single entry, which is the ordinary case.
+//
+// Never logged, never stored.
+export function clientKey(req, trustProxy = 0) {
+  let addr = normalizeIp(req.socket && req.socket.remoteAddress);
+  if (trustProxy > 0) {
+    const fwd = String((req.headers && req.headers['x-forwarded-for']) || '').split(',').map((s) => normalizeIp(s)).filter(Boolean);
+    if (fwd.length) addr = fwd[Math.max(0, fwd.length - trustProxy)];
+  }
+  return v6net(addr) || '?';
+}
+
+const retryAfter = (l) => ({ 'retry-after': String(l.windowS || 60) });
 
 function readForm(req) {
   return new Promise((resolve, reject) => {
@@ -56,11 +149,20 @@ function readForm(req) {
   });
 }
 
-export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'vendor'), githubUrl = '', tuberUrl = '', log = () => {}, claimLimit = limiter() }) {
+export function createApp({
+  world, illustrationsDir, artifactsDir,
+  vendorDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'vendor'),
+  githubUrl = '', tuberUrl = '', log = () => {},
+  trustProxy = 0,
+  claimLimit = limiter(...LIMITS.claim),
+  heartbeatLimit = limiter(...LIMITS.heartbeat),
+  choiceLimit = limiter(...LIMITS.choice),
+  registerLimit = limiter(...LIMITS.register),
+  netRegisterLimit = limiter(...LIMITS.register_net),
+}) {
   // The short code on the device buys a long token; the File lives at the token. Never at the code.
   function claim(req, res, code) {
-    const ip = (req.socket && req.socket.remoteAddress) || '?';
-    if (!claimLimit(ip)) return html(res, 429, renderMessage('NOT NOW', TOO_MANY), { 'retry-after': '60' });
+    if (!claimLimit(clientKey(req, trustProxy))) { req.resume(); return html(res, 429, renderMessage('NOT NOW', TOO_MANY), retryAfter(claimLimit)); }
     const p = world.byClaim(String(code || '').trim().toUpperCase());
     if (!p) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
     const token = world.mintToken(p);
@@ -95,9 +197,42 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
     res.headOnly = req.method === 'HEAD';
     const m = res.headOnly ? 'GET' : req.method;
 
-    if (m === 'POST' && p === '/v0/register') return json(res, 200, world.register(await readJson(req)));
-    if (m === 'POST' && p === '/v0/heartbeat') return json(res, 200, world.heartbeat(await readJson(req)));
-    if (m === 'POST' && p === '/v0/choice') { const r = world.choice(await readJson(req)); return json(res, r.status, r.scene); }
+    // The device endpoints, rationed. A potato is bursty by design, so the windows are wide (see LIMITS):
+    // what they stop is a shell loop, not a potato being handled. Refusals are 429 — never 401/403/404,
+    // which the firmware reads as "this server has forgotten me" and answers by wiping its registration.
+    if (m === 'POST' && p === '/v0/register') {
+      const body = await readJson(req);
+      // Only a NEW citizen is permanent state, and only permanent state is worth rationing. A device
+      // re-registering its own secret (a wiped server, a serial `netReregister`) is idempotent and free.
+      const fresh = !world.bySecret(String(body.secret || '').toLowerCase());
+      const key = fresh ? clientKey(req, trustProxy) : null;
+      if (fresh) {
+        if (!netRegisterLimit.peek('*')) {
+          log(`register refused: the Net is at its ceiling of ${netRegisterLimit.max} new citizens per ${netRegisterLimit.windowS}s`);
+          return json(res, 429, { error: REGISTER_CLOSED }, retryAfter(netRegisterLimit));
+        }
+        if (!registerLimit.peek(key)) {
+          log(`register refused: one address is over ${registerLimit.max} new citizens per ${registerLimit.windowS}s`);
+          return json(res, 429, { error: ENOUGH_FROM_YOU }, retryAfter(registerLimit));
+        }
+      }
+      const out = world.register(body);
+      // Charged once the citizen exists, never on the asking — so a refused device retrying every 15 s,
+      // which is exactly what the firmware does, can never talk itself into a longer lockout.
+      if (fresh) { registerLimit.charge(key); netRegisterLimit.charge('*'); }
+      return json(res, 200, out);
+    }
+    if (m === 'POST' && p === '/v0/heartbeat') {
+      // Drained, not parsed: a refusal must not leave a half-read body on a kept-alive connection,
+      // and must not spend CPU on JSON it has already decided to ignore.
+      if (!heartbeatLimit(clientKey(req, trustProxy))) { req.resume(); return json(res, 429, { error: TOO_FAST }, retryAfter(heartbeatLimit)); }
+      return json(res, 200, world.heartbeat(await readJson(req)));
+    }
+    if (m === 'POST' && p === '/v0/choice') {
+      if (!choiceLimit(clientKey(req, trustProxy))) { req.resume(); return json(res, 429, { error: TOO_FAST }, retryAfter(choiceLimit)); }
+      const r = world.choice(await readJson(req));
+      return json(res, r.status, r.scene);
+    }
 
     // Firmware: the device asks once a day. No secret: an image is not a secret and the device is not yet trusted to be itself.
     if (m === 'GET' && p === '/v0/firmware') {
@@ -189,8 +324,7 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
     }
     fm = p.match(/^\/file\/([a-f0-9]{48})\/vote$/);
     if (m === 'POST' && fm) {
-      const ip = (req.socket && req.socket.remoteAddress) || '?';
-      if (!claimLimit(ip)) return html(res, 429, renderMessage('NOT NOW', TOO_MANY), { 'retry-after': '60' });
+      if (!claimLimit(clientKey(req, trustProxy))) { req.resume(); return html(res, 429, renderMessage('NOT NOW', TOO_MANY), retryAfter(claimLimit)); }
       const body = await readForm(req);
       const r = world.voteFromFile(fm[1], body.choice_id);
       if (!r) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
@@ -201,8 +335,7 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
     }
     fm = p.match(/^\/file\/([a-f0-9]{48})\/ack$/);
     if (m === 'POST' && fm) {
-      const ip = (req.socket && req.socket.remoteAddress) || '?';
-      if (!claimLimit(ip)) return html(res, 429, renderMessage('NOT NOW', TOO_MANY), { 'retry-after': '60' });
+      if (!claimLimit(clientKey(req, trustProxy))) { req.resume(); return html(res, 429, renderMessage('NOT NOW', TOO_MANY), retryAfter(claimLimit)); }
       const line = world.ack(fm[1]);
       if (!line) return html(res, 404, renderMessage('NO SUCH FILE', NO_SUCH_CODE));
       return html(res, 200, renderAcknowledged(line));

@@ -16,9 +16,17 @@
 // until the first good heartbeat marks it valid; otherwise the bootloader
 // rolls back to the previous slot.
 //
+// An image is somebody else's code running on this potato, so it is fetched
+// over the same verified transport as everything else (net.h, netClientFor):
+// on an https Net the manifest and the image both come from a server whose
+// certificate chained to a Mozilla root, and an image URL that is not itself
+// https is refused rather than downgraded. The sha256 in the manifest is
+// still checked over the whole image before Update.end() — but a hash is only
+// as trustworthy as the channel that delivered it, which is the point.
+//
 // Identical copies live in firmware/potato and firmware/paper. Edit both.
-// Needs, from net.h before this include: resolveUrl(), netLog(), BOARD_NAME,
-// FW_VERSION, USBSerial.
+// Needs, from net.h before this include: resolveUrl(), netClientFor(),
+// urlIsHttps(), serverUrl, netLog(), BOARD_NAME, FW_VERSION, USBSerial.
 
 static const uint32_t OTA_CHECK_MS = 24UL * 3600UL * 1000UL;
 static const uint32_t OTA_FIRST_CHECK_MS = 90000;   // after boot, once online
@@ -90,10 +98,13 @@ static bool otaFetchManifest(char *version, size_t vcap, char *url, size_t ucap,
   char base[128];
   if (!resolveUrl(base, sizeof(base))) { otaSetResult("server unresolved"); return false; }
   String u = String(base) + "/v0/firmware?board=" + BOARD_NAME + "&fw=" + FW_VERSION;
+  const char *why = nullptr;
+  NetworkClient *client = netClientFor(u.c_str(), &why);
+  if (!client) { otaSetResult(why); return false; }
   HTTPClient http;
   http.setTimeout(8000);
   http.setConnectTimeout(8000);
-  if (!http.begin(u)) { otaSetResult("bad url"); return false; }
+  if (!http.begin(*client, u)) { otaSetResult("bad url"); return false; }
   const int code = http.GET();
   if (code == 204 || code == 304) { http.end(); otaSetResult("up to date"); return false; }
   if (code != 200) {
@@ -124,10 +135,20 @@ static bool otaDownload(const char *url, const char *shaHex, size_t size) {
   const esp_partition_t *next = esp_ota_get_next_update_partition(nullptr);
   if (!next) { otaSetResult("no OTA slot"); return false; }
   if (size > next->size) { otaSetResult("image larger than slot"); return false; }
+  // No downgrade. A Net reached over https hands over its firmware over
+  // https too; a manifest naming a plain-http image is refused, whoever
+  // wrote it. (A relative url has already been given the server's scheme.)
+  if (urlIsHttps(serverUrl) && !urlIsHttps(url)) {
+    otaSetResult("image url is not https — refused");
+    return false;
+  }
+  const char *why = nullptr;
+  NetworkClient *client = netClientFor(url, &why);
+  if (!client) { otaSetResult(why); return false; }
   HTTPClient http;
   http.setTimeout(15000);
   http.setConnectTimeout(8000);
-  if (!http.begin(url)) { otaSetResult("bad image url"); return false; }
+  if (!http.begin(*client, url)) { otaSetResult("bad image url"); return false; }
   const int code = http.GET();
   if (code != 200) { http.end(); char b[48]; snprintf(b, sizeof(b), "image http %d", code); otaSetResult(b); return false; }
   const int len = http.getSize();
