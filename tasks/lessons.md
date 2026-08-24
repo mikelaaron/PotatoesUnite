@@ -275,3 +275,29 @@ instrument reads clean exactly when the fault was real, and the bug looks fixed
 whether or not it is. Separately: on the ESP32, treat "set the level, then
 enable the driver" as a three-step sequence, never two — and never trust a
 `digitalWrite` on a pin that has not been claimed.
+
+## A reset storm kills the S3's USB console while the firmware keeps running
+
+**2026-08-24.** Verifying the I2C bus-recovery fix meant reproducing "a reset
+that lands mid-transaction", so the host drove the DTR/RTS reset sequence in a
+loop — about 32 resets at roughly one every seven seconds. The test worked: in
+15 scored boots the recovery fired three times (`SDA was held low at boot —
+clocked 2 / 4 / 1, now released`) and no boot lost the expander, touch or PMU.
+Then the console went silent. The device still enumerated (`ioreg` showed the
+MAC and "USB JTAG_serial debug unit"), the port node was recreated, the panel
+still rendered and the potato still reacted to handling — but 75 s of handling
+produced **zero serial bytes**, and a fresh open with DTR raised produced
+nothing. The HWCDC console had died; the firmware had not.
+
+Two things this cost: an hour chasing a phantom "she's dozing on USB" bug that
+the silence looked exactly like, and the ability to read `i` — the very command
+added so a running potato could report its boot verdict.
+
+**How to apply:** a reset loop against the S3's native USB CDC needs to let the
+host fully re-enumerate between resets — seconds, not one second — and should
+stop after a batch rather than run tens of iterations. When a board goes quiet
+but still enumerates, do not assume a firmware state (sleep, hang, crash):
+check whether the *console* died by looking for evidence the app is alive
+elsewhere — the panel, the network, the server's heartbeat record. Recovery is
+a real power cycle; with a battery attached USB is not the power switch, so it
+takes a PWR long-press (~6 s), not a replug.
