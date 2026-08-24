@@ -28,7 +28,7 @@ test('/about renders the standfirst and no placeholder when GITHUB_URL is unset'
   assert.match(html, /All of it is open\. Inside: the server/);
   assert.match(html, /<h2 id="what-it-is-not">What it is not<\/h2>\s*<ul><li>No [^<]+<\/li>/, 'the list follows its heading (copy may change; shape must not)');
   assert.match(html, /<h2 id="privacy">Privacy<\/h2>/, 'the privacy record has its anchor');
-  assert.match(html, /<footer><p>No location\. No audio\. Public counts start at five potatoes\. Privacy record →<\/p><\/footer>/, 'plain text on the page that holds the record');
+  assert.match(html, /<footer><p>No location\. No audio\. Public counts start at five potatoes\. Privacy record&nbsp;→<\/p><\/footer>/, 'plain text on the page that holds the record');
   assert.ok(!html.includes('<a href="/about#privacy">'), 'no self-link');
   assert.match(html, /<ol><li>Start with a supported device\./);
   assert.match(html, /<p><strong>[^<]+\?<\/strong><br>[^<]+<\/p>/, 'a Q&A pair renders as a bold question, a break, the answer');

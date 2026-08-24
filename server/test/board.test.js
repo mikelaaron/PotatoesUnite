@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { makeWorld, at, hb, SECRET, DATA_DIR, ASSETS_DIR } from './helpers.js';
-import { renderBoard } from '../lib/pages.js';
+import { renderBoard, renderEditions } from '../lib/pages.js';
 import { createApp } from '../lib/app.js';
 import { World } from '../lib/world.js';
 
@@ -14,6 +16,29 @@ function net(n, start = at(7, 0)) {
   for (let i = 1; i <= n; i++) w.register({ secret: SECRET(20 + i), board: 'amoled18', fw: '0.1.0' });
   return { w, set };
 }
+
+// A Net whose data directory is this one with a file swapped: a Silence, or a Question that was withdrawn.
+function netWith(files, n = 6, start = at(7, 0)) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'potato-'));
+  fs.cpSync(DATA_DIR, dir, { recursive: true });
+  for (const [name, value] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), JSON.stringify(value));
+  const clock = { now: start };
+  const w = new World({ dbPath: ':memory:', dataDir: dir, assetsDir: ASSETS_DIR, now: () => clock.now, random: () => 0.5, log: () => {} });
+  for (let i = 1; i <= n; i++) w.register({ secret: SECRET(20 + i), board: 'amoled18', fw: '0.1.0' });
+  return { w, set: (t) => { clock.now = t; } };
+}
+
+// One day's Net, run past the close so both of its editions have printed.
+function aDay(mk = () => net(6)) {
+  const { w, set } = mk();
+  set(at(14, 0));
+  for (let i = 1; i <= 6; i++) hb(w, SECRET(20 + i), []);
+  set(at(23, 30));
+  w.tick();
+  return { w, set };
+}
+
+const edition = (w, day, ed) => renderEditions([w.withQuestion(w.bulletin(day, ed))], { single: true });
 
 test('the front page never shows a bucket under five', () => {
   const { w, set } = net(6);
@@ -80,7 +105,7 @@ test('masthead: lede, clock, the return signal, nav, footer', () => {
   assert.match(html, /<p class="lede">Every potato is connected to the Net\. When the Net reaches a conclusion, the Council announces it\.<\/p>/);
   assert.match(html, /<p class="next" data-next-utc="\d+" data-printed-utc="\d+">NEXT EDITION IN 13 H 0 MIN\.<\/p>/);
   assert.match(html, /The Net · TUE 25 AUG · Day 1 · <a href="\/about">About<\/a>/);
-  assert.match(html, /<footer><p>No location\. No audio\. Public counts start at five potatoes\. <a href="\/about#privacy">Privacy record →<\/a><\/p><\/footer>/);
+  assert.match(html, /<footer><p>No location\. No audio\. Public counts start at five potatoes\. <a href="\/about#privacy">Privacy record&nbsp;→<\/a><\/p><\/footer>/);
   assert.match(html, /<input id="claim-code" name="code" size="8" maxlength="8"/, 'room for the whole code');
   assert.match(html, /\.claim input \{[^}]*width: 12ch; height: 2\.4rem;[^}]*\}/);
   assert.match(html, /\.claim button \{[^}]*height: 2\.4rem;[^}]*\}/, 'input and button align');
@@ -139,5 +164,72 @@ test('earlier editions: hidden with one edition, three links later; the archive 
     assert.equal((text.match(/<article class="edition">/g) || []).length, 1);
     assert.equal((await fetch(`${base}/editions/2026-08-20/morning`)).status, 404);
     assert.equal((await fetch(`${base}/editions/2026-08-25/noon`)).status, 404);
+  } finally { server.close(); }
+});
+
+// An edition read months later has to make sense on its own. "THE COUNT IS IN." and a remark about being
+// served with ketchup mean nothing to a reader who was never told what was asked.
+test("an edition states the day's Question: put in the morning, settled in the evening", () => {
+  const { w } = aDay();
+  const Q = 'Ketchup. Which would you least object to being served with?';
+  assert.equal(w.questionFor('2026-08-25').text, Q, 'the day keeps its Question, so an archived edition can still name it');
+  assert.equal(w.withQuestion(w.bulletin('2026-08-25', 'evening')).question, Q);
+
+  const evening = edition(w, '2026-08-25', 'evening');
+  assert.match(evening, /<\/p>\n<p class="asked">The Question put to the Net: Ketchup\. Which would you least object to being served with\?<\/p>\n<ul class="items">/,
+    'the deck sits under the headline and above the items it explains');
+  const morning = edition(w, '2026-08-25', 'morning');
+  assert.match(morning, /<\/p>\n<p class="asked">The Question before the Net today: Ketchup\. Which would you least object to being served with\?<\/p>\n<ul class="items">/);
+  // The Question's text, never its Count. Nothing new here can publish a tally under five.
+  assert.doesNotMatch(evening.match(/<p class="asked">[^<]*<\/p>/)[0], /[0-9]/);
+  assert.match(evening, /\.edition \.asked \{ color: var\(--faint\)/, 'faint serif, inside the type system the page already has');
+});
+
+test('the Silence: an edition with no Question prints no deck, and no lead-in with nothing after it', () => {
+  const { w } = aDay(() => netWith({ 'broadcasts.json': [{ id: 's', type: 'silence', from: '2026-08-25T00:00:00Z', to: '2026-08-26T00:00:00Z' }] }));
+  assert.equal(w.questionFor('2026-08-25'), null);
+  assert.equal(w.withQuestion(w.bulletin('2026-08-25', 'evening')).question, '');
+  for (const ed of ['morning', 'evening']) {
+    const html = edition(w, '2026-08-25', ed);
+    assert.doesNotMatch(html, /class="asked"/, `${ed}: no deck at all`);
+    assert.doesNotMatch(html, /The Question (put|before) the Net/);
+    assert.doesNotMatch(html, /<p[^>]*>\s*<\/p>/, 'and no empty paragraph where the Question would have been');
+    assert.match(html, /No Question today|There was no Question today/, 'the items already say so');
+  }
+});
+
+test('a withdrawn Question is still named: WITHDRAWN. means nothing until the page says what was', () => {
+  const { w } = aDay(() => netWith({
+    'questions.json': [{
+      id: 'qw', text: 'Butter or sour cream?', topic: 'butter', bulletin: 'butter or sour cream', withdrawn: true,
+      options: [{ id: 'butter', label: 'BUTTER' }, { id: 'sour', label: 'SOUR CREAM' }],
+      remark: 'This Question has been withdrawn. The member who proposed it has been spoken to.',
+    }],
+  }));
+  const evening = edition(w, '2026-08-25', 'evening');
+  assert.match(evening, /<p class="head">WITHDRAWN\.<\/p>\n<p class="asked">The Question put to the Net: Butter or sour cream\?<\/p>/);
+  assert.match(evening, /<li>This Question has been withdrawn\./, 'the remark still follows, as the ballot card does it');
+});
+
+test('the archive: every edition renders, and a day states its Question once, not twice', async () => {
+  const { w, set } = net(6);
+  set(at(23, 30)); for (let i = 1; i <= 6; i++) hb(w, SECRET(20 + i), []);
+  set(at(23, 30, 1)); for (let i = 1; i <= 6; i++) hb(w, SECRET(20 + i), []);
+  const app = createApp({ world: w, illustrationsDir: ILL_DIR, artifactsDir: path.join(ASSETS_DIR, 'illustrations') });
+  const server = http.createServer(app);
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const all = await (await fetch(`${base}/editions`)).text();
+    const articles = all.split('<article class="edition">').slice(1);
+    assert.equal(articles.length, 4, 'two days, two editions each');
+    assert.equal(articles.filter((a) => /class="asked"/.test(a)).length, 2, 'the Question belongs to the day: once per day, not once per edition');
+    assert.ok(/\/editions\/2026-08-26\/evening/.test(articles[0]));
+    assert.match(articles[0], /<p class="asked">The Question put to the Net: Are fries still potatoes\?<\/p>/, 'on the edition carrying the Count');
+    assert.ok(/\/editions\/2026-08-26\/morning/.test(articles[1]));
+    assert.doesNotMatch(articles[1], /class="asked"/, 'and not again on the same day’s morning, which would only be noise');
+    assert.match(articles[2], /<p class="asked">The Question put to the Net: Ketchup\./, 'the day before, once');
+    const one = await (await fetch(`${base}/editions/2026-08-26/morning`)).text();
+    assert.match(one, /<p class="asked">The Question before the Net today: Are fries still potatoes\?<\/p>/, "a morning's own page always states it");
   } finally { server.close(); }
 });

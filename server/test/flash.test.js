@@ -21,7 +21,7 @@ async function serve(opts = {}) {
   return { w, server, base: `http://127.0.0.1:${server.address().port}` };
 }
 
-test('/flash: two board cards, portraits, vendored module, manifests, the join flow', async () => {
+test('/flash: a card with an image gets Connect, a card without one gets the Council; portraits, module, join flow', async () => {
   const releases = fs.mkdtempSync(path.join(os.tmpdir(), 'potato-fl-'));
   fs.mkdirSync(path.join(releases, 'amoled18'));
   fs.writeFileSync(path.join(releases, 'amoled18', 'webflash.json'), JSON.stringify({ name: 'Potatoes Unite', builds: [{ chipFamily: 'ESP32-S3', parts: [{ path: 'webflash-0.2.1.bin', offset: 0 }] }] }));
@@ -33,7 +33,10 @@ test('/flash: two board cards, portraits, vendored module, manifests, the join f
     const html = await r.text();
     assert.match(html, /<script type="module" src="\/vendor\/esp-web-tools\/install-button\.js"><\/script>/);
     assert.match(html, /<esp-web-install-button manifest="\/releases\/amoled18\/webflash\.json">/);
-    assert.match(html, /<esp-web-install-button manifest="\/releases\/epaper154\/webflash\.json">/);
+    // the paper has no image in this deploy: no button, no dead manifest reference, one honest line instead
+    assert.doesNotMatch(html, /releases\/epaper154\/webflash\.json/);
+    assert.match(html, /<p class="not-issued">No image for this board yet\. The Council does not publish a schedule\.<\/p>/);
+    assert.equal((html.match(/<esp-web-install-button/g) || []).length, 1);
     assert.match(html, /THE AMOLED CITIZEN/i);
     assert.match(html, /votes by button/);
     assert.equal((html.match(/<svg class="portrait"/g) || []).length, 2);
@@ -43,7 +46,7 @@ test('/flash: two board cards, portraits, vendored module, manifests, the join f
     assert.match(html, /POTATO-xxxx/);
     assert.match(html, /<a href="\/flash\/agent">Or hand this page to your coding agent →<\/a>/);
     assert.match(html, /Tested on exactly these two devices\./);
-    assert.match(html, /<a href="https:\/\/github\.com\/example\/potatoes-unite">CODE →<\/a>/);
+    assert.match(html, /<a href="https:\/\/github\.com\/example\/potatoes-unite">CODE&nbsp;→<\/a>/);
     // the manifest and the merged image resolve
     const man = await fetch(`${base}/releases/amoled18/webflash.json`);
     assert.equal(man.status, 200);
@@ -55,6 +58,54 @@ test('/flash: two board cards, portraits, vendored module, manifests, the join f
     assert.equal(Number(bin.headers.get('content-length')), 4096);
     assert.equal((await fetch(`${base}/releases/epaper154/webflash.json`)).status, 404, 'no release for the paper yet');
     // the front page links to the flasher
+    assert.match(await (await fetch(`${base}/`)).text(), /<a href="\/flash">Flash<\/a>/);
+  } finally { server.close(); }
+});
+
+test('/flash: no manifests at all — every card declines, nothing looks like a button, the nav stops advertising it', async () => {
+  const releases = fs.mkdtempSync(path.join(os.tmpdir(), 'potato-fl-empty-'));
+  const { server, base } = await serve({ worldOpts: { releasesDir: releases } });
+  try {
+    const r = await fetch(`${base}/flash`);
+    assert.equal(r.status, 200);
+    const html = await r.text();
+    // both cards are still there, with their portraits — they just have nothing to install
+    assert.equal((html.match(/<svg class="portrait"/g) || []).length, 2);
+    assert.match(html, /THE AMOLED CITIZEN/i);
+    assert.match(html, /THE E-PAPER CITIZEN/i);
+    assert.equal((html.match(/<p class="not-issued">No image for this board yet\. The Council does not publish a schedule\.<\/p>/g) || []).length, 2);
+    assert.match(html, /<p class="notice">The flasher is closed\. The Council has not said when it opens\.<\/p>/);
+    // nothing that reads as an install control, and nothing pointing at an image that isn't there
+    assert.doesNotMatch(html, /<esp-web-install-button/);
+    assert.doesNotMatch(html, /class="connect"/);
+    assert.doesNotMatch(html, /install-button\.js/);
+    assert.doesNotMatch(html, /webflash\.json/);
+    assert.doesNotMatch(html, /esptool/, 'no one-liner for an image nobody can download');
+    assert.doesNotMatch(html, /\/flash\/agent/, 'the agent procedure fetches a binary that is not there either');
+    // which is the truth: both manifests are 404
+    assert.equal((await fetch(`${base}/releases/amoled18/webflash.json`)).status, 404);
+    assert.equal((await fetch(`${base}/releases/epaper154/webflash.json`)).status, 404);
+    // and the front page does not send strangers there
+    const front = await (await fetch(`${base}/`)).text();
+    assert.doesNotMatch(front, /href="\/flash"/);
+    assert.match(front, /<a href="\/about">About<\/a>/, 'the rest of the nav is untouched');
+  } finally { server.close(); }
+});
+
+test('/flash: both manifests present — both cards keep their Connect button and the front page keeps the link', async () => {
+  const releases = fs.mkdtempSync(path.join(os.tmpdir(), 'potato-fl-both-'));
+  for (const board of ['amoled18', 'epaper154']) {
+    fs.mkdirSync(path.join(releases, board));
+    fs.writeFileSync(path.join(releases, board, 'webflash.json'), JSON.stringify({ name: 'Potatoes Unite', builds: [] }));
+  }
+  const { server, base } = await serve({ worldOpts: { releasesDir: releases } });
+  try {
+    const html = await (await fetch(`${base}/flash`)).text();
+    assert.match(html, /<esp-web-install-button manifest="\/releases\/amoled18\/webflash\.json">/);
+    assert.match(html, /<esp-web-install-button manifest="\/releases\/epaper154\/webflash\.json">/);
+    assert.equal((html.match(/<button slot="activate" class="connect">Connect<\/button>/g) || []).length, 2);
+    assert.doesNotMatch(html, /<p class="not-issued">|The flasher is closed/);
+    assert.match(html, /<noscript>[^]*esptool[^]*<\/noscript>/);
     assert.match(await (await fetch(`${base}/`)).text(), /<a href="\/flash">Flash<\/a>/);
   } finally { server.close(); }
 });

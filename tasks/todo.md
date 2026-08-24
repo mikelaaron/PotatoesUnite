@@ -40,8 +40,20 @@ The full new-user flow against the LAN Net (the public path waits for 0.3.0 HTTP
 4. It names itself; claim the new File at `localhost:8080` with the code from the screen.
 5. Watch: first pick-up line, the ration, the Question, the File filling.
 
+## 24 Aug — public-readiness pass
+
+Went through the repo and the live site asking "is this safe and honest to show a stranger."
+
+- [x] **Two GPS-tagged iPhone photos (`IMG_4030/4031.JPG`) were tracked at the repo root**, referenced by nothing, in a repo whose stated non-negotiable is that no location ever leaves a device. Purged from all 88 commits and every ref with `filter-branch`, verified absent, `.git` 26 MB → 19 MB. Originals and a pre-rewrite bundle kept at `~/Developer/potatoes-unite-backup-20260824/`. The repo was <24 h old with 0 forks/stars/watchers, so the rewrite is genuinely clean. **Owner force-pushes.**
+- [x] **Licensing simplified to MIT for everything.** The CC BY-NC-SA split is gone: `LICENSE-CONTENT.md` deleted, `LICENSE` is now stock MIT with no appended footer, README says it in one line. A single stock LICENSE with no sibling `LICENSE-*` also fixes GitHub reading the repo as "Other" instead of MIT.
+- [x] **`/flash` was a dead end on the public server** — linked from the front-page nav, two Connect buttons, and both webflash manifests 404 because `.railwayignore` excludes `server/data/releases/`. Every stranger who followed the main call-to-action hit a failure. The page now checks (live `stat`, so a 0.3.0 release opens it with no restart or code change) and declines honestly instead: "The flasher is closed. The Council has not said when it opens." Nav link, esptool one-liner, BOOT paragraph and the agent link all drop with it.
+- [x] GitHub description and homepage set.
+- [x] Website: flash page closing line trimmed; footer spacing fixed (`&nbsp;` glues each arrow to its label, ` · ` between the two records) and the flash page stopped hand-rolling its own footer copy — that duplication was why only it had the bug.
+
+Deferred deliberately: **firmware 0.3.0 (HTTPS)**. It is the largest remaining task in the project, untestable without a board on the desk, and it buys exactly one thing — a stranger flashing a potato that can reach the public Net. Until that stranger exists, `/flash` telling the truth is the better trade.
+
 ## Open from firmware bring-up (22 Aug)
-- [ ] One boot in ~10 after a USB reset came up with XCA9554/CST820/AXP2101 "not found" (no touch/PMU until next reboot). Likely an I2C slave holding SDA across reset; add a 9-clock bus-recovery pulse before `Wire.begin`.
+- [x] One boot in ~10 after a USB reset came up with XCA9554/CST820/AXP2101 "not found". `i2cBusRecover()` landed in 35c3107 and this line was simply never ticked. Reviewed 24 Aug and a real defect found: `pinMode(IIC_SCL, OUTPUT)` before `digitalWrite(HIGH)` drove SCL low for a moment (the latch is LOW out of reset), and that stray low-then-high **is a clock** — it could free a held SDA before the sample, so a boot that genuinely needed recovery reported "bus clear" and the fault stayed invisible. Fixed: `INPUT_PULLUP` (claims the pin — core 3.x `digitalWrite` no-ops on an unclaimed pin, `esp32-hal-gpio.c` `perimanGetPinBus` guard) → `digitalWrite(HIGH)` → `OUTPUT`. STOP is now open-drain so releasing SDA lets the pull-ups raise it. The verdict is kept in `i2cBootClocks`/`i2cBootFreed` and reprinted by `i`, because opening this board's port reboots it and destroys the boot log. **Needs hardware confirmation — see below.**
 - [ ] `sound` is always "quiet" (ES8311 mic path not wired). `cue: throat_clear` logged, not played. No sprout drawing yet. Saturday line and "charged while you slept" not implemented.
 - [ ] Real server needs `potatoes.local` advertised (mDNS) or an IP URL set in the portal; dev uses gitignored `firmware/potato/secrets.h`.
 

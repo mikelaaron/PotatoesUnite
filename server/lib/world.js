@@ -971,6 +971,16 @@ export class World {
   editions(limit = 500) {
     return this.store.all('SELECT * FROM bulletins ORDER BY t DESC LIMIT ?', limit).map((r) => ({ no: r.no, edition: r.edition, headline: r.headline, items: JSON.parse(r.items), t: r.t, day: r.day }));
   }
+  // An edition, plus the Question that day was put. The Question is persisted per day, so any edition —
+  // this evening's or one from months ago — can still say what was asked, which is what makes a Count line
+  // read cold. Text only: an edition names the Question, never the size of the Count. A day with no
+  // Question (the Silence, a withdrawn day that carried none) gets an empty string and the page prints
+  // nothing rather than a label with nothing after it.
+  withQuestion(b) {
+    if (!b) return b;
+    const q = this.questionFor(b.day);
+    return { ...b, question: q && q.text ? q.text : '' };
+  }
   // The next print after t: mornings at 00:00 UTC, evenings at 23:00 UTC.
   nextPrint(t) {
     const ds = C.dayStart(t);

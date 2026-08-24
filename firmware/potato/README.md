@@ -11,6 +11,12 @@ probed up to three times 50 ms apart, and anything still missing is re-probed
 every 60 s from the loop (the PMU re-run repeats its full setup). While the
 PMU is missing the heartbeat carries `"battery": {"pct": null, …}`.
 
+The outcome is printed at boot as either `i2c: bus clear at boot` or
+`i2c: SDA was held low at boot — clocked N, now released`, and is kept for
+the session: `i` over serial reprints it after the identity line, so you can
+ask a running potato whether recovery fired without having captured its boot
+log.
+
 Battery: a 3.7 V / 400 mAh / 1.48 Wh Li-ion cell. At boot the firmware sets
 the AXP2101 constant charge current to **150 mA** (0.375C, under 0.5C) and
 the charge target voltage to **4.20 V**, and prints both plus the precharge

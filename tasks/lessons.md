@@ -249,3 +249,29 @@ Verify existence by probing the resource itself (link to the ID, curl the
 URL), never by membership in a list endpoint, which may be eventually
 consistent. And before `up`/`deploy` commands, confirm what the CLI thinks
 the current directory is linked to.
+
+## A recovery routine that can mask its own trigger reports success forever
+
+**2026-08-24.** `i2cBusRecover()` had been in the firmware since 35c3107 and the
+bug it fixes was still open in the plan — so it got re-reviewed, and the review
+found it could lie. It opened with `pinMode(IIC_SCL, OUTPUT)` and only then
+`digitalWrite(IIC_SCL, HIGH)`. `pinMode` never writes the output latch, and the
+latch is LOW out of reset, so enabling the driver drove SCL low for the moment
+before the write — and on a wedged I2C bus a low-then-high *is a clock pulse*.
+If that stray pulse happened to be the one the stuck slave needed, SDA released
+before the code sampled it, and a boot that genuinely needed recovery printed
+`i2c: bus clear`. The routine worked and simultaneously erased the evidence
+that it had been needed.
+
+The correct order is not obvious: in esp32 core 3.x `digitalWrite` is gated on
+`perimanGetPinBus(pin, ESP32_BUS_TYPE_GPIO) != NULL` (`cores/esp32/esp32-hal-gpio.c`)
+and silently does nothing on a pin no `pinMode` has claimed. So preset-then-enable
+only works as `INPUT_PULLUP` (claim) → `digitalWrite(HIGH)` (latch) → `OUTPUT`
+(enable).
+
+**How to apply:** when a routine both detects a fault and repairs it, check
+whether any part of the repair can run *before* the detection. If it can, the
+instrument reads clean exactly when the fault was real, and the bug looks fixed
+whether or not it is. Separately: on the ESP32, treat "set the level, then
+enable the driver" as a three-step sequence, never two — and never trust a
+`digitalWrite` on a pin that has not been claimed.

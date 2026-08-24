@@ -46,4 +46,4 @@ Read `CLAUDE.md` (or `AGENTS.md`, the same file). Real potato words, used deadpa
 
 ## License
 
-The code is [MIT](LICENSE) — do what you like; ports are welcome. The potato's words and pictures — the voice, the story, the Questions, the line pools wherever they appear, The Tuber, the illustrations — are [CC BY-NC-SA 4.0](LICENSE-CONTENT.md): share and adapt with credit, same license, not commercially. Run a Net for your own desks: yes, please. Sell potatoes that speak the Council's words: talk to the Council.
+[MIT](LICENSE), all of it — the code, the words, the pictures. Do what you like with it; keep the copyright notice. Ports and forks are welcome.

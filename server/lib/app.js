@@ -68,6 +68,15 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
     res.end();
   }
 
+  // The web-flash manifest for a board, and whether this deploy actually carries it. The /flash page asks
+  // before it offers a Connect button: a public deploy ships no images until 0.3.0, and a button that 404s
+  // is worse than a page that says nothing has been issued.
+  const webflashManifest = (board) => (world.data.releasesDir ? path.join(world.data.releasesDir, board, 'webflash.json') : null);
+  const hasWebflash = (board) => {
+    const file = webflashManifest(board);
+    try { return !!file && fs.statSync(file).isFile(); } catch { return false; }
+  };
+
   // docs/illustrations, read-only, one hour of cache. Names are slugs only; nothing else is reachable.
   function illustration(res, name) {
     const m = name.match(/^([a-z0-9-]+)\.(png|jpg|jpeg|webp)$/);
@@ -103,7 +112,7 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
     }
     let rm = p.match(/^\/releases\/([a-z0-9]+)\/webflash\.json$/);
     if (m === 'GET' && rm) {
-      const file = world.data.releasesDir ? path.join(world.data.releasesDir, rm[1], 'webflash.json') : null;
+      const file = webflashManifest(rm[1]);
       let st = null;
       try { st = file && fs.statSync(file); } catch { st = null; }
       if (!st || !st.isFile()) return json(res, 404, { error: 'no such manifest' });
@@ -127,12 +136,12 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
       const b = world.board();
       const ill = b.incident ? findIllustration(illustrationsDir, b.incident) : null;
       b.incidentSrc = ill ? ill.src : null;
-      return html(res, 200, renderBoard(b, { tuberUrl }));
+      return html(res, 200, renderBoard(b, { tuberUrl, flashOpen: Object.keys(BOARDS).some(hasWebflash) }));
     }
     if (m === 'GET' && p === '/flash') {
       const boards = Object.entries(BOARDS).map(([id, b]) => {
         const variety = world.data.variety(b.variety) || world.data.varieties[0] || {};
-        return { id, ...b, portrait: potatoSvg(variety, 77 + id.length, { name: b.citizen, size: 96 }) };
+        return { id, ...b, webflash: hasWebflash(id), portrait: potatoSvg(variety, 77 + id.length, { name: b.citizen, size: 96 }) };
       });
       return html(res, 200, renderFlash({ boards, githubUrl, tuberUrl }));
     }
@@ -152,11 +161,12 @@ export function createApp({ world, illustrationsDir, artifactsDir, vendorDir = p
       return fs.createReadStream(file).pipe(res);
     }
     if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, tuberUrl, illustrationsDir, artifactsDir }), { tuberUrl }));
-    if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions(), { tuberUrl })); }
+    // Every edition carries the Question its day was put; the page prints it so a Count reads cold.
+    if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions().map((e) => world.withQuestion(e)), { tuberUrl })); }
     let em = p.match(/^\/editions\/(\d{4}-\d{2}-\d{2})\/(morning|evening)$/);
     if (m === 'GET' && em) {
       world.tick();
-      const e = world.bulletin(em[1], em[2]);
+      const e = world.withQuestion(world.bulletin(em[1], em[2]));
       if (!e) return html(res, 404, renderMessage('NO SUCH EDITION', 'The Council did not print that one.'));
       return html(res, 200, renderEditions([e], { single: true, tuberUrl }));
     }

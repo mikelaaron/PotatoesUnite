@@ -680,18 +680,43 @@ static void excite(float amount) {
 
 // ------------------------------------------------------------------ setup ---
 
+// What the boot bus looked like, kept so 'i' can answer "did recovery fire?"
+// hours later. Opening this board's port reboots it (see tasks/lessons.md),
+// so a boot log is not always there to re-read.
+static int  i2cBootClocks = -1;      // -1 = bus was already clear, else 0..9
+static bool i2cBootFreed  = true;
+
+// One wording for the boot line and the 'i' dump, so they cannot drift.
+static void i2cReport() {
+  if (i2cBootClocks < 0) {
+    USBSerial.println("i2c: bus clear at boot");
+  } else {
+    USBSerial.printf("i2c: SDA was held low at boot — clocked %d, now %s\n",
+                     i2cBootClocks, i2cBootFreed ? "released" : "STILL LOW");
+  }
+}
+
 // I2C bus recovery. A reset that lands mid-transaction (USB re-enumeration
 // after a flash, a re-plug) can leave a slave holding SDA low, and every
 // probe afterwards fails: one boot in ten came up with no expander, no
 // touch and no PMU. Clock SCL until the slave releases SDA, then STOP.
+//
+// Both pins idle high before either driver is enabled. pinMode(OUTPUT) hands
+// the pad whatever is already in the output latch, and that latch is LOW out
+// of reset, so enabling SCL straight away puts a stray low pulse on the bus.
+// That pulse is a free clock: it can release a held SDA before the sample
+// below, and then a boot that genuinely needed recovery reports "bus clear"
+// and the fault stays invisible. Setting the latch needs the pin registered
+// first — core 3.x digitalWrite ignores a pin that no pinMode has claimed
+// (esp32-hal-gpio.c, the perimanGetPinBus guard) — and pinMode never touches
+// the latch, so INPUT_PULLUP -> digitalWrite -> OUTPUT is glitch-free.
 static void i2cBusRecover() {
   pinMode(IIC_SDA, INPUT_PULLUP);
-  pinMode(IIC_SCL, OUTPUT);
+  pinMode(IIC_SCL, INPUT_PULLUP);   // claim the pin so the write below lands
   digitalWrite(IIC_SCL, HIGH);
+  pinMode(IIC_SCL, OUTPUT);
   delayMicroseconds(5);
-  if (digitalRead(IIC_SDA) == HIGH) {
-    USBSerial.println("i2c: bus clear");
-  } else {
+  if (digitalRead(IIC_SDA) == LOW) {
     int clocks = 0;
     while (digitalRead(IIC_SDA) == LOW && clocks < 9) {
       digitalWrite(IIC_SCL, LOW);
@@ -700,8 +725,11 @@ static void i2cBusRecover() {
       delayMicroseconds(5);
       ++clocks;
     }
-    // STOP: SDA low -> high while SCL is high.
-    pinMode(IIC_SDA, OUTPUT);
+    // STOP: SDA low -> high while SCL is high. Open-drain, so releasing the
+    // line lets the pull-ups raise it instead of driving it into a slave that
+    // is still pulling down. The latch is LOW out of reset, so enabling the
+    // driver pulls SDA down — which is the first step of the STOP anyway.
+    pinMode(IIC_SDA, OUTPUT_OPEN_DRAIN | PULLUP);
     digitalWrite(IIC_SDA, LOW);
     delayMicroseconds(5);
     digitalWrite(IIC_SCL, HIGH);
@@ -709,10 +737,12 @@ static void i2cBusRecover() {
     digitalWrite(IIC_SDA, HIGH);
     delayMicroseconds(5);
     pinMode(IIC_SDA, INPUT_PULLUP);
-    USBSerial.printf("i2c: SDA was held low — clocked %d, now %s\n", clocks,
-                     digitalRead(IIC_SDA) == HIGH ? "released" : "STILL LOW");
+    delayMicroseconds(5);
+    i2cBootClocks = clocks;
+    i2cBootFreed = digitalRead(IIC_SDA) == HIGH;
   }
   pinMode(IIC_SCL, INPUT_PULLUP);   // hand the pins to Wire
+  i2cReport();
 }
 
 // PMU bring-up. Called at boot and again from the loop if the PMU was not
@@ -907,6 +937,7 @@ static void serialCommand(int c) {
                        identity.potatoId, identity.variety, identity.claim, (unsigned long)poolSeed,
                        net.status, (unsigned long)net.heartbeats, (unsigned long)net.failures,
                        sceneRev, serverUrl, tzString, FW_VERSION, ota.lastResult);
+      i2cReport();
       break;
     case 'W': netForgetWifi(); break;
     case 'R': netReregister(); break;
@@ -926,7 +957,7 @@ static void serialCommand(int c) {
       USBSerial.println();
       break;
     case 'h':
-      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity, m ration state, W forget wifi, R register again");
+      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity + boot I2C, m ration state, W forget wifi, R register again");
       break;
     default: break;
   }

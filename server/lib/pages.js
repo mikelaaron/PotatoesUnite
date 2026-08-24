@@ -23,6 +23,7 @@ body.paper-doc { --paper: #efe6cf; --ink: #1c1a16; --rule: #5e5647; --faint: #7d
 .board-card p { font-size: .92em; margin: .3rem 0 .8rem; }
 .board-card esp-web-install-button button, .board-card .connect { font-family: var(--tt); font-size: 1.2em; background: var(--ink); color: var(--paper); border: 0; padding: .45rem 1.6rem; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; }
 .board-card .unsupported { display: block; color: var(--faint); font-size: .85em; margin-top: .5rem; }
+.board-card .not-issued { display: block; color: var(--faint); font-size: .9em; margin: .9rem 0 .3rem; }
 .requirements { color: var(--faint); }
 .paper-name { text-align: center; margin: .2rem 0 0; font-size: 1.8em; letter-spacing: .12em; color: var(--ink); }
 .oneliner { background: var(--wash); border: 1px solid var(--rule); padding: .6rem .8rem; overflow-x: auto; font-size: .85em; }
@@ -79,6 +80,7 @@ footer { clear: both; margin-top: var(--s4); border-top: 1px solid var(--rule); 
 /* editions archive */
 .edition { margin: var(--s2) 0 var(--s3); }
 .edition h2 { margin-bottom: .2rem; }
+.edition .asked { color: var(--faint); margin: .2rem 0 .5rem; } /* the deck: serif, because a person reads it */
 /* the claim form */
 .claim { margin: var(--s3) 0 0; }
 .claim label { display: block; color: var(--faint); letter-spacing: .2em; text-transform: uppercase; margin-bottom: var(--s1); }
@@ -215,15 +217,19 @@ ${body}
 
 const PRIVACY_LONG = 'Your device never sends where it is. It never sends audio — only whether the room is quiet or loud. Nothing is shown here until at least five potatoes are involved. Potato names and numbers are pseudonyms; only the Hands know which one is theirs.';
 const LEDE = 'Every potato is connected to the Net. When the Net reaches a conclusion, the Council announces it.';
+// The flasher can only offer what the deploy carries. When it carries nothing, it says so instead of pointing at a 404.
+const NOT_ISSUED = 'No image for this board yet. The Council does not publish a schedule.';
+const FLASHER_CLOSED = 'The flasher is closed. The Council has not said when it opens.';
 const EDITION_TIMES = { morning: 0, evening: 23 };
 
 // "13:00 UTC" with the instant attached, so the script can add the viewer's time after it.
 const utc = (t, attrs = '') => `<time data-utc="${Math.round(t)}"${attrs}>${h(hm(t))} UTC</time>`;
 
 // One sentence and the privacy record. On /about the record is on the page itself, so no link there.
-export function footer({ tuberUrl = '', privacyHere = false } = {}) {
-  const record = privacyHere ? 'Privacy record →' : '<a href="/about#privacy">Privacy record →</a>';
-  return `<footer><p>No location. No audio. Public counts start at five potatoes. ${record}</p>${tuberUrl ? `<p>Editions are also issued on X: <a href="${h(tuberUrl)}">${h(tuberHandle(tuberUrl))}</a>.</p>` : ''}</footer>`;
+export function footer({ tuberUrl = '', privacyHere = false, githubUrl = '' } = {}) {
+  const record = privacyHere ? 'Privacy record&nbsp;→' : '<a href="/about#privacy">Privacy record&nbsp;→</a>';
+  const code = githubUrl ? ` · <a href="${h(githubUrl)}">CODE&nbsp;→</a>` : '';
+  return `<footer><p>No location. No audio. Public counts start at five potatoes. ${record}${code}</p>${tuberUrl ? `<p>Editions are also issued on X: <a href="${h(tuberUrl)}">${h(tuberHandle(tuberUrl))}</a>.</p>` : ''}</footer>`;
 }
 
 // Server-side first render of the countdown; the script keeps it current.
@@ -238,12 +244,20 @@ function withTimes(text, t) {
   return h(text).replace(/\b(\d\d):(\d\d) UTC\b/g, (m, hh, mm) => (t ? utc(dayStart(t) + Number(hh) * 3600 + Number(mm) * 60) : m));
 }
 
-function editionHtml(b, { link = false } = {}) {
+// The deck under the headline. An evening edition leads with the Count, and a Count means nothing to
+// someone arriving cold, so the edition says what was put. The morning has it pending; the evening has
+// settled it. The Question's text and nothing else — no tally, no total, so a small Count stays unpublished.
+const ASKED = { morning: 'The Question before the Net today', evening: 'The Question put to the Net' };
+
+function editionHtml(b, { link = false, asked = true } = {}) {
   const when = `${dayHeader(b.t)} · ${String(b.edition).toUpperCase()}`;
+  // A day with no Question — the Silence, or a day nothing was put — prints no deck at all. The items
+  // already say there was no Question; a lead-in with nothing after it would be worse than silence.
+  const deck = asked && b.question ? `<p class="asked">${h(ASKED[b.edition] || ASKED.evening)}: ${h(b.question)}</p>\n` : '';
   return `<article class="edition"><h2>${link ? `<a href="/editions/${h(b.day)}/${h(b.edition)}">${h(when)}</a>` : h(when)}</h2>
 <div class="small">No. ${h(b.no)}</div>
 <p class="head">${withTimes(b.headline, b.t)}</p>
-<ul class="items">${b.items.map((i) => `<li>${withTimes(i, b.t)}</li>`).join('')}</ul>
+${deck}<ul class="items">${b.items.map((i) => `<li>${withTimes(i, b.t)}</li>`).join('')}</ul>
 <div class="small">Issued by The Tuber.</div></article>`;
 }
 
@@ -271,7 +285,7 @@ ${q.remark ? `<p>${h(q.remark)}</p>` : ''}`;
   return `<section class="ballot"><span class="stamp">${stamp}</span><h2>The Question</h2>${body}${note}</section>`;
 }
 
-export function renderBoard(b, { tuberUrl = '' } = {}) {
+export function renderBoard(b, { tuberUrl = '', flashOpen = true } = {}) {
   const A = b.aggregates;
   const agg = b.small
     ? `<p>Reports begin at five potatoes.</p>`
@@ -297,7 +311,7 @@ export function renderBoard(b, { tuberUrl = '' } = {}) {
   const missing = b.missing.length ? `<h2>Missing</h2>${b.missing.map((m) => `<p class="notice">${h(m)}</p>`).join('')}` : '';
   const potd = b.potd ? `<h2>Potato of the Day</h2><p>${h(b.potd.name)} #${h(b.potd.id)} · ${h(b.potd.variety)}</p>${b.potd.excerpt ? `<p class="notice">${h(b.potd.excerpt)}</p>` : ''}` : '';
   return layout('POTATOES UNITE!', `
-<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a> · <a href="/flash">Flash</a></div></header>
+<header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a>${flashOpen ? ' · <a href="/flash">Flash</a>' : ''}</div></header>
 <p class="tt paper-name">THE TUBER</p>
 <p class="now">It is ${utc(b.t)}.</p>
 <p class="next" data-next-utc="${h(b.nextPrint)}" data-printed-utc="${h(b.lastPrint || 0)}">${h(nextLine(b.t, b.lastPrint, b.nextPrint))}</p>
@@ -316,7 +330,15 @@ ${footer({ tuberUrl })}`);
 
 export function renderEditions(list, { single = false, tuberUrl = '' } = {}) {
   const title = single && list[0] ? `Potatoes Unite! — Edition No. ${list[0].no}, ${list[0].edition}` : 'Potatoes Unite! — Editions';
-  const body = list.length ? list.map((b) => editionHtml(b, { link: !single })).join('\n') : '<p class="muted">No editions yet. The press is warming up.</p>';
+  // The archive prints a day's two editions one after the other, newest first. The Question belongs to the
+  // day, not to the edition, so the list states it once per day — on that day's latest edition, the one
+  // carrying the Count — and a single edition's own page always states it.
+  const printed = new Set();
+  const body = list.length ? list.map((b) => {
+    const firstOfDay = !printed.has(b.day);
+    printed.add(b.day);
+    return editionHtml(b, { link: !single, asked: single || firstOfDay });
+  }).join('\n') : '<p class="muted">No editions yet. The press is warming up.</p>';
   return layout(title, `
 <header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · Editions · <a href="/">Front page</a></div></header>
 ${body}
@@ -403,28 +425,32 @@ ${footer({ tuberUrl, privacyHere: true })}`, { bodyClass: 'paper-doc' });
 }
 
 // GET /flash — flash a spare board into a citizen. ESP Web Tools, vendored; no CDN.
+// A board gets a Connect button only when the deploy actually carries its manifest (b.webflash).
+// Without one there is nothing to write, and the page declines instead of offering a button that 404s.
 export function renderFlash({ boards, githubUrl = '', tuberUrl = '' } = {}) {
+  const open = boards.some((b) => b.webflash);
   const cards = boards.map((b) => `<div class="board-card">
 ${b.portrait}
 <h3>${h(b.citizen)}</h3>
 <p>${h(b.blurb)}</p>
-<esp-web-install-button manifest="/releases/${h(b.id)}/webflash.json">
+${b.webflash ? `<esp-web-install-button manifest="/releases/${h(b.id)}/webflash.json">
 <button slot="activate" class="connect">Connect</button>
 <span slot="unsupported" class="unsupported">This browser has no Web Serial. Chrome or Edge, on a computer — or the command below.</span>
 <span slot="not-allowed" class="unsupported">Serial needs an https page (or localhost).</span>
-</esp-web-install-button>
+</esp-web-install-button>` : `<p class="not-issued">${h(NOT_ISSUED)}</p>`}
 </div>`).join('\n');
   return layout('Potatoes Unite! — Flash', `
-<script type="module" src="/vendor/esp-web-tools/install-button.js"></script>
+${open ? '<script type="module" src="/vendor/esp-web-tools/install-button.js"></script>' : ''}
 <header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">Flash · <a href="/">Front page</a></div></header>
 <p class="lede">A spare board becomes a citizen. The flasher writes the whole image; the potato does the rest.</p>
+${open ? '' : `<p class="notice">${h(FLASHER_CLOSED)}</p>`}
 <div class="boards">
 ${cards}
 </div>
 <p class="requirements">Chrome or Edge, on a computer, with a USB data cable.</p>
-<p class="muted">If it says "Failed to initialize," or the port keeps vanishing from the list: hold the board's BOOT button, plug the cable back in while still holding it, and try again.</p>
+${open ? `<p class="muted">If it says "Failed to initialize," or the port keeps vanishing from the list: hold the board's BOOT button, plug the cable back in while still holding it, and try again.</p>
 <noscript><p class="muted">Without JavaScript the button cannot reach the port. The command works anywhere Python does:</p>
-<pre class="oneliner">pip install esptool && esptool --port /dev/ttyUSB0 write_flash 0x0 webflash-&lt;version&gt;.bin   # image: /releases/&lt;board&gt;/webflash.json</pre></noscript>
+<pre class="oneliner">pip install esptool && esptool --port /dev/ttyUSB0 write_flash 0x0 webflash-&lt;version&gt;.bin   # image: /releases/&lt;board&gt;/webflash.json</pre></noscript>` : ''}
 <h2>Then</h2>
 <ol>
 <li>The potato opens a Wi-Fi network called POTATO-xxxx. Join it once.</li>
@@ -432,9 +458,9 @@ ${cards}
 <li>It names itself. Name, number and variety come from its seed. You are not consulted.</li>
 <li>Claim its File with the code on the screen, at <a href="/">the front page</a> under CLAIM YOUR FILE.</li>
 </ol>
-<p><a href="/flash/agent">Or hand this page to your coding agent →</a></p>
-<p class="muted">Tested on exactly these two devices. Another model needs a port — its pins and its display — and the protocol is small. Both show a potato. One of them takes fifteen seconds to change its mind.</p>
-<footer><p>No location. No audio. Public counts start at five potatoes. <a href="/about#privacy">Privacy record →</a>${githubUrl ? ` <a href="${h(githubUrl)}">CODE →</a>` : ''}</p>${tuberUrl ? `<p>Editions are also issued on X: <a href="${h(tuberUrl)}">${h(tuberHandle(tuberUrl))}</a>.</p>` : ''}</footer>`);
+${open ? '<p><a href="/flash/agent">Or hand this page to your coding agent →</a></p>' : ''}
+<p class="muted">Tested on exactly these two devices. Another model needs a port — its pins and its display — and the protocol is small.</p>
+${footer({ tuberUrl, githubUrl })}`);
 }
 
 // GET /flash/agent — docs/FLASH_WITH_AN_AGENT.md, when it exists.
