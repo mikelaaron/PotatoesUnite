@@ -26,7 +26,9 @@
 // Never sent: raw audio, location, anything that is not in the protocol.
 // The secret is generated on first boot, kept in NVS, and never shown.
 
-#if __has_include("secrets.h")
+// NO_SECRETS (set by `make webflash`) keeps dev credentials out of any image
+// a stranger might flash: a public build must always open the portal.
+#if __has_include("secrets.h") && !defined(NO_SECRETS)
 #include "secrets.h"   // optional, gitignored: WIFI_SSID, WIFI_PASS, SERVER_URL
 #endif
 

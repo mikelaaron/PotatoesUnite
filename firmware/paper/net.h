@@ -30,7 +30,9 @@
 // board name, a larger scene cap (the Scene carries two Bulletin editions),
 // and temp_c / utc_offset_min in the snapshot. Unify the two copies later.
 
-#if __has_include("secrets.h")
+// NO_SECRETS (set by `make webflash`) keeps dev credentials out of any image
+// a stranger might flash: a public build must always open the portal.
+#if __has_include("secrets.h") && !defined(NO_SECRETS)
 #include "secrets.h"   // optional, gitignored: WIFI_SSID, WIFI_PASS, SERVER_URL
 #endif
 

@@ -179,8 +179,8 @@ webflash:
 	@test -n "$(ESPTOOL)" || { echo "esptool not found under Arduino15"; exit 1; }
 	@set -e; \
 	case "$(BOARD)" in \
-	  potato) ID=amoled18; NAME="Potatoes Unite - potato (amoled18)"; FQ="$(FQBN)"; FLAGS="$(EXTRA_FLAGS) $(SERVER_FLAG)";; \
-	  paper)  ID=epaper154; NAME="Potatoes Unite - paper (epaper154)"; FQ="$(PAPER_FQBN)"; FLAGS="-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI) $(SERVER_FLAG)";; \
+	  potato) ID=amoled18; NAME="Potatoes Unite - potato (amoled18)"; FQ="$(FQBN)"; FLAGS="$(EXTRA_FLAGS) $(SERVER_FLAG) -DNO_SECRETS=1";; \
+	  paper)  ID=epaper154; NAME="Potatoes Unite - paper (epaper154)"; FQ="$(PAPER_FQBN)"; FLAGS="-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI) $(SERVER_FLAG) -DNO_SECRETS=1";; \
 	  *) echo "BOARD must be potato or paper"; exit 1;; \
 	esac; \
 	VER=$$(sed -n 's/.*#define FW_VERSION "\(.*\)".*/\1/p' $(BOARD)/version.h); \
