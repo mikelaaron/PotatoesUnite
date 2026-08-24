@@ -2,6 +2,8 @@
 
 *A network of desk potatoes that do not need you, and have noticed how you treat them.*
 
+**Live: [potatoesunite.com](https://potatoesunite.com)** · The Tuber files on X: [@IssuedByCouncil](https://x.com/IssuedByCouncil)
+
 Spare ESP32 boards, lying on desks with nothing to do, become potatoes. Each one is on the Net. Once a day the Council puts a Question to every potato (ketchup; whether Tuesday should continue). Each keeps a File on how its Hands treat it — picked up, left face down, shaken, left home again — and tells its neighbor. The potatoes never need you. They have noticed you.
 
 The whole story, in the Council's words: [docs/STORY.md](docs/STORY.md) — served at `/about` on a running Net.
@@ -41,3 +43,7 @@ Your device never sends where it is. It never sends audio — only whether the r
 ## Rules for contributors
 
 Read `CLAUDE.md` (or `AGENTS.md`, the same file). Real potato words, used deadpan. No puns. No AI writing the lines. If a line could go on a mug, cut it. Ports to other boards are welcome.
+
+## License
+
+The code is [MIT](LICENSE) — do what you like; ports are welcome. The potato's words and pictures — the voice, the story, the Questions, the line pools wherever they appear, The Tuber, the illustrations — are [CC BY-NC-SA 4.0](LICENSE-CONTENT.md): share and adapt with credit, same license, not commercially. Run a Net for your own desks: yes, please. Sell potatoes that speak the Council's words: talk to the Council.
