@@ -93,9 +93,19 @@ static const uint8_t  DOZE_GPIO_SPURIOUS = 3;
 
 // The QMI8658's interrupt cannot reach the ESP32-S3 on this board.
 //
-// Read off Waveshare's schematic (ESP32-S3-Touch-AMOLED-1.8.pdf) and
-// corroborated by their own ESP-IDF board_variant.c, which leaves expander
-// bits 3-6 configured as inputs:
+// Read off Waveshare's schematic (ESP32-S3-Touch-AMOLED-1.8.pdf), corroborated
+// by their own ESP-IDF board_variant.c (which leaves expander bits 3-6 as
+// inputs), and confirmed a third time against the Espressif BSP component
+// packages v1.0.0 and v2.0.3 — identical pin_config.h, identical BSP headers,
+// so V1 and V2 do not differ here.
+//
+// One honest caveat: "no V2 schematic exists" rests on 404s at the predictable
+// URLs, not on a document saying so. If the interrupt path ever matters enough
+// to design around, settle it on the actual hardware in minutes instead of
+// trusting this comment — read the TCA9554 input port over I2C and watch bits
+// 3, 5 and 6 move against an RTC alarm, a charger insert, and a configured IMU
+// interrupt. That check is read-only and cannot hurt a live potato.
+//
 //
 //   QMI8658 INT1 -> net QMI_INT1 -> TCA9554 P6 (EXIO6)
 //   QMI8658 INT2 -> net QMI_INT2, one node only. A dead stub.
