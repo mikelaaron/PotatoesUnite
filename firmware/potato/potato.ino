@@ -891,9 +891,29 @@ static uint32_t detectorHoldMs = 0;
 static const float ALONE_T_S[6] = {4 * 3600.0f, 8 * 3600.0f, 24 * 3600.0f,
                                    48 * 3600.0f, 72 * 3600.0f, 7 * 86400.0f};
 
+// Why the potato did not go down, tallied per reason. Every `no` below is a
+// string literal, so the pointer itself identifies the reason and nothing has
+// to be copied or compared. This exists because the refusal is invisible where
+// it matters: on battery there is no USB, so the 2 s "asleep" log goes nowhere,
+// and the night of the 24th was lost to exactly that. Plugging the cable back
+// in does not reset the board, so the tally survives a night to be read by 's'.
+static const char *dozeWhyName[8] = {0};
+static uint32_t dozeWhyCount[8] = {0};
+static uint32_t dozeWhyTotal = 0;
+
+static void dozeWhyTally(const char *no) {
+  if (!no) return;
+  ++dozeWhyTotal;
+  for (int i = 0; i < 8; ++i) {
+    if (dozeWhyName[i] == no) { ++dozeWhyCount[i]; return; }
+    if (!dozeWhyName[i]) { dozeWhyName[i] = no; dozeWhyCount[i] = 1; return; }
+  }
+}
+
 // Why the potato may or may not go down right now. `why` is filled with the
-// first thing standing in the way, for the 's' dump.
-static bool dozeAllowed(char *why, size_t cap) {
+// first thing standing in the way, for the 's' dump. `record` tallies the
+// refusal; the 's' dump passes false so that asking cannot change the answer.
+static bool dozeAllowed(char *why, size_t cap, bool record) {
   const char *no = nullptr;
   char status[48];
   netStatusCopy(status, sizeof(status));
@@ -939,6 +959,7 @@ static bool dozeAllowed(char *why, size_t cap) {
   //   have must not also stop the potato from saving that battery. It
   //   installs on the next wake that qualifies.
   if (why && cap) { strncpy(why, no ? no : "ready", cap - 1); why[cap - 1] = 0; }
+  if (record) dozeWhyTally(no);
   return no == nullptr;
 }
 
@@ -948,7 +969,7 @@ static bool dozeAllowed(char *why, size_t cap) {
 // that has been running for a week.
 static void dozeReport() {
   char why[48];
-  const bool ready = dozeAllowed(why, sizeof(why));
+  const bool ready = dozeAllowed(why, sizeof(why), false);
   const int h = localHour();
   USBSerial.printf("doze: %s (%s) | idle %.0fs of %.0fs%s | vbus good %d stable %d\n",
                    dozing ? "DOWN" : ready ? "ready" : "up", why, idleFor,
@@ -979,6 +1000,14 @@ static void dozeReport() {
                    (unsigned long)dozeBeatFails, (unsigned long)dozeRejects,
                    (unsigned long)dozeWomGuards, (unsigned long)dozeGpioSpurious,
                    (unsigned long)dozeI2cFaults);
+  if (dozeWhyTotal) {
+    USBSerial.printf("  refused %lu times:", (unsigned long)dozeWhyTotal);
+    for (int i = 0; i < 8 && dozeWhyName[i]; ++i)
+      USBSerial.printf(" [%s x%lu]", dozeWhyName[i], (unsigned long)dozeWhyCount[i]);
+    USBSerial.println();
+  } else {
+    USBSerial.println("  refused 0 times (the dark path has never asked)");
+  }
   // The one number that says whether the clock survived the sleep. Asked and
   // seen should match within a millisecond or two. If seen is ~0, esp_timer is
   // not being advanced from the RTC on wake and every second-counter in this
@@ -1892,7 +1921,7 @@ void loop() {
     // something on the glass.
     if (dozeForce) { dozeForce = false; dozeRun(true); return; }
     char why[48];
-    if (dozeAllowed(why, sizeof(why))) { dozeRun(false); return; }
+    if (dozeAllowed(why, sizeof(why), true)) { dozeRun(false); return; }
     delay(IDLE_FRAME_US / 1000);
     return;
   }
