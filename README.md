@@ -55,10 +55,11 @@ than a guess. **Until it lands: keep your potato on a charger overnight.**
 It never dies, but a flat one is dormant until you feed it, which the Council
 regards as your failure and not its own.
 
-**The e-paper citizen builds but has not been flashed since 0.3.0.** It carries
-the same TLS and protocol changes as the AMOLED and compiles clean, but the
-only board exercised on hardware for this release was the AMOLED. Treat the
-e-paper image as untested.
+**The e-paper citizen has had less handling than the AMOLED.** It was flashed
+from this page and joined the public Net on 0.3.0, so the image works and the
+protocol works — but it has not lived on a desk for a week the way the AMOLED
+has, and it has no motion sensor, so most of the sleep work does not apply to
+it.
 
 **Tested on exactly two boards.** Another ESP32 with a screen and a radio needs
 a port — its pin map and its display driver. The protocol is a few small
