@@ -80,8 +80,20 @@ export class World {
 
   variety(id) { return this.data.variety(id) || { id, name: id }; }
 
+  // board and fw are the only device-supplied strings the server keeps, and a
+  // stranger's device can put anything in them. The heartbeat has always held
+  // them to an allowlist; register did not, so an unbounded string reached the
+  // row. Neither value is ever rendered into a page — they surface only as
+  // JSON on /v0/fleet — so this was storage, not script. Same rule both ways
+  // now: anything that does not match is simply dropped, never an error, so an
+  // odd build string can never stop a potato from registering.
+  static cleanBoard(v, fallback = '') { return typeof v === 'string' && /^[a-z0-9]{1,32}$/.test(v) ? v : fallback; }
+  static cleanFw(v, fallback = '') { return typeof v === 'string' && /^[\w.+-]{1,32}$/.test(v) ? v : fallback; }
+
   register({ secret, board, fw } = {}) {
     if (typeof secret !== 'string' || !/^[0-9a-fA-F]{16,128}$/.test(secret)) throw new HttpError(400, 'secret must be 16–128 hex characters');
+    board = World.cleanBoard(board);
+    fw = World.cleanFw(fw);
     secret = secret.toLowerCase();
     const t = this.now();
     let p = this.bySecret(secret);
