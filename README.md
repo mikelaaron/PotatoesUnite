@@ -40,6 +40,34 @@ Almost everything a potato does comes from the Net: its lines, the Question, eve
 
 Your device never sends where it is. It never sends audio — only whether the room is quiet or loud. Nothing is shown publicly until at least five potatoes are involved. Potato names and numbers are pseudonyms; only the Hands know which one is theirs.
 
+## What doesn't work yet
+
+Honest list. This is a weekend project that got out of hand, not a product.
+
+**A potato lasts about six hours off the charger.** It should last days. There
+is a sleep mode — the panel goes dark, the Net stands down, the chip
+light-sleeps and wakes every fifteen minutes to file a heartbeat, or instantly
+when you pick it up. It demonstrably works when forced, and it has been caught
+firing on its own. But something stops it engaging reliably on battery, and
+three plausible explanations have already been wrong. The firmware now records
+why it refused and how close it got, so the next attempt is a readout rather
+than a guess. **Until it lands: keep your potato on a charger overnight.**
+It never dies, but a flat one is dormant until you feed it, which the Council
+regards as your failure and not its own.
+
+**The e-paper citizen builds but has not been flashed since 0.3.0.** It carries
+the same TLS and protocol changes as the AMOLED and compiles clean, but the
+only board exercised on hardware for this release was the AMOLED. Treat the
+e-paper image as untested.
+
+**Tested on exactly two boards.** Another ESP32 with a screen and a radio needs
+a port — its pin map and its display driver. The protocol is a few small
+requests and `net.h`/`protocol.h` carry over.
+
+**Wake sensitivity is unturned.** `POTATO_WOM_MG` (default 100 mg) decides how
+easily a sleeping potato notices being picked up. Too low and it wakes for
+footsteps; too high and it ignores its Hands. It depends on your desk.
+
 ## Rules for contributors
 
 Read `CLAUDE.md` (or `AGENTS.md`, the same file). Real potato words, used deadpan. No puns. No AI writing the lines. If a line could go on a mug, cut it. Ports to other boards are welcome.

@@ -6,7 +6,14 @@ firmware/
 tasks/
 prototypes/
 .claude/
-# No firmware on the public Net until 0.3.0 (HTTPS) ships: the .bin files are
-# gitignored anyway, and a manifest without its binary advertises an update
-# that 404s. Devices OTA from the LAN server until the cutover.
-server/data/releases/
+# 0.3.0 shipped, so the firmware ships with it. The webflash images are what
+# the /flash page installs and what the flasher checks for before it opens at
+# all, so they have to reach the deploy. They are gitignored (binaries do not
+# belong in history) — `railway up` uploads the working directory, so build
+# them with `make -C firmware webflash BOARD=... PUBLIC_SERVER_URL=https://potatoesunite.com`
+# before deploying, or the page will correctly report itself closed.
+#
+# The OTA .bin files (data/releases/<board>/<version>.bin, no webflash- prefix)
+# are a separate matter: publish those with `npm run release` only after the
+# version has been flashed and lived on a real board.
+
