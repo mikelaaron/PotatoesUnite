@@ -1,6 +1,24 @@
 data/*.db
 data/*.db-*
 node_modules/
-data/releases/*/*.bin
 data/releases/*/*.tmp
-data/releases/*/webflash.json
+
+# Firmware images stay out of git by default — they arrive every time a version
+# is cut and history does not need them.
+data/releases/*/*.bin
+
+# EXCEPT the current web-flash images and their manifests, which are committed
+# with `git add -f` (a tracked file ignores .gitignore, so the rule above keeps
+# every other build artifact out while these stay in). They are what the public
+# /flash page installs, and the page checks for them before it opens at all.
+# `railway up` honours .gitignore as well as .railwayignore, so an image that is
+# merely ignored never reaches the deploy and the flasher reports itself closed.
+#
+# GitHub Releases cannot stand in for this: release assets carry no
+# access-control-allow-origin and redirect to a URL that expires within the
+# hour, so a browser cannot fetch one cross-origin. They are published there
+# too, for anyone who would rather use esptool.
+#
+# Cutting a release: build with PUBLIC_SERVER_URL, then
+#   git rm --cached server/data/releases/*/webflash-<old>.bin
+#   git add -f server/data/releases/*/webflash-<new>.bin
