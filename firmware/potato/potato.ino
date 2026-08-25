@@ -901,7 +901,14 @@ static const char *dozeWhyName[8] = {0};
 static uint32_t dozeWhyCount[8] = {0};
 static uint32_t dozeWhyTotal = 0;
 
+// The high-water mark of idleFor while the panel was dark. Without it a tally
+// of "not idle thirty minutes yet" is ambiguous: it reads the same whether the
+// timer crept to 1799 and got interrupted, or never passed 60 because
+// something kept resetting it. One number separates those.
+static float dozeIdleMax = 0.0f;
+
 static void dozeWhyTally(const char *no) {
+  if (idleFor > dozeIdleMax) dozeIdleMax = idleFor;
   if (!no) return;
   ++dozeWhyTotal;
   for (int i = 0; i < 8; ++i) {
@@ -1004,7 +1011,7 @@ static void dozeReport() {
     USBSerial.printf("  refused %lu times:", (unsigned long)dozeWhyTotal);
     for (int i = 0; i < 8 && dozeWhyName[i]; ++i)
       USBSerial.printf(" [%s x%lu]", dozeWhyName[i], (unsigned long)dozeWhyCount[i]);
-    USBSerial.println();
+    USBSerial.printf(" | idle high-water %.0fs of %.0fs\n", dozeIdleMax, DOZE_IDLE_S);
   } else {
     USBSerial.println("  refused 0 times (the dark path has never asked)");
   }
