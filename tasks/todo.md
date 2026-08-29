@@ -98,7 +98,7 @@ deploying, or editing the live broadcast schedule.
 - [x] Cut an AMOLED 0.3.1 OTA containing `utc_offset_min` and the new power/Net
   diagnostics; verify build, binary hash, and firmware manifest.
 - [x] Exercise the real heartbeat and OTA path on Doreen while she is on USB.
-- [ ] Release the proven scheduler and OTA, then record live evidence here.
+- [x] Release the proven scheduler and OTA, then record live evidence here.
 
 ### Release hold
 
@@ -119,9 +119,12 @@ then reported firmware 0.3.1, `utc_offset_min=-240`, HTTP 200, battery 88%,
 charging and VBUS. A temporary Saturday test window made the real device render
 `I miss looking out the window.`; restoring 12:30 made the prior Scene return.
 
-Production remains unchanged. The Railway deploy gate requires a fresh explicit
-approval naming the production `potatoes-unite` / `net` service and the OTA
-effect on connected devices.
+Production: explicitly approved and deployed to Railway project
+`potatoes-unite`, service `net`, as deployment
+`c5a233ab-f1ac-4c5a-9716-f1e52abfc5f4`. The live health endpoint is green;
+0.3.0 receives the 0.3.1 offer; 0.3.1 receives 204; and the production image is
+1,434,192 bytes with SHA-256 `dcc798df...56b99409`, byte-identical to the image
+that Doreen installed.
 
 ## Next
 - [ ] `assets/varieties.json` + the potato look (art) — same potato on device, File, board, cards.
