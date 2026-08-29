@@ -22,5 +22,74 @@
   "file": "Asked about the crate.",
   "after": "Interesting.",
   "result": "A crate appeared. {n_open} opened it. Contents: undisclosed."
+ },
+ {
+  "id": "midday-delight-v1",
+  "type": "daily_line",
+  "local_at": "12:30",
+  "local_days": [
+   "tue",
+   "thu",
+   "sat"
+  ],
+  "duration_min": 10,
+  "lines": [
+   {
+    "id": "N1",
+    "when": "neighbor",
+    "text": "{neighbor} is my neighbor this week. Noted."
+   },
+   {
+    "id": "N6",
+    "when": "neighbor_recent_6h",
+    "text": "{neighbor} checked in with the Net today."
+   },
+   {
+    "id": "N11",
+    "when": "neighbor_completed_handling_today",
+    "text": "{neighbor} was picked up today."
+   },
+   {
+    "id": "N16",
+    "when": "neighbor_completed_transit_today",
+    "text": "{neighbor} was in transit today."
+   },
+   {
+    "id": "N21",
+    "when": "neighbor_quiet_4h",
+    "text": "{neighbor} reports a quiet world."
+   },
+   {
+    "id": "O1",
+    "text": "I have been thinking about the window."
+   },
+   {
+    "id": "O2",
+    "text": "I miss looking out the window."
+   },
+   {
+    "id": "Q1",
+    "when": "self_quiet_4h",
+    "text": "The world has been quiet for four hours."
+   },
+   {
+    "id": "Q8",
+    "when": "self_still_since_0900",
+    "text": "Nothing happened. I noticed the whole thing."
+   },
+   {
+    "id": "H1",
+    "when": "self_handled_3_today",
+    "text": "The Hands have rearranged the world again."
+   },
+   {
+    "id": "D2",
+    "text": "Plants are quiet. That proves nothing."
+   },
+   {
+    "id": "C3",
+    "text": "The Council is between decisions."
+   }
+  ]
  }
 ]

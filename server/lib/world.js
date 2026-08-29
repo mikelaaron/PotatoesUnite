@@ -36,6 +36,7 @@ const CLAIM_L = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const CLAIM_A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ORIENTATIONS = new Set(['up', 'down', 'side', 'inverted']);
 const SOUNDS = new Set(['quiet', 'normal', 'loud']);
+const HEARTBEAT_COVERAGE_GAP_S = 5 * MIN; // the 120 s cadence may miss one beat without inventing an offline interval
 
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const unit = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -237,6 +238,11 @@ export class World {
     // The running firmware and board come with every heartbeat: after an OTA the server sees which version actually stuck.
     const board = typeof body.board === 'string' && /^[a-z0-9]{1,32}$/.test(body.board) ? body.board : p.board;
     const fw = typeof body.fw === 'string' && /^[\w.+-]{1,32}$/.test(body.fw) ? body.fw : p.fw;
+    const previousHeartbeat = p.st.last_heartbeat_t;
+    if (!previousHeartbeat || t < previousHeartbeat || t - previousHeartbeat > HEARTBEAT_COVERAGE_GAP_S) p.st.heartbeat_coverage_since_t = t;
+    if (p.st.last_heartbeat_orientation && p.st.last_heartbeat_orientation !== orientation) p.st.last_orientation_boundary_t = t;
+    p.st.last_heartbeat_t = t;
+    p.st.last_heartbeat_orientation = orientation;
     this.store.run(
       `UPDATE potatoes SET last_seen_t = ?, battery_pct = ?, charging = ?, vbus = ?, orientation = ?, since_handled_s = ?, sound = ?, temp_c = ?, utc_offset_min = ?, board = ?, fw = ? WHERE id = ?`,
       t, b.pct == null ? null : Math.round(num(b.pct)), b.charging ? 1 : 0, b.vbus ? 1 : 0, orientation, since, sound,
@@ -714,6 +720,65 @@ export class World {
     return null;
   }
 
+  localDayBounds(p, t) {
+    const off = p.utc_offset_min || 0;
+    const localDay = Math.floor((t + off * MIN) / DAY);
+    const start = localDay * DAY - off * MIN;
+    return { start, end: start + DAY };
+  }
+
+  heartbeatCovers(p, since, t) {
+    return !!(p && p.st.heartbeat_coverage_since_t <= since && p.st.last_heartbeat_t >= t - HEARTBEAT_COVERAGE_GAP_S);
+  }
+
+  hadMotionBetween(p, since, until) {
+    if (!p) return false;
+    const types = [...HANDLING];
+    return !!this.store.get(
+      `SELECT 1 FROM events WHERE potato_id = ? AND type IN (${types.map(() => '?').join(', ')}) AND t >= ? AND t <= ? LIMIT 1`,
+      p.id, ...types, since, until);
+  }
+
+  hasQuietCoverage(p, since, t) {
+    const orientationMoved = p && p.st.last_orientation_boundary_t >= since && p.st.last_orientation_boundary_t <= t;
+    return this.heartbeatCovers(p, since, t) && !orientationMoved && !this.hadMotionBetween(p, since, t);
+  }
+
+  completedHandlingToday(p, t) {
+    if (!p) return 0;
+    const { start, end } = this.localDayBounds(p, t);
+    return this.store.get(
+      `SELECT COUNT(*) n FROM entries WHERE potato_id = ? AND kind IN ('pickup', 'handled') AND created_t >= ? AND created_t < ?`,
+      p.id, start, end).n;
+  }
+
+  completedTransitToday(p, t) {
+    if (!p) return false;
+    const { start, end } = this.localDayBounds(p, t);
+    return !!this.store.get(
+      `SELECT 1 FROM events WHERE potato_id = ? AND type = 'transit_end' AND t >= ? AND t < ? LIMIT 1`,
+      p.id, start, end);
+  }
+
+  dailyLineFact(p, neighbor, when, t) {
+    switch (when) {
+      case 'always': return true;
+      case 'neighbor': return !!neighbor;
+      case 'neighbor_recent_6h': return !!neighbor && t - neighbor.last_seen_t >= 0 && t - neighbor.last_seen_t <= 6 * HOUR;
+      case 'neighbor_completed_handling_today': return this.completedHandlingToday(neighbor, t) >= 1;
+      case 'neighbor_completed_transit_today': return this.completedTransitToday(neighbor, t);
+      case 'neighbor_quiet_4h': return this.hasQuietCoverage(neighbor, t - 4 * HOUR, t);
+      case 'self_quiet_4h': return this.hasQuietCoverage(p, t - 4 * HOUR, t);
+      case 'self_still_since_0900': {
+        const { start } = this.localDayBounds(p, t);
+        const morning = start + 9 * HOUR;
+        return t >= morning && this.hasQuietCoverage(p, morning, t);
+      }
+      case 'self_handled_3_today': return this.completedHandlingToday(p, t) >= 3;
+      default: return false;
+    }
+  }
+
   // A recurring authored line uses the offset most recently reported by this potato.
   // It is only a Scene override: it files nothing and does not alter the UTC Question row.
   activeDailyLine(p, t) {
@@ -721,22 +786,48 @@ export class World {
     const localT = t + off * MIN;
     const localSecond = ((localT % DAY) + DAY) % DAY;
     const localDay = Math.floor(localT / DAY);
+    const localWeekday = new Date(localT * 1000).getUTCDay();
+    const weekdayIds = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
     for (const b of this.data.broadcasts) {
       if (!b || b.type !== 'daily_line' || typeof b.id !== 'string' || !b.id) continue;
       const match = typeof b.local_at === 'string' && b.local_at.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
       const durationMin = Number(b.duration_min);
-      const lines = (Array.isArray(b.lines) ? b.lines : [b.line]).filter((line) => typeof line === 'string' && line.length > 0 && line.length <= 60);
-      if (!match || !Number.isInteger(durationMin) || durationMin < 1 || durationMin > 120 || !lines.length) continue;
+      const entries = (Array.isArray(b.lines) ? b.lines : [b.line]).map((line, i) => {
+        if (typeof line === 'string') return { id: String(i), text: line, when: 'always' };
+        if (!line || typeof line !== 'object') return null;
+        return { id: typeof line.id === 'string' ? line.id : String(i), text: line.text, when: line.when || 'always' };
+      }).filter((line) => line && typeof line.text === 'string' && line.text.length > 0 && line.text.length <= 60);
+      if (!match || !Number.isInteger(durationMin) || durationMin < 1 || durationMin > 120 || !entries.length) continue;
+      let scheduledPosition = localDay;
+      if (b.local_days != null) {
+        const days = Array.isArray(b.local_days)
+          ? [...new Set(b.local_days.map((day) => String(day).toLowerCase()).filter((day) => weekdayIds.includes(day)))]
+            .sort((a, c) => ((weekdayIds.indexOf(a) + 6) % 7) - ((weekdayIds.indexOf(c) + 6) % 7))
+          : [];
+        if (!days.includes(weekdayIds[localWeekday])) continue;
+        const mondayBasedDay = (localWeekday + 6) % 7;
+        const localWeek = Math.floor((localDay - mondayBasedDay) / 7);
+        scheduledPosition = localWeek * days.length + days.indexOf(weekdayIds[localWeekday]);
+      }
       const start = Number(match[1]) * HOUR + Number(match[2]) * MIN;
       const duration = durationMin * MIN;
       if (start + duration > DAY || localSecond < start || localSecond >= start + duration) continue;
       const from = b.from ? iso(b.from) : -Infinity, to = b.to ? iso(b.to) : Infinity;
       if (Number.isNaN(from) || Number.isNaN(to) || t < from || t >= to) continue;
-      const order = bagOrder(lines.length, p.seed, `daily_line:${b.id}`);
-      const position = ((localDay % lines.length) + lines.length) % lines.length;
+      const neighbor = this.neighborOf(p, t);
+      const order = bagOrder(entries.length, p.seed, `daily_line:${b.id}`);
+      const position = ((scheduledPosition % entries.length) + entries.length) % entries.length;
+      let selected = null;
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[order[(position + i) % entries.length]];
+        if (this.dailyLineFact(p, neighbor, entry.when, t)) { selected = entry; break; }
+      }
+      if (!selected) continue;
+      const line = fill(selected.text, { neighbor: neighbor ? neighbor.name : '' });
+      if (!line || line.length > 60) continue;
       return {
         ...b,
-        line: lines[order[position]],
+        line,
         from_t: t - (localSecond - start),
         to_t: t + (start + duration - localSecond),
       };
