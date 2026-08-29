@@ -65,7 +65,7 @@ int main() {
   q.push(7000, EV_REQUEST_DONE, 0, "r81");
   Event evs[EVENT_CAP];
   for (int i = 0; i < q.count; ++i) evs[i] = q.at(i);
-  HeartbeatSnapshot snap = {63, true, true, "up", 14400, "quiet"};
+  HeartbeatSnapshot snap = {63, true, true, "up", 14400, "quiet", true, -240};
   char body[1536];
   size_t n = buildHeartbeatJson("00ff", FW_VERSION, 42, snap, evs, q.count, 1756000010L, 10000, body, sizeof(body));
   CHECK(n > 0);
@@ -79,6 +79,7 @@ int main() {
   CHECK_STR(back["orientation"] | "", "up");
   CHECK((back["since_handled_s"] | 0) == 14400);
   CHECK_STR(back["sound"] | "", "quiet");
+  CHECK((back["utc_offset_min"] | 0) == -240);
   CHECK(back["events"].size() == 4);
   CHECK((back["events"][0]["t"] | 0L) == 1756000001L);          // 9s before now
   CHECK_STR(back["events"][1]["type"] | "", "facedown_end");
@@ -89,10 +90,11 @@ int main() {
   n = buildHeartbeatJson("00ff", FW_VERSION, 0, snap, evs, 1, 0L, 10000, body, sizeof(body));
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);
   CHECK((back["events"][0]["t"] | -1L) == 0L);                  // no clock yet
-  HeartbeatSnapshot blind = {-1, false, true, "up", 0, "quiet"};  // PMU missing
+  HeartbeatSnapshot blind = {-1, false, true, "up", 0, "quiet", false, 0};  // PMU/clock missing
   n = buildHeartbeatJson("00ff", FW_VERSION, 0, blind, evs, 0, 0L, 10000, body, sizeof(body));
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);
   CHECK(back["battery"]["pct"].isNull() && !back["battery"].isNull());   // present, null pct
+  CHECK(back["utc_offset_min"].isNull());
 
   n = buildRegisterJson("00ff", "amoled18", FW_VERSION, body, sizeof(body));
   CHECK(deserializeJson(back, body) == DeserializationError::Ok);

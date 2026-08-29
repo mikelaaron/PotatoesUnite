@@ -375,6 +375,21 @@ static bool isNight() {
   const int h = localHour();
   return h >= 0 && (h >= 23 || h < 6);
 }
+
+// Minutes east of UTC. Derive it from the two calendars instead of relying
+// on a non-portable tm_gmtoff field; this is the same calculation as the
+// e-paper citizen. The server uses the optional value for local File times
+// and authored local-time windows. The Question clock remains UTC.
+static int utcOffsetMin() {
+  const time_t now = time(nullptr);
+  struct tm g, l;
+  gmtime_r(&now, &g);
+  localtime_r(&now, &l);
+  int off = (l.tm_hour * 60 + l.tm_min) - (g.tm_hour * 60 + g.tm_min);
+  int dd = l.tm_yday - g.tm_yday;
+  if (dd > 1) dd = -1; else if (dd < -1) dd = 1;
+  return off + dd * 1440;
+}
 // A small local day key for "first pick-up of the day". -1 until the Net
 // has given us a clock.
 static int localDayKey() {
@@ -471,8 +486,11 @@ static void showStatusCard() {
     snprintf(l[3], 48, "Time unknown");
   }
   bool online, ok;
-  { NetLock lk; online = net.online; ok = net.lastHttpOk; }
-  snprintf(l[4], 48, "%s", !online ? "Wi-Fi: none" : ok ? "Net: connected" : "Net: unreachable");
+  uint32_t attempts;
+  { NetLock lk; online = net.online; ok = net.lastHttpOk; attempts = net.httpAttempts; }
+  snprintf(l[4], 48, "%s", !online ? "Wi-Fi: none"
+                          : !attempts ? "Net: checking"
+                          : ok ? "Net: connected" : "Net: unreachable");
   const char *lines[CARD_LINES] = {l[0], l[1], l[2], l[3], l[4]};
   uiSetCard(lines, CARD_LINES);
   cardUntilMs = millis() + 20000;
@@ -595,8 +613,9 @@ static void netPoll(uint32_t tNow) {
   }
   if (tNow - lastSnapshotMs >= 1000) {
     lastSnapshotMs = tNow;
+    const bool hasOffset = time(nullptr) > 1700000000;
     netUpdateSnapshot(battery.pct, battery.charging, battery.vbus, orientationNow,
-                      (uint32_t)sinceHandledS);
+                      (uint32_t)sinceHandledS, hasOffset, hasOffset ? utcOffsetMin() : 0);
   }
 }
 
@@ -663,6 +682,23 @@ static void poolStateSave() {
 // steps to 200 mA, then 100 mA steps to 1000 mA).
 static inline int chgCurMa(uint8_t code) {
   return code <= 8 ? code * 25 : 200 + (code - 8) * 100;
+}
+
+static inline int vbusLimitMa(uint8_t code) {
+  static const int LIMIT_MA[8] = {100, 500, 900, 1000, 1500, 2000, -1, -1};
+  return LIMIT_MA[code & 0x07];
+}
+
+static const char *chargerStateName(uint8_t state) {
+  switch (state) {
+    case XPOWERS_AXP2101_CHG_TRI_STATE:  return "trickle";
+    case XPOWERS_AXP2101_CHG_PRE_STATE:  return "precharge";
+    case XPOWERS_AXP2101_CHG_CC_STATE:   return "constant-current";
+    case XPOWERS_AXP2101_CHG_CV_STATE:   return "constant-voltage";
+    case XPOWERS_AXP2101_CHG_DONE_STATE: return "done";
+    case XPOWERS_AXP2101_CHG_STOP_STATE: return "stopped";
+    default:                              return "unknown";
+  }
 }
 
 // Eyelid coverage over a blink: shut fast, open a little slower.
@@ -842,6 +878,37 @@ static bool pmuSetup(const char *when) {
                    "termination %d mA (defaults, reported only)\n",
                    chargeCurrentMa, vol < 6 ? CHG_VOL[vol] : "?", pre * 25, term * 25);
   return true;
+}
+
+// Read-only PMU evidence for a battery complaint. AXP2101 has no battery
+// current ADC, so this does not invent one: it reports the rails, configured
+// limits and charger state that distinguish "USB is present but constrained"
+// from "the cell is simply still empty". Serial 'P' runs this on demand.
+static void powerReport() {
+  if (!powerReady) {
+    USBSerial.printf("power detail: AXP2101 unavailable | USB host %s | battery values unknown\n",
+                     USBSerial.isPlugged() ? "present" : "absent");
+    return;
+  }
+  battery.present = power.isBatteryConnect();
+  battery.pct = battery.present ? power.getBatteryPercent() : -1;
+  battery.mv = battery.present ? (int)power.getBattVoltage() : -1;
+  battery.charging = power.isCharging();
+  battery.vbus = power.isVbusIn();
+  const uint8_t inputCode = power.getVbusCurrentLimit();
+  const int inputMa = vbusLimitMa(inputCode);
+  const uint8_t charger = (uint8_t)power.getChargerStatus();
+  USBSerial.printf("power detail: batt %d%% %dmV present %d | vbus good %d in %d %umV | "
+                   "system %umV | input limit %s%d%s active %d | charger %s set %dmA "
+                   "charging %d discharging %d standby %d\n",
+                   battery.pct, battery.mv, battery.present ? 1 : 0,
+                   power.isVbusGood() ? 1 : 0, power.isVbusIn() ? 1 : 0,
+                   (unsigned)power.getVbusVoltage(), (unsigned)power.getSystemVoltage(),
+                   inputMa < 0 ? "code " : "", inputMa < 0 ? inputCode : inputMa,
+                   inputMa < 0 ? "" : "mA", power.getCurrentLimitStatus() ? 1 : 0,
+                   chargerStateName(charger), chargeCurrentMa,
+                   power.isCharging() ? 1 : 0, power.isDischarge() ? 1 : 0,
+                   power.isStandby() ? 1 : 0);
 }
 
 static bool touchSetup(const char *when) {
@@ -1174,14 +1241,18 @@ static void serialCommand(int c) {
     case 'u': otaRequestCheck(); USBSerial.println("ota: check requested"); break;
     case 'X': USBSerial.println("restart requested"); USBSerial.flush(); delay(100); ESP.restart(); break;
     case 'b': netRequestHeartbeat(); USBSerial.println("heartbeat requested"); break;
-    case 'i':
-      USBSerial.printf("identity: %s, %s #%s %s claim %s seed %08lx | net %s hb %lu fail %lu rev %d | server %s tz %s | fw %s ota: %s\n",
+    case 'i': {
+      const NetHttpDiagnostic http = netHttpDiagnostic();
+      USBSerial.printf("identity: %s, %s #%s %s claim %s seed %08lx | net %s hb %lu fail %lu rev %d http %d tries %lu age %lums | server %s tz %s | fw %s ota: %s\n",
                        identity.registered ? "registered" : "not registered", identity.name,
                        identity.potatoId, identity.variety, identity.claim, (unsigned long)poolSeed,
                        net.status, (unsigned long)net.heartbeats, (unsigned long)net.failures,
-                       sceneRev, serverUrl, tzString, FW_VERSION, ota.lastResult);
+                       sceneRev, http.code, (unsigned long)http.attempts, (unsigned long)http.ageMs,
+                       serverUrl, tzString, FW_VERSION, ota.lastResult);
       i2cReport();
       break;
+    }
+    case 'P': powerReport(); break;
     case 'W': netForgetWifi(); break;
     case 'R': netReregister(); break;
     case 's': dozeReport(); break;
@@ -1207,7 +1278,7 @@ static void serialCommand(int c) {
       USBSerial.println();
       break;
     case 'h':
-      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity + boot I2C, m ration state, s doze state + last wake, S doze now, W forget wifi, R register again");
+      USBSerial.println("keys: t tap, n night, p pickup, d drop, k dark-restored, q demo Question, 1/2/3 press a button, x clear, a aggrieved, w pleased, z asleep, v waiting, e events, c claim, b heartbeat, i identity + Net result + boot I2C, P PMU power detail, m ration state, s doze state + last wake, S doze now, W forget wifi, R register again");
       break;
     default: break;
   }
@@ -1230,8 +1301,9 @@ static void dozeBeatNow() {
   ++dozeBeats;
   lastBatteryPollMs = 0;   // it has been fifteen minutes; take a reading now
   batteryPoll(millis());
+  const bool hasOffset = time(nullptr) > 1700000000;
   netUpdateSnapshot(battery.pct, battery.charging, battery.vbus, orientationNow,
-                    (uint32_t)sinceHandledS);
+                    (uint32_t)sinceHandledS, hasOffset, hasOffset ? utcOffsetMin() : 0);
   if (!netSleepBeat(DOZE_BEAT_TIMEOUT_MS)) ++dozeBeatFails;
 }
 

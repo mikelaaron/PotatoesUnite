@@ -64,7 +64,11 @@ python3 firmware/tools/serial_capture.py /dev/cu.usbmodem2101 20 /tmp/potato.log
 Serial dev keys (lower case, `h` lists them): `t` tap, `n` night, `p` pickup,
 `d` drop, `k` dark-restored, `q` demo Question with three buttons, `1`/`2`/`3` press a button, `x` clear,
 `a`/`w`/`z`/`v` expressions, `e` event queue, `c` status card (what long-press shows), `b` heartbeat
-now, `u` OTA check now, `i` identity and net status, `W` forget Wi-Fi credentials, `R` register again (e.g. after pointing at a new server; the server also triggers this by answering a heartbeat with 404).
+now, `u` OTA check now, `i` identity and the last exact Net result, `P`
+read-only PMU detail (battery/VBUS/system voltage, input limit and charger
+state), `W` forget Wi-Fi credentials, `R` register again (e.g. after pointing
+at a new server; the server also triggers this by answering a heartbeat with
+404).
 
 ## Wi-Fi setup
 
@@ -164,6 +168,10 @@ All blits are even-aligned; telemetry prints `ODD!` if one is not.
   rasterizer to a PPM (`c++ -std=c++11 -I firmware/potato ...`).
 - `tools/protocol_test.cpp` — checks `protocol.h` (wire format) and the
   counted-duration words against the stub's and the doc's JSON.
+- `tools/watch_battery.sh` — samples one citizen's battery, power flags and
+  heartbeat age from the local Net's SQLite WAL without opening/resetting the
+  USB port. Use it for a battery run, for example:
+  `firmware/tools/watch_battery.sh server/data/potatoes.db 0001 14400 60 | tee /tmp/doreen-battery.csv`.
 
 ## Releasing (OTA)
 

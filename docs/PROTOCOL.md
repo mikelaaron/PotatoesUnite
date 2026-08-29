@@ -125,6 +125,7 @@ Clarifications from building `server/` against the contract above. Nothing here 
 *Firmware (`firmware/potato`), 2026-08-22.*
 
 - **Event `t` may be 0.** The device keeps event times as uptime and converts to epoch at send. Before it has a clock (no NTP yet, first minutes after boot) it sends `"t": 0`; the server should use arrival time for those.
+- **`utc_offset_min` is sent once the clock is set.** The AMOLED already keeps a POSIX timezone for its local night behavior; its heartbeat now derives the current minutes east of UTC from the UTC and local calendars. It omits the field before NTP answers. This matches the e-paper citizen and lets the server place local-time authored windows without moving the UTC Question clock.
 - **Orientation, as the AMOLED judges it** (screen +y is down): `down` = face down (az > 0.72); `inverted` = standing on its top edge (in-plane gravity > 0.6 g pointing up the screen); `side` = standing on a long edge (in-plane gravity mostly along x); `up` = everything else, i.e. flat face-up or standing upright. A request with `orientation:up` is therefore satisfied by a potato lying flat.
 - **`sound` is `"quiet"` on `amoled18` for now.** The ES8311 mic path is not wired; the field is present so the schema is stable.
 - **`cue: throat_clear` is accepted and skipped** on `amoled18` (no audio path). `incident` widens the eyes for four seconds. `silence` does nothing on the device.

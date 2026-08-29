@@ -63,7 +63,10 @@ struct NetShared {
   char statusLine[MAX_LINE];   // shown when there is no scene (portal instructions)
   char status[48];             // one word for telemetry
   bool online, timeSynced, registered;
-  bool lastHttpOk;             // the last register/heartbeat/choice got an answer
+  bool lastHttpOk;             // last register/heartbeat/choice got any HTTP answer
+  int lastHttpCode;            // 0 before the first try; negative = transport/DNS/TLS
+  uint32_t httpAttempts;
+  uint32_t lastHttpAtMs;
   uint32_t heartbeats, failures;
   // loop -> task
   bool wantHeartbeat;
@@ -131,6 +134,18 @@ static void netLog(const char *fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, ap);
   va_end(ap);
   USBSerial.printf("net: %s\n", buf);
+}
+
+// Keep the status card honest and make a failed Net check diagnosable after
+// the fact. Battery percentage is deliberately absent: an HTTP result is a
+// transport observation, not a battery inference. Any positive HTTP status,
+// including an application error such as 429, proves the Net was reachable.
+static void netRecordHttp(int code) {
+  NetLock l;
+  net.lastHttpOk = code > 0;
+  net.lastHttpCode = code;
+  net.lastHttpAtMs = millis();
+  ++net.httpAttempts;
 }
 
 // --------------------------------------------------------------- identity ---
@@ -313,12 +328,12 @@ static bool doRegister() {
   String resp;
   buildRegisterJson(identity.secretHex, BOARD_NAME, FW_VERSION, body, sizeof(body));
   const int code = httpPostJson("/v0/register", String(body), resp);
+  netRecordHttp(code);
   if (code != 200) {
     netLog("register: http %d", code);
-    { NetLock l; ++net.failures; net.lastHttpOk = false; }
+    { NetLock l; ++net.failures; }
     return false;
   }
-  { NetLock l; net.lastHttpOk = true; }
   JsonDocument r;
   if (deserializeJson(r, resp) != DeserializationError::Ok) {
     netLog("register: bad json");
@@ -372,6 +387,7 @@ static bool doHeartbeat() {
                      body, sizeof(body));
   String resp;
   const int code = httpPostJson("/v0/heartbeat", String(body), resp);
+  netRecordHttp(code);
   if (code == 401 || code == 403 || code == 404) {
     // A server that does not know this secret: a new server, or a wiped
     // database. Register again; the secret and the events are kept.
@@ -380,7 +396,6 @@ static bool doHeartbeat() {
     netPrefs.remove("pid");
     NetLock l;
     net.registered = false;
-    net.lastHttpOk = true;   // the server answered; it just does not know us
     ++net.failures;
     return false;
   }
@@ -388,14 +403,12 @@ static bool doHeartbeat() {
     netLog("heartbeat: http %d (%d events held)", code, nEvents);
     NetLock l;
     ++net.failures;
-    net.lastHttpOk = code > 0;
     return false;
   }
   {
     NetLock l;
     net.events->drop(nEvents);
     ++net.heartbeats;
-    net.lastHttpOk = true;
   }
   otaConfirmValid();   // a new image has proven itself: cancel the rollback
   if (nowEpoch > 1700000000) netPrefs.putULong("last_epoch", (unsigned long)nowEpoch);
@@ -409,14 +422,13 @@ static bool doChoice(int rev, const char *id) {
   String resp;
   buildChoiceJson(identity.secretHex, rev, id, body, sizeof(body));
   const int code = httpPostJson("/v0/choice", String(body), resp);
+  netRecordHttp(code);
   if (code != 200 && code != 409) {
     netLog("choice %s: http %d", id, code);
     NetLock l;
     ++net.failures;
-    net.lastHttpOk = code > 0;
     return false;
   }
-  { NetLock l; net.lastHttpOk = true; }
   netLog("choice %s: http %d, %u bytes back", id, code, resp.length());
   storeScene(resp);
   return true;
@@ -687,13 +699,15 @@ static void netBegin(Preferences &loopPrefs, EventQueue *events) {
 
 // Loop side: update what the next heartbeat will carry. Cheap; call often.
 static void netUpdateSnapshot(int pct, bool charging, bool vbus, const char *orientation,
-                              uint32_t sinceHandledS) {
+                              uint32_t sinceHandledS, bool hasOffset, int utcOffsetMin) {
   NetLock l;
   net.snap.pct = pct;
   net.snap.charging = charging;
   net.snap.vbus = vbus;
   strncpy(net.snap.orientation, orientation, sizeof(net.snap.orientation) - 1);
   net.snap.sinceHandledS = sinceHandledS;
+  net.snap.hasOffset = hasOffset;
+  net.snap.utcOffsetMin = utcOffsetMin;
 }
 
 static void netRequestHeartbeat() { NetLock l; net.wantHeartbeat = true; }
@@ -733,6 +747,19 @@ static void netStatusCopy(char *out, size_t cap) {
   NetLock l;
   strncpy(out, net.status, cap - 1);
   out[cap - 1] = 0;
+}
+
+struct NetHttpDiagnostic {
+  int code;
+  uint32_t attempts;
+  uint32_t ageMs;
+};
+
+static NetHttpDiagnostic netHttpDiagnostic() {
+  NetLock l;
+  NetHttpDiagnostic d = {net.lastHttpCode, net.httpAttempts,
+                         net.httpAttempts ? millis() - net.lastHttpAtMs : 0};
+  return d;
 }
 
 static void netSendChoice(int rev, const char *id) {

@@ -26,6 +26,8 @@ struct HeartbeatSnapshot {
   char orientation[10];
   uint32_t sinceHandledS;
   const char *sound;     // "quiet" | "normal" | "loud"
+  bool hasOffset;
+  int utcOffsetMin;      // minutes east of UTC; omitted until the clock is set
 };
 
 struct SceneData {
@@ -124,6 +126,7 @@ static size_t buildHeartbeatJson(const char *secretHex, const char *fw, int revS
   doc["orientation"] = snap.orientation;
   doc["since_handled_s"] = snap.sinceHandledS;
   doc["sound"] = snap.sound;
+  if (snap.hasOffset) doc["utc_offset_min"] = snap.utcOffsetMin;
   JsonArray arr = doc["events"].to<JsonArray>();
   const bool synced = nowEpoch > 1700000000L;
   for (int i = 0; i < nEvents; ++i) {
