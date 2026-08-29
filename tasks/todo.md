@@ -87,6 +87,42 @@ The active `Potatoes Unite weekly editorial packet` heartbeat runs Mondays at
 and one Question seed for review. It is explicitly barred from publishing,
 deploying, or editing the live broadcast schedule.
 
+## 29 Aug — approved midday release slice
+
+- [x] Add a red heartbeat-seam test for a local-time midday line on exactly
+  three nonconsecutive weekdays, with the Question returning outside the window.
+- [x] Make the approved 12-line pool live without ever showing an unresolved
+  `{neighbor}` token or a neighbor claim that the Net cannot support.
+- [x] Verify deterministic selection, the ten-minute display window, truth
+  gates, and the complete server suite.
+- [x] Cut an AMOLED 0.3.1 OTA containing `utc_offset_min` and the new power/Net
+  diagnostics; verify build, binary hash, and firmware manifest.
+- [x] Exercise the real heartbeat and OTA path on Doreen while she is on USB.
+- [ ] Release the proven scheduler and OTA, then record live evidence here.
+
+### Release hold
+
+The user approved the 12 selected lines and this complete release slice on
+29 Aug. No social post is part of this release, and the weekly editorial
+automation remains draft-only.
+
+### Review
+
+Server: the full suite passes 96/96. The active schedule is Tuesday, Thursday
+and Saturday at 12:30 device-local time for ten minutes. Conditional lines use
+recorded facts; continuity claims need new heartbeat coverage and do not infer
+history across a gap. Question timing, the File and Bulletins are unchanged.
+
+Firmware: Doreen downloaded the credential-free 0.3.1 image over the local Net,
+verified all 1,434,192 bytes (`dcc798df...56b99409`), rebooted into `ota_1`, and
+then reported firmware 0.3.1, `utc_offset_min=-240`, HTTP 200, battery 88%,
+charging and VBUS. A temporary Saturday test window made the real device render
+`I miss looking out the window.`; restoring 12:30 made the prior Scene return.
+
+Production remains unchanged. The Railway deploy gate requires a fresh explicit
+approval naming the production `potatoes-unite` / `net` service and the OTA
+effect on connected devices.
+
 ## Next
 - [ ] `assets/varieties.json` + the potato look (art) — same potato on device, File, board, cards.
 - [ ] `firmware/press` — e-paper bulletin (GPIO17 latch, 15 s refresh, two editions a day).
