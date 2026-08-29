@@ -131,19 +131,25 @@ paper-portrait:
 # writes the manifest /v0/firmware serves. Never flash a release by USB to
 # test OTA; that is what OTA is for.
 #
+# OTA images are served by the public Net, so they must never include a local
+# secrets.h. Existing potatoes keep their Wi-Fi and Net URL in NVS; the public
+# URL below is only the clean fallback for an otherwise unconfigured image.
+#
 # The compile log lives NEXT TO the build path, never inside it: when the
 # flags fingerprint changes (release and webflash share build/<board> but
 # webflash bakes in SERVER_URL_DEFAULT), arduino-cli wipes the build path
 # mid-compile and takes an in-flight log with it — the compile "succeeds",
 # the log is gone, and grep dies with a bare "No such file or directory".
 RELEASE_DIR ?= $(CURDIR)/../server/data/releases
+OTA_SERVER_URL ?= https://potatoesunite.com
+OTA_SERVER_FLAG = -DSERVER_URL_DEFAULT=\"$(OTA_SERVER_URL)\"
 
 release:
 	@test -n "$(BOARD)" || { echo "usage: make release BOARD=potato|paper"; exit 1; }
 	@set -e; \
 	case "$(BOARD)" in \
-	  potato) ID=amoled18; FQ="$(FQBN)"; FLAGS="$(EXTRA_FLAGS)"; SLOT=3145728;; \
-	  paper)  ID=epaper154; FQ="$(PAPER_FQBN)"; FLAGS="-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI)"; SLOT=2621440;; \
+	  potato) ID=amoled18; FQ="$(FQBN)"; FLAGS="$(EXTRA_FLAGS) $(OTA_SERVER_FLAG) -DNO_SECRETS=1"; SLOT=3145728;; \
+	  paper)  ID=epaper154; FQ="$(PAPER_FQBN)"; FLAGS="-DEPD_ROTATE_180=$(PAPER_ROTATE) -DEPD_HW_SPI=$(PAPER_HW_SPI) $(OTA_SERVER_FLAG) -DNO_SECRETS=1"; SLOT=2621440;; \
 	  *) echo "BOARD must be potato or paper"; exit 1;; \
 	esac; \
 	VER=$$(sed -n 's/.*#define FW_VERSION "\(.*\)".*/\1/p' $(BOARD)/version.h); \

@@ -32,3 +32,7 @@ data/releases/*/*.bin
 # manifest does not mean the image beside it arrived.
 !data/releases/amoled18/webflash-0.3.0.bin
 !data/releases/epaper154/webflash-0.3.0.bin
+
+# The current AMOLED OTA has passed a real network update on Doreen. Keep the
+# exact image available to `railway up`; superseded OTA images stay ignored.
+!data/releases/amoled18/0.3.1.bin

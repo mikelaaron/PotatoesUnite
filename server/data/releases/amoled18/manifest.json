@@ -1,8 +1,8 @@
 {
-  "version": "0.2.4",
-  "file": "0.2.4.bin",
-  "sha256": "9d15ab8b2fb89fa140951ab461f5f563b73ddcb43fc5854c4f09109261bf0d37",
-  "size": 1344192,
-  "notes": "Eyes hold forward; a new line earns a glance down; no more reading",
-  "published": "2026-08-23T22:30:41Z"
+  "version": "0.3.1",
+  "file": "0.3.1.bin",
+  "sha256": "dcc798dfbdf6e8b0b7acc4d9273c9d8c8c0d3ec71f0983b8316749ca56b99409",
+  "size": 1434192,
+  "notes": "Local time and clearer Net and power diagnostics.",
+  "published": "2026-08-29T23:34:10Z"
 }
