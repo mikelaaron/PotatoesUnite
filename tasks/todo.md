@@ -16,6 +16,49 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 - [x] `firmware/potato` — fork of creature: lying-down potato per art spec, text line + up to three touch buttons, captive-portal Wi-Fi (AP POTATO-xxxx), protocol v0 (register/heartbeat/scene/choice, NVS identity + cached scene), IMU events, AXP2101 battery. Flashed and verified over serial; 41% of flash, 55 fps.
 - [x] Live: both talking on the LAN (22 Aug night). Doreen #0001 registered, heartbeats, File fills. Ration applied on both sides after the first handling session; copy review applied; local times on the Net and the File; status card on long-press; charge current 150 mA for the 400 mAh cell.
 
+## 29 Aug — traction, Doreen health, and more daily delight
+
+- [x] Verify Doreen on USB at 2%: VBUS/charging state, battery voltage, Wi-Fi association, configured Net URL, heartbeat result, firmware version, and doze diagnostics.
+- [x] Separate low-battery behavior from the reported `Net unreachable` state with a reproducible serial/HTTP check.
+- [x] Investigate battery drain from measurements and the current power/doze implementation; produce a ranked root-cause finding before changing firmware.
+  - [x] Trace the AMOLED power path: awake is 240 MHz/60 fps with Wi-Fi and high-rate IMU; the panel goes dark after 150 s only off VBUS; doze begins after 30 min (5 min at night), never on VBUS; unwired IMU INT requires a 120 ms wake-and-I2C poll.
+  - [x] Add read-only serial evidence: `i` now reports exact last HTTP code/attempt age; `P` reports AXP2101 battery, VBUS/system rails, input-current limiting and charger state. Initial Wi-Fi association now says `Net: checking`, not the false `Net: unreachable` before any HTTP attempt.
+  - [x] Add and smoke-test `firmware/tools/watch_battery.sh`, which records battery slope and heartbeat age from the local SQLite WAL without opening/resetting the USB device.
+  - [x] Verify the diagnostic build (`make -C firmware build`) and host protocol test. No hardware flash or current measurement was performed in this lane.
+  - [ ] Measure awake-battery, awake-USB and forced-doze current at the USB/cell rail; one overnight percentage alone cannot validate the 2.5-4 mA estimate.
+- [x] Audit the 30 daily Questions for variety and staying power under the voice rules — `docs/DAILY_DELIGHT_AUDIT.md`.
+- [x] Design the smallest protocol-compatible midday surprise: authored, non-quiz, no human typing, no AI, and no new product machinery.
+  - [x] Heartbeat seam spec: a hot-reloaded `daily_line` gives each potato one seeded authored line during a bounded local-time window; it has no choices or File/Bulletin entry, and the Question still opens/closes at 13:00/23:00 UTC.
+- [x] Implement and verify only changes supported by the findings above.
+
+### Review
+
+Complete for this pass. Battery lane: 2% is not an input to the `Net unreachable` decision;
+that card means Wi-Fi is associated and the last register/heartbeat/choice did
+not receive an HTTP answer. A critically low cell can still cause an
+indirect brownout or RF instability off VBUS, but that requires voltage/reset
+evidence. The immediate incident was the saved LAN Net at `10.0.0.245:8080`
+not running; after it started, Doreen drained 27 queued events on a 200 response.
+Live DB evidence on 29 Aug showed firmware 0.3.0 rising from the reported 2%
+to 15% by 18:42, with `charging=1`, `vbus=1` and fresh heartbeats; charging and
+the Net were both functioning. Do not raise
+the 150 mA charge setting for the 400 mAh cell; first use
+the new PMU report and external current measurement to distinguish weak VBUS,
+input-current limiting, normal pre/constant-current recovery, failed doze entry,
+and an optimistic 120 ms polled-doze estimate.
+
+Midday server lane: `daily_line` schedules now hot-reload from
+`broadcasts.json`, rotate an authored pool deterministically by seed and local
+day, and use the existing Scene without a new Scene or endpoint. AMOLED
+heartbeats now send the protocol's existing optional `utc_offset_min` after the
+clock is set, so a future versioned OTA can honor actual local midday. No
+production schedule or copy was enabled. The new boundary, rotation, and offset
+tests pass, as does the full server suite (86/86).
+
+Daily delight audit: 29 ordinary days before the first repeat; enough for the
+launch week, not the second month. Recommended a three-in-seven, no-choice
+trial with no File or Standing effect.
+
 ## Next
 - [ ] `assets/varieties.json` + the potato look (art) — same potato on device, File, board, cards.
 - [ ] `firmware/press` — e-paper bulletin (GPIO17 latch, 15 s refresh, two editions a day).
