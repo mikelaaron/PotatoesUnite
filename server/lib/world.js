@@ -714,6 +714,36 @@ export class World {
     return null;
   }
 
+  // A recurring authored line uses the offset most recently reported by this potato.
+  // It is only a Scene override: it files nothing and does not alter the UTC Question row.
+  activeDailyLine(p, t) {
+    const off = p.utc_offset_min || 0;
+    const localT = t + off * MIN;
+    const localSecond = ((localT % DAY) + DAY) % DAY;
+    const localDay = Math.floor(localT / DAY);
+    for (const b of this.data.broadcasts) {
+      if (!b || b.type !== 'daily_line' || typeof b.id !== 'string' || !b.id) continue;
+      const match = typeof b.local_at === 'string' && b.local_at.match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+      const durationMin = Number(b.duration_min);
+      const lines = (Array.isArray(b.lines) ? b.lines : [b.line]).filter((line) => typeof line === 'string' && line.length > 0 && line.length <= 60);
+      if (!match || !Number.isInteger(durationMin) || durationMin < 1 || durationMin > 120 || !lines.length) continue;
+      const start = Number(match[1]) * HOUR + Number(match[2]) * MIN;
+      const duration = durationMin * MIN;
+      if (start + duration > DAY || localSecond < start || localSecond >= start + duration) continue;
+      const from = b.from ? iso(b.from) : -Infinity, to = b.to ? iso(b.to) : Infinity;
+      if (Number.isNaN(from) || Number.isNaN(to) || t < from || t >= to) continue;
+      const order = bagOrder(lines.length, p.seed, `daily_line:${b.id}`);
+      const position = ((localDay % lines.length) + lines.length) % lines.length;
+      return {
+        ...b,
+        line: lines[order[position]],
+        from_t: t - (localSecond - start),
+        to_t: t + (start + duration - localSecond),
+      };
+    }
+    return null;
+  }
+
   // ------------------------------------------------------------------ the Question
   dayIndex(day) { return Math.round((C.dayStartOfKey(day) - C.dayStartOfKey(this.store.meta('net_open_day'))) / DAY); }
   questionRow(day) { return this.store.get('SELECT * FROM question_days WHERE day = ?', day); }
@@ -1196,7 +1226,7 @@ export class World {
     const countRow = this.questionRow(countDay);
     const countClose = C.closeAt(C.dayStartOfKey(countDay));
     const silence = this.activeBroadcast('silence', t);
-    const lineBc = this.activeBroadcast('line', t);
+    const lineBc = this.activeBroadcast('line', t) || this.activeDailyLine(p, t);
     const open = this.questionOpen(t);
     const vote = open ? this.store.get('SELECT * FROM votes WHERE day = ? AND potato_id = ?', day, p.id) : null;
     const since = this.sinceHandled(p, t);

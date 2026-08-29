@@ -72,6 +72,7 @@ All hot-reloaded within ~2 s of a save. A file that fails to parse is ignored an
 - `data/broadcasts.json` — an array of scheduled overrides:
   - `{"id":"s1","type":"silence","from":"2026-09-01T00:00:00Z","to":"2026-09-02T00:00:00Z"}` — the Silence. No Question that day, no requests, every screen shows the line.
   - `{"id":"l1","type":"line","from":"…","to":"…","line":"…"}` — one line on every screen while active.
+  - `{"id":"midday","type":"daily_line","local_at":"12:30","duration_min":20,"lines":["…"]}` — one authored, non-interactive line per potato's local day. The seed walks the pool without a repeat until every line has played. The reported `utc_offset_min` sets local time; potatoes without one use UTC. The line briefly overlays the Scene but does not move the Question's 13:00/23:00 UTC clock, enter the File, or print in a Bulletin. `duration_min` must be 1–120 and every line must be ≤ 60 characters. Optional absolute `from`/`to` bounds can enable or retire the schedule.
 - `data/pools/*.json` — reactions, charging, requests, net lines, File templates, Bulletin templates. Copy is verbatim from the voice doc; `{fields}` are live values. Keys beginning with `_` are notes.
 - `../assets/varieties.json` — the ten varieties (skin, silhouette, eyes, dither, lean). One file for the device, the File, the board and the cards.
 
