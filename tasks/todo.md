@@ -59,6 +59,34 @@ Daily delight audit: 29 ordinary days before the first repeat; enough for the
 launch week, not the second month. Recommended a three-in-seven, no-choice
 trial with no File or Standing effect.
 
+## 29 Aug — weekly editorial system
+
+- [x] Build a plainspoken device-line bank weighted toward true neighbor news,
+  outside/the window, the county, the world, the warm machine, and quiet desk life;
+  add no food lines.
+- [x] Build a Tuber topic queue that can become one or two restrained posts a week
+  without pretending the Net is larger or busier than it is.
+- [x] Define a repeatable weekly packet: three device lines, two Tuber topics, one
+  Question seed, and a short voice/canon check. Draft only; never auto-publish.
+- [x] Schedule a weekly Codex heartbeat to prepare that packet for review.
+
+### Review
+
+Complete. `docs/MIDDAY_LINE_BANK.md` contains 65 verified device lines in 13
+truth-gated pools: 25 neighbor lines, no food or weather lines, and plain
+outside/window and desk-life material. A 16-character neighbor and six-digit
+Net count render the longest line at 57 characters; none exceeds 60.
+
+`docs/TUBER_TOPIC_QUEUE.md` contains 28 durable truth-gated topic seeds, ten
+short draft structures, and five immediate drafts based on this week's
+owner-reported traction and Doreen incident. The cadence is one anchor post and
+one optional post per week; a quiet second slot stays empty.
+
+The active `Potatoes Unite weekly editorial packet` heartbeat runs Mondays at
+09:00 local time in this task. It drafts three device lines, two Tuber topics,
+and one Question seed for review. It is explicitly barred from publishing,
+deploying, or editing the live broadcast schedule.
+
 ## Next
 - [ ] `assets/varieties.json` + the potato look (art) — same potato on device, File, board, cards.
 - [ ] `firmware/press` — e-paper bulletin (GPIO17 latch, 15 s refresh, two editions a day).

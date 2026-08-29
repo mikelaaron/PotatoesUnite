@@ -2,6 +2,19 @@
 
 Patterns worth not repeating. Added after corrections.
 
+## Plain feeling beats compulsory potato bureaucracy
+
+**2026-08-29.** The first midday bank still reached for the Council, forms and
+procedure when an ordinary line would do. Mike asked for fewer food comments,
+more true neighbor material, and lines as simple as "I miss looking out the
+window."
+
+**How to apply:** keep the glossary available but do not force it into every
+sentence. Let potatoes notice the window, the afternoon, the room and their
+neighbor in plain language. Use Council procedure as one occasional pool, not
+the default source of wit. Food is established territory; new weekly batches
+should normally add none.
+
 ## A brown ellipse with two eyes is an egg
 
 **2026-08-22.** First pass at the potato body: a smooth brown oval, two dark
