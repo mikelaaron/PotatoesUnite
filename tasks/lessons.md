@@ -314,3 +314,30 @@ check whether the *console* died by looking for evidence the app is alive
 elsewhere — the panel, the network, the server's heartbeat record. Recovery is
 a real power cycle; with a battery attached USB is not the power switch, so it
 takes a PWR long-press (~6 s), not a replug.
+
+## A stopped LAN server can be the symptom while the saved LAN URL is the defect
+
+**2026-08-30.** Doreen showed `Net unreachable`; live serial correctly proved
+that Wi-Fi and power were healthy and that no LAN server answered. I stopped
+at “start the local server,” but the owner corrected the premise: Doreen is a
+public citizen and should use the same full online Net as everyone else.
+
+**How to apply:** always compare a citizen's configured URL with its intended
+deployment role. For a public citizen, `http://potatoes.local:8080` or a LAN IP
+is itself a configuration defect even when starting a local server would make
+the heartbeat green. Repair the saved URL to the verified public HTTPS Net,
+preserve identity/Wi-Fi/queued events, and prove the public heartbeat.
+
+## An NVS-preserving flash still destroys a RAM event queue
+
+**2026-08-30.** Doreen had 32 events held while her configured Net was
+unreachable. I correctly preserved the NVS partition during the public URL
+migration, but flashed before checking where the event queue lived. It was a
+RAM `EventQueue`, so the reset discarded all 32 events even though her secret,
+identity, claim, Wi-Fi, and cached scene survived.
+
+**How to apply:** before any reset, upload, OTA, or power cycle during a Net
+migration, send serial `e` and trace the queue's storage. If it is non-empty
+and RAM-only, do not reset. Change the live URL through the captive portal or
+another no-reset path, get an HTTP 200 heartbeat, and verify the queue drains
+before touching firmware.

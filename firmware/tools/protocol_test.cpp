@@ -8,12 +8,30 @@
 #include "version.h"
 #include "protocol.h"
 #include "pools.h"
+#include "../server_config.h"
 
 static int failures = 0;
 #define CHECK(cond) do { if (!(cond)) { ++failures; printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #cond); } } while (0)
 #define CHECK_STR(a, b) do { if (strcmp((a), (b)) != 0) { ++failures; printf("FAIL %s:%d \"%s\" != \"%s\"\n", __FILE__, __LINE__, (a), (b)); } } while (0)
 
 int main() {
+  // A public image must carry an existing citizen off the legacy LAN default,
+  // while leaving intentional custom Nets alone.
+  {
+    char url[96];
+    CHECK(selectServerUrl("http://potatoes.local:8080", "https://potatoesunite.com",
+                          url, sizeof(url)));
+    CHECK_STR(url, "https://potatoesunite.com");
+    CHECK(!selectServerUrl("http://10.0.0.8:8080", "https://potatoesunite.com",
+                           url, sizeof(url)));
+    CHECK_STR(url, "http://10.0.0.8:8080");
+    CHECK(!selectServerUrl("http://potatoes.local:8080", "http://potatoes.local:8080",
+                           url, sizeof(url)));
+    CHECK_STR(url, "http://potatoes.local:8080");
+    CHECK(!selectServerUrl("", "https://potatoesunite.com", url, sizeof(url)));
+    CHECK_STR(url, "https://potatoesunite.com");
+  }
+
   // The stub's Question scene, as firmware/tools/stub_server.py sends it.
   const char *stubScene =
       "{\"rev\": 7, \"expression\": \"waiting\", \"line\": \"Ketchup. Which would you least object to?\", "

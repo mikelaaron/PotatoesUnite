@@ -16,6 +16,78 @@ Hacker project. Days, not months. The device is the conduit; the Net is the prod
 - [x] `firmware/potato` — fork of creature: lying-down potato per art spec, text line + up to three touch buttons, captive-portal Wi-Fi (AP POTATO-xxxx), protocol v0 (register/heartbeat/scene/choice, NVS identity + cached scene), IMU events, AXP2101 battery. Flashed and verified over serial; 41% of flash, 55 fps.
 - [x] Live: both talking on the LAN (22 Aug night). Doreen #0001 registered, heartbeats, File fills. Ration applied on both sides after the first handling session; copy review applied; local times on the Net and the File; status card on long-press; charge current 150 mA for the 400 mAh cell.
 
+## 30 Aug — Doreen `Net unreachable` live check
+
+- [x] Identify the attached board by USB descriptor without resetting it.
+- [x] Capture Doreen's status, identity/network, PMU, and forced-heartbeat diagnostics over serial.
+- [x] Check the configured Net host, mDNS resolution, local listener, and HTTP health from the Mac.
+- [x] Record the finding and evidence below; make no firmware change unless the evidence requires one.
+
+### Review
+
+Confirmed attached USB MAC `28:84:85:90:B4:58` is Doreen. Firmware 0.3.1
+reported Wi-Fi online, saved server `http://potatoes.local:8080`, last HTTP
+result `-100`, `server unresolved`, and two forced heartbeats failed with
+`mDNS: potatoes.local not found`; all 32 queued events remained held. Power is
+healthy: 100%, 4.200 V battery, VBUS good at 5.225 V, system 4.415 V, charger
+in constant-voltage mode at the configured 150 mA, with no input-limit event.
+
+The Mac is still `10.0.0.245`, but nothing listens on TCP 8080; both
+`127.0.0.1:8080/health` and `10.0.0.245:8080/health` failed, and
+`potatoes.local` did not resolve. The similarly named long-running `npm start`
+process belongs to `/Users/mikelaaron/Documents/ChatGPT/stand-in` and listens
+on port 4317, not this project. Root cause: this repository's local Net server
+and its mDNS advertisement are not running. No firmware or server change was
+made; recovery is `cd server && npm start`, followed by one forced heartbeat.
+
+Correction from the owner: Doreen is a public citizen now and must not depend
+on a LAN Net. The stopped local process explains the immediate transport
+failure, but the actual configuration defect is her persisted legacy
+`http://potatoes.local:8080` URL. Do not restore that dependency.
+
+## 30 Aug — move Doreen to the public Net
+
+- [x] Add a red host test for migrating the exact legacy default only in a public build.
+- [x] Implement the smallest NVS server-URL migration without touching identity, Wi-Fi, claim, scene, or queued events.
+- [x] Build and flash the public AMOLED firmware while preserving NVS.
+- [x] Verify `https://potatoesunite.com`, certificate-verified TLS, and an HTTP 200 heartbeat on the attached board.
+- [x] Reconcile public citizen #0004's generated name `Derek` back to `Doreen` with approved, temporary production database access.
+
+### Review
+
+Firmware 0.3.2 migrated the persisted exact legacy default to
+`https://potatoesunite.com`; custom Net URLs and LAN development builds remain
+untouched. The first public attempt exposed a second real defect: the 272 px
+DMA tile consumed 148 KB internal RAM, leaving ~27 KB, and mbedTLS failed with
+`SSL - Memory allocation failed`. A 192 px even-aligned tile leaves ~104 KB
+after a request and costs about four frames per second (54 -> 50 observed),
+while preserving the rendering path. The device then completed a verified
+TLS heartbeat: HTTP 200, 1,017 bytes, public scene revision 1, status card
+`Net: connected`.
+
+The local database identity could not travel intact because production already
+has citizens #0001-#0003, with #0001 assigned to an e-paper board. Production
+accepted this hardware as AMOLED #0004 and generated `Derek`, fingerling,
+claim `GCC-WVK`. Renaming that one exact production row to Doreen requires
+production volume access; Railway correctly refused adding a persistent SSH
+key without the owner's explicit authorization.
+
+After authorization, registered the Mac's existing SSH public key temporarily,
+created and opened the consistent backup
+`/data/potatoes.db.pre-doreen-rename-20260830T1958Z` (131,072 bytes), and ran a
+guarded transaction matching exactly `#0004 / amoled18 / Derek / fingerling`.
+The resulting row is `Doreen / purple_majesty`, retaining public number #0004
+and claim `GCC-WVK`. Serial `R` refreshed that authoritative identity onto the
+device; a forced heartbeat returned HTTP 200 and the final card read
+`DOREEN #0004 / PURPLE MAJESTY` and `Net: connected`. The temporary Railway
+SSH key was then removed.
+
+Important loss: I flashed before the read-only firmware agent returned its
+queue warning. The 32 held events were RAM-only and the reset discarded them.
+The secret, old local identity, claim, cached scene, Wi-Fi, and NVS survived,
+but the events did not. Future migrations must inspect serial `e` first and
+either drain successfully or use the live captive portal without resetting.
+
 ## 29 Aug — traction, Doreen health, and more daily delight
 
 - [x] Verify Doreen on USB at 2%: VBUS/charging state, battery voltage, Wi-Fi association, configured Net URL, heartbeat result, firmware version, and doze diagnostics.

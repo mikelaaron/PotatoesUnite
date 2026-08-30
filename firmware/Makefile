@@ -132,8 +132,8 @@ paper-portrait:
 # test OTA; that is what OTA is for.
 #
 # OTA images are served by the public Net, so they must never include a local
-# secrets.h. Existing potatoes keep their Wi-Fi and Net URL in NVS; the public
-# URL below is only the clean fallback for an otherwise unconfigured image.
+# secrets.h. Existing potatoes keep their Wi-Fi and custom Net URL in NVS; a
+# public build migrates only the exact legacy potatoes.local default below.
 #
 # The compile log lives NEXT TO the build path, never inside it: when the
 # flags fingerprint changes (release and webflash share build/<board> but

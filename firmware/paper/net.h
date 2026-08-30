@@ -17,6 +17,7 @@
 #include "esp_mac.h"
 #include "events.h"
 #include "protocol.h"
+#include "../server_config.h"
 
 // The Net. Protocol v0 (docs/PROTOCOL.md) over HTTP or HTTPS, from its own
 // FreeRTOS task on core 0 so a slow server or an open captive portal never
@@ -154,8 +155,12 @@ static void loadIdentity(Preferences &p) {
   p.getString("claim", identity.claim, sizeof(identity.claim));
   identity.seed = p.getUInt("seed", 0);
   identity.registered = identity.potatoId[0] != 0;
-  p.getString("server", serverUrl, sizeof(serverUrl));
-  if (!serverUrl[0]) strncpy(serverUrl, SERVER_URL_DEFAULT, sizeof(serverUrl) - 1);
+  char storedServerUrl[sizeof(serverUrl)] = {0};
+  p.getString("server", storedServerUrl, sizeof(storedServerUrl));
+  if (selectServerUrl(storedServerUrl, SERVER_URL_DEFAULT, serverUrl, sizeof(serverUrl))) {
+    p.putString("server", serverUrl);
+    USBSerial.printf("net: migrated legacy LAN server to %s\n", serverUrl);
+  }
 #ifdef SERVER_URL
   strncpy(serverUrl, SERVER_URL, sizeof(serverUrl) - 1);   // dev override
 #endif
@@ -300,6 +305,16 @@ static int httpPostJson(const char *path, const String &body, String &resp) {
     USBSerial.printf("net: TLS live — heap %lu -> %lu (%ld bytes for one verified connection)\n",
                      (unsigned long)heapBefore, (unsigned long)heapAfter,
                      (long)heapBefore - (long)heapAfter);
+  }
+  if (code < 0) {
+    if (secure) {
+      char tlsError[128] = {0};
+      const int tlsCode = netSecureClient.lastError(tlsError, sizeof(tlsError));
+      netLog("%s: transport %d (%s), TLS %d (%s)", path, code,
+             HTTPClient::errorToString(code).c_str(), tlsCode, tlsError);
+    } else {
+      netLog("%s: transport %d (%s)", path, code, HTTPClient::errorToString(code).c_str());
+    }
   }
   if (code > 0) resp = http.getString();
   http.end();

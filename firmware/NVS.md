@@ -20,7 +20,7 @@ net task):
 | `claim` | string | register | Claim code for the File. |
 | `seed` | uint32 | first boot (random), then register (server's) | Pool/voice seed. The server's value wins once registered. |
 | `scene` | string ≤ ~2 KB | every heartbeat/choice | Last Scene JSON, shown when offline. |
-| `server` | string | captive-portal save | Server URL (default `http://potatoes.local:8080`). A `secrets.h` `SERVER_URL` overrides it at compile time. |
+| `server` | string | captive-portal save or public-build legacy migration | Server URL (default `http://potatoes.local:8080`). A public build replaces that exact legacy default with its HTTPS build default; custom URLs stay authoritative. A `secrets.h` `SERVER_URL` overrides it at compile time. |
 | `tz` | string | captive-portal save | POSIX TZ string. |
 | `last_epoch` | ulong | every heartbeat when time is known | For `dormant_resume` duration after a power-on reset. |
 

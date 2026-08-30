@@ -15,7 +15,10 @@
 //   Shapes are scanline-analytic: an ellipse row is one quadratic solve, a
 //   potato row is two sub-row interval lookups. No per-pixel sqrt or atan2.
 
-static const int MAX_RECT = 272;   // 147968 bytes, fits internal DMA RAM
+// 192 keeps the DMA tile even-aligned while leaving enough internal RAM for
+// a verified TLS handshake. At 272 the 148 KB tile left only ~27 KB free and
+// mbedTLS failed before the public Net could answer.
+static const int MAX_RECT = 192;   // 73728 bytes; a body frame is at most 2 tiles
 static uint16_t *win = nullptr;
 static int rcX = 0, rcY = 0, rcW = 0, rcH = 0;   // window geometry (buffer)
 static int clX0 = 0, clY0 = 0, clX1 = -1, clY1 = -1;   // clip, inclusive
