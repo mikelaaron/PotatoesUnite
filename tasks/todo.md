@@ -295,3 +295,20 @@ The owner's call, and the right one: if nobody can join, there is no point. Thre
 - [ ] Publish the 0.3.0 webflash binaries (GitHub Releases keeps them out of the deploy) — the flasher page turns itself back on when the manifests appear, no code change.
 - [ ] `TRUST_PROXY=1` on Railway when the rate limits deploy, or every visitor shares one quota.
 - [ ] Write the "run your own Net" page: clone, `npm start`, flash, join over http on the LAN. Works today, needs no TLS, and is the honest hacker path the MIT licence invites.
+# 6 Sep — farewell broadcast
+
+- [x] Prepare the exact owner-approved message: `Project Over. Thank you.`
+- [x] Verify existing broadcast priority and deploy to the public Net.
+- [x] Verify production availability; distinguish availability from device receipt.
+
+The existing line broadcast will stay scheduled through 2036 so reconnecting
+devices can receive it while the server remains online. This does not shut down
+the service or promise receipt by offline devices.
+
+Review: exercised real World heartbeat responses locally at publication, one
+day later, and seven days later, including a drop event; all returned the exact
+farewell and no choices. Railway deployment
+`57334e50-07da-428e-b4de-8c7f8ecd16cb` is online and passed its production health
+check at 2026-09-07 02:00 UTC. Device receipt has not been verified. Existing
+firmware can still show local reactions; this is a server broadcast, not a
+firmware shutdown mode.

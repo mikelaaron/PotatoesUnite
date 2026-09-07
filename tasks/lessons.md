@@ -2,6 +2,13 @@
 
 Patterns worth not repeating. Added after corrections.
 
+## A second board is not a viable second participant
+
+**2026-09-06.** Mike clarified that the e-paper device is not viable for a
+paired experience and he has no suitable second device to give someone.
+Do not propose a two-person test on the assumption that owning two boards
+means having two usable devices. Respect the decision to finish the project.
+
 ## Plain feeling beats compulsory potato bureaucracy
 
 **2026-08-29.** The first midday bank still reached for the Council, forms and
