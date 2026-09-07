@@ -1,5 +1,22 @@
 # Potatoes Unite — plan
 
+## Close public installation and announce closure
+
+- [x] Confirm scope: disable hosted new installs and publish plain closure notices;
+  keep existing devices connected for the farewell and preserve the repository.
+- [x] Add and test the server closure switch and site notice.
+- [x] Publish the README closure update to GitHub.
+- [x] Deploy with public installs closed and verify live routes and health.
+
+Review: 97/97 server tests passed. Production `PROJECT_CLOSED=1` deployed as
+`e772482c-e27a-422d-b293-cd506d5fd444`. Live board, About and editions show the
+closure notice without installation links. Installer, agent installer,
+webflash manifest and merged image URLs return 410. Health and the existing
+AMOLED firmware offer/image still return 200. Existing registration and
+heartbeat compatibility verified in HTTP tests; no new live citizen created.
+GitHub README and description explicitly state closure. Repository retained
+for reference and forks; service remains online for the farewell.
+
 Hacker project. Days, not months. The device is the conduit; the Net is the product.
 (Codex's earlier launch plan and its review are preserved in git history at the baseline commit.)
 
