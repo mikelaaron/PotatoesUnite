@@ -1,5 +1,10 @@
 # Flashing a Potatoes Unite board — instructions for a coding agent
 
+**Project closed.** The public installer and new registrations are closed.
+Do not use these historical instructions to install a new device on
+potatoesunite.com. They remain as reference for independent self-hosted forks;
+those require their own server and firmware configuration.
+
 You are an agent asked to flash a potato. Follow exactly; do not improvise.
 
 **1. Prerequisites.** You need `esptool` ≥ 4: try `esptool version`, then

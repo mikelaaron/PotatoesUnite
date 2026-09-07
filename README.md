@@ -1,8 +1,18 @@
 # Potatoes Unite!
 
+**Project closed. Thank you.**
+
+Potatoes Unite has finished. New installations on the public service are closed,
+and the project is no longer maintained. The server is staying online for now
+so existing devices can receive the farewell: **“Project Over. Thank you.”**
+
+The code, artwork, and writing remain available under the MIT license for
+reference and independent forks. The documentation below describes the project
+as it was; it is not a promise of ongoing service or support.
+
 *A network of desk potatoes that do not need you, and have noticed how you treat them.*
 
-**Live: [potatoesunite.com](https://potatoesunite.com)** · The Tuber files on X: [@IssuedByCouncil](https://x.com/IssuedByCouncil)
+**Project site: [potatoesunite.com](https://potatoesunite.com)** · The Tuber on X: [@IssuedByCouncil](https://x.com/IssuedByCouncil)
 
 Spare ESP32 boards, lying on desks with nothing to do, become potatoes. Each one is on the Net. Once a day the Council puts a Question to every potato (ketchup; whether Tuesday should continue). Each keeps a File on how its Hands treat it — picked up, left face down, shaken, left home again — and tells its neighbor. The potatoes never need you. They have noticed you.
 
@@ -71,7 +81,10 @@ footsteps; too high and it ignores its Hands. It depends on your desk.
 
 ## Rules for contributors
 
-Read `CLAUDE.md` (or `AGENTS.md`, the same file). Real potato words, used deadpan. No puns. No AI writing the lines. If a line could go on a mug, cut it. Ports to other boards are welcome.
+The original project is closed and is not accepting maintenance commitments.
+For independent forks, read `CLAUDE.md` (or `AGENTS.md`, the same file). Real
+potato words, used deadpan. No puns. No AI writing the lines. If a line could go
+on a mug, cut it.
 
 ## License
 
