@@ -1,6 +1,7 @@
 // Plain server-rendered HTML. Paper and ink. Teletext (VT323) for the official parts — masthead, dateline,
 // section labels, timestamps, stamps, all-caps notices — and a readable serif for everything a person reads.
 // Times are rendered in UTC; a tiny inline script adds the viewer's local time and keeps the countdown current.
+import closure from '../data/closure.json' with { type: 'json' };
 import { escapeHtml as h, fewerThanFive } from './text.js';
 import { hm, dayHeader, dayStart } from './clock.js';
 import { potatoSvg } from './portrait.js';
@@ -215,6 +216,8 @@ ${body}
 </html>`;
 }
 
+const closureNotice = (closed) => closed ? `<section class="notice" aria-label="Project closed"><h2>${h(closure.title)}</h2><p>${h(closure.message)}</p></section>` : '';
+
 const PRIVACY_LONG = 'Your device never sends where it is. It never sends audio — only whether the room is quiet or loud. Nothing is shown here until at least five potatoes are involved. Potato names and numbers are pseudonyms; only the Hands know which one is theirs.';
 const LEDE = 'Every potato is connected to the Net. When the Net reaches a conclusion, the Council announces it.';
 // The flasher can only offer what the deploy carries. When it carries nothing, it says so instead of pointing at a 404.
@@ -285,7 +288,7 @@ ${q.remark ? `<p>${h(q.remark)}</p>` : ''}`;
   return `<section class="ballot"><span class="stamp">${stamp}</span><h2>The Question</h2>${body}${note}</section>`;
 }
 
-export function renderBoard(b, { tuberUrl = '', flashOpen = true } = {}) {
+export function renderBoard(b, { tuberUrl = '', flashOpen = true, projectClosed = false } = {}) {
   const A = b.aggregates;
   const agg = b.small
     ? `<p>Reports begin at five potatoes.</p>`
@@ -312,6 +315,7 @@ export function renderBoard(b, { tuberUrl = '', flashOpen = true } = {}) {
   const potd = b.potd ? `<h2>Potato of the Day</h2><p>${h(b.potd.name)} #${h(b.potd.id)} · ${h(b.potd.variety)}</p>${b.potd.excerpt ? `<p class="notice">${h(b.potd.excerpt)}</p>` : ''}` : '';
   return layout('POTATOES UNITE!', `
 <header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · ${h(dayHeader(b.t))} · Day ${h(b.no)} · <a href="/about">About</a>${flashOpen ? ' · <a href="/flash">Flash</a>' : ''}</div></header>
+${closureNotice(projectClosed)}
 <p class="tt paper-name">THE TUBER</p>
 <p class="now">It is ${utc(b.t)}.</p>
 <p class="next" data-next-utc="${h(b.nextPrint)}" data-printed-utc="${h(b.lastPrint || 0)}">${h(nextLine(b.t, b.lastPrint, b.nextPrint))}</p>
@@ -328,7 +332,7 @@ ${potd}
 ${footer({ tuberUrl })}`);
 }
 
-export function renderEditions(list, { single = false, tuberUrl = '' } = {}) {
+export function renderEditions(list, { single = false, tuberUrl = '', projectClosed = false } = {}) {
   const title = single && list[0] ? `Potatoes Unite! — Edition No. ${list[0].no}, ${list[0].edition}` : 'Potatoes Unite! — Editions';
   // The archive prints a day's two editions one after the other, newest first. The Question belongs to the
   // day, not to the edition, so the list states it once per day — on that day's latest edition, the one
@@ -341,6 +345,7 @@ export function renderEditions(list, { single = false, tuberUrl = '' } = {}) {
   }).join('\n') : '<p class="muted">No editions yet. The press is warming up.</p>';
   return layout(title, `
 <header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">The Net · Editions · <a href="/">Front page</a></div></header>
+${closureNotice(projectClosed)}
 ${body}
 ${footer({ tuberUrl })}`);
 }
@@ -415,9 +420,10 @@ export function renderAcknowledged(line) {
 }
 
 // GET /about — docs/STORY.md, already converted to HTML.
-export function renderAbout(storyHtml, { tuberUrl = '' } = {}) {
+export function renderAbout(storyHtml, { tuberUrl = '', projectClosed = false } = {}) {
   return layout('Potatoes Unite! — About', `
 <header class="mast"><h1>POTATOES UNITE!</h1><div class="sub">About · <a href="/">Front page</a></div></header>
+${closureNotice(projectClosed)}
 <div class="prose">
 ${storyHtml}
 </div>

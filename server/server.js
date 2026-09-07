@@ -39,6 +39,7 @@ const ticker = setInterval(() => { try { world.tick(); } catch (e) { log('tick f
 
 const server = http.createServer(createApp({
   world, log,
+  projectClosed: /^(1|true|yes|on)$/i.test(process.env.PROJECT_CLOSED || ''),
   illustrationsDir: path.join(docsDir, 'illustrations'),
   artifactsDir: path.join(here, '..', 'assets', 'illustrations'),
   githubUrl: process.env.GITHUB_URL || '',

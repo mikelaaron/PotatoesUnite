@@ -166,3 +166,43 @@ test('THE TUBER nameplate under the masthead — plain ink, no link; the X link 
     assert.match(html, /Editions are also issued on/);
   } finally { server.close(); }
 });
+
+test('closed project blocks new installs and enrollment while existing citizens and OTA remain available', async () => {
+  const { w, server, base } = await serve({ app: { projectClosed: true }, worldOpts: { docsDir: DOCS_DIR } });
+  const secret = 'ab'.repeat(16);
+  const existing = w.register({ secret, board: 'amoled18', fw: '0.3.0' });
+  const post = (route, body) => fetch(`${base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    for (const route of ['/flash', '/flash/agent', '/releases/amoled18/webflash.json', '/releases/amoled18/webflash-0.3.0.bin']) {
+      for (const method of ['GET', 'HEAD']) {
+        const r = await fetch(`${base}${route}`, { method });
+        assert.equal(r.status, 410, `${method} ${route}`);
+        assert.equal(r.headers.get('cache-control'), 'no-store');
+        const body = await r.text();
+        if (method === 'GET') assert.match(body, /Project Over\. Thank you\./);
+        assert.doesNotMatch(body, /<esp-web-install-button|install-button\.js/);
+      }
+    }
+    for (const route of ['/', '/about', '/editions']) {
+      const r = await fetch(`${base}${route}`);
+      assert.equal(r.status, 200);
+      const body = await r.text();
+      assert.match(body, /Project Over\. Thank you\./);
+      assert.doesNotMatch(body, /href="\/flash(?:\/agent)?"/);
+      if (route === '/about') assert.doesNotMatch(body, /Flash it from the browser/);
+    }
+    const fresh = await post('/v0/register', { secret: 'cd'.repeat(16), board: 'amoled18' });
+    assert.equal(fresh.status, 410);
+    assert.equal((await fresh.json()).error, 'Project Over. Thank you.');
+    const again = await post('/v0/register', { secret, board: 'amoled18' });
+    assert.equal(again.status, 200);
+    assert.equal((await again.json()).potato_id, existing.potato_id);
+    assert.equal((await post('/v0/heartbeat', { secret, events: [] })).status, 200);
+    assert.equal((await fetch(`${base}/health`)).status, 200);
+    const ota = await fetch(`${base}/v0/firmware?board=amoled18&fw=0.0.0`);
+    assert.equal(ota.status, 200);
+    const image = await fetch(`${base}${(await ota.json()).url}`);
+    assert.equal(image.status, 200);
+    assert.ok((await image.arrayBuffer()).byteLength > 0);
+  } finally { server.close(); w.close(); }
+});

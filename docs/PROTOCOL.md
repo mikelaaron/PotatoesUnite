@@ -175,3 +175,14 @@ Clarifications from building `server/` against the contract above. Nothing here 
 - **Failure is quiet and never destructive.** A rejected certificate, an expired one, a wrong hostname, or no clock yet all end as a failed request: `httpPostJson` returns a negative code (`-102` when https was refused before it was tried), which every caller already treats as "no answer". `++failures`, `lastHttpOk` false, events stay queued, nothing is written to NVS. The heartbeat's re-register path fires only on 401/403/404 — a real answer from a server — so a TLS failure can never clear a potato's registration. The potato keeps its secret, name, claim code and cached scene, falls back to its on-device pools (voice doc layers 1–3), and tries again. It cannot brick and it cannot forget who it is.
 - **Verifying on hardware.** Point a board at the public Net (portal field or `make webflash BOARD=… PUBLIC_SERVER_URL=https://potatoesunite.com`) and watch the serial: the boot banner must carry `net: TLS ready — Mozilla root store 68983 bytes, certificates verified`, then `net: TLS live — heap …` on the first request, then a normal `heartbeat ok`. To prove it actually verifies rather than merely connects, point the same board at a host whose certificate cannot chain (a self-signed LAN server over `https://`) and confirm the heartbeats fail and the identity survives a power cycle. An `http://` LAN server must behave exactly as before, with no TLS lines at all.
 - **Legacy LAN cutover.** A public build migrates a persisted URL only when it is exactly `http://potatoes.local:8080`; the new build default is written back to the frozen `server` NVS key. A custom LAN IP or self-hosted Net is never rewritten. Before any reset or update, inspect the RAM-only event queue with serial `e` and drain it over the current Net; preserving NVS does not preserve queued events across a reboot.
+
+## Hosted project closure
+
+`PROJECT_CLOSED=1` closes new installations on this deployment. `GET`/`HEAD`
+`/flash`, `/flash/*`, `/releases/{board}/webflash.json`, and
+`/releases/{board}/webflash-*.bin` return 410 with the closure notice.
+`POST /v0/register` returns 410 for new secrets; existing secrets still return
+their original identity. Heartbeats, Files, choices, and OTA offers/images
+remain available so existing devices can receive the farewell. Public pages
+show the closure notice and stop advertising installation. Unset or false
+keeps a self-hosted deployment open. This does not stop the server or its tick.

@@ -130,8 +130,9 @@ export const tuberHandle = (url) => '@' + String(url).replace(/\/+$/, '').split(
 // docs/STORY.md → the /about page body. Drops the trailing "Short forms" section and resolves
 // {GITHUB_URL} and {TUBER_URL}. Unset, the placeholders vanish along with their leading colons,
 // so the sentences still read.
-export function storyToHtml(md, { githubUrl = '', tuberUrl = '', illustrationsDir = null, artifactsDir = null } = {}) {
+export function storyToHtml(md, { githubUrl = '', tuberUrl = '', illustrationsDir = null, artifactsDir = null, projectClosed = false } = {}) {
   let s = String(md || '');
+  if (projectClosed) s = s.replace(/^## How it works, for the Hands\n[\s\S]*?(?=^## |$(?![\s\S]))/m, '');
   const cut = s.search(/^## Short forms\s*$/m);
   if (cut >= 0) s = s.slice(0, cut);
   s = s.replace(/^# [^\n]*\n/, ''); // the masthead already says it

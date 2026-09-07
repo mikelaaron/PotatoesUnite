@@ -1,5 +1,6 @@
 // Routing. server.js listens; this is everything it serves, so tests can mount it on any port.
 import fs from 'node:fs';
+import closure from '../data/closure.json' with { type: 'json' };
 import path from 'node:path';
 import { HttpError } from './world.js';
 import { renderBoard, renderFile, renderMessage, renderAbout, renderEditions, renderAcknowledged, renderFlash, renderFlashAgent } from './pages.js';
@@ -154,6 +155,7 @@ export function createApp({
   vendorDir = path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'vendor'),
   githubUrl = '', tuberUrl = '', log = () => {},
   trustProxy = 0,
+  projectClosed = false,
   claimLimit = limiter(...LIMITS.claim),
   heartbeatLimit = limiter(...LIMITS.heartbeat),
   choiceLimit = limiter(...LIMITS.choice),
@@ -197,6 +199,12 @@ export function createApp({
     res.headOnly = req.method === 'HEAD';
     const m = res.headOnly ? 'GET' : req.method;
 
+    // Close fresh installations without interrupting existing device heartbeats or OTA.
+    if (projectClosed && m === 'GET') {
+      if (p === '/flash' || p.startsWith('/flash/')) return html(res, 410, renderMessage(closure.title, closure.message));
+      if (/^\/releases\/[a-z0-9]+\/webflash(?:\.json|-[^/]+\.bin)$/.test(p)) return json(res, 410, { error: closure.title, message: closure.message });
+    }
+
     // The device endpoints, rationed. A potato is bursty by design, so the windows are wide (see LIMITS):
     // what they stop is a shell loop, not a potato being handled. Refusals are 429 — never 401/403/404,
     // which the firmware reads as "this server has forgotten me" and answers by wiping its registration.
@@ -207,6 +215,7 @@ export function createApp({
       const fresh = !world.bySecret(String(body.secret || '').toLowerCase());
       const key = fresh ? clientKey(req, trustProxy) : null;
       if (fresh) {
+        if (projectClosed) return json(res, 410, { error: closure.title, message: closure.message });
         if (!netRegisterLimit.peek('*')) {
           log(`register refused: the Net is at its ceiling of ${netRegisterLimit.max} new citizens per ${netRegisterLimit.windowS}s`);
           return json(res, 429, { error: REGISTER_CLOSED }, retryAfter(netRegisterLimit));
@@ -271,7 +280,7 @@ export function createApp({
       const b = world.board();
       const ill = b.incident ? findIllustration(illustrationsDir, b.incident) : null;
       b.incidentSrc = ill ? ill.src : null;
-      return html(res, 200, renderBoard(b, { tuberUrl, flashOpen: Object.keys(BOARDS).some(hasWebflash) }));
+      return html(res, 200, renderBoard(b, { tuberUrl, projectClosed, flashOpen: !projectClosed && Object.keys(BOARDS).some(hasWebflash) }));
     }
     if (m === 'GET' && p === '/flash') {
       const boards = Object.entries(BOARDS).map(([id, b]) => {
@@ -295,15 +304,15 @@ export function createApp({
       if (res.headOnly) return res.end();
       return fs.createReadStream(file).pipe(res);
     }
-    if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, tuberUrl, illustrationsDir, artifactsDir }), { tuberUrl }));
+    if (m === 'GET' && p === '/about') return html(res, 200, renderAbout(storyToHtml(world.data.story, { githubUrl, tuberUrl, illustrationsDir, artifactsDir, projectClosed }), { tuberUrl, projectClosed }));
     // Every edition carries the Question its day was put; the page prints it so a Count reads cold.
-    if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions().map((e) => world.withQuestion(e)), { tuberUrl })); }
+    if (m === 'GET' && p === '/editions') { world.tick(); return html(res, 200, renderEditions(world.editions().map((e) => world.withQuestion(e)), { tuberUrl, projectClosed })); }
     let em = p.match(/^\/editions\/(\d{4}-\d{2}-\d{2})\/(morning|evening)$/);
     if (m === 'GET' && em) {
       world.tick();
       const e = world.withQuestion(world.bulletin(em[1], em[2]));
       if (!e) return html(res, 404, renderMessage('NO SUCH EDITION', 'The Council did not print that one.'));
-      return html(res, 200, renderEditions([e], { single: true, tuberUrl }));
+      return html(res, 200, renderEditions([e], { single: true, tuberUrl, projectClosed }));
     }
     if (m === 'GET' && p === '/health') return json(res, 200, { ok: true, t: world.now() });
     if (m === 'GET' && p === '/v0/fleet') return json(res, 200, { fleet: world.fleet() });
